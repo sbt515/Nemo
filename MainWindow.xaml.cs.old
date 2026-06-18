@@ -23,10 +23,6 @@ using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
 
-// Alias to avoid conflicts with PdfSharp
-using iTextPdfDocument = iText.Kernel.Pdf.PdfDocument;
-using iTextPdfPage = iText.Kernel.Pdf.PdfPage;
-
 namespace Nemo
 {
     public partial class MainWindow : Window
@@ -3509,7 +3505,7 @@ namespace Nemo
             // Remove invalid filename characters and replace spaces with underscores
             string safeName = string.IsNullOrWhiteSpace(characterName)
                 ? "Untitled"
-                : string.Join("_", characterName.Split(System.IO.Path.GetInvalidFileNameChars()));
+                : string.Join("_", characterName.Split(Path.GetInvalidFileNameChars()));
 
             string defaultFileName = $"{safeName}_CharacterSheet.pdf";
 
@@ -3528,7 +3524,7 @@ namespace Nemo
 
             try
             {
-                var document = new PdfSharp.Pdf.PdfDocument();
+                var document = new PdfDocument();
                 document.Info.Title = $"{CurrentCharacter.Name} - D&D 5e Character Sheet";
                 document.Info.Author = "Nemo Character Creator";
 
@@ -4139,9 +4135,6 @@ namespace Nemo
 
         private void ExportFillablePDF_Click(object sender, RoutedEventArgs e)
         {
-            // === Ensure we have the latest character data (same as regular PDF export) ===
-            AutoSaveCharacterToJson();
-
             if (CurrentCharacter == null)
             {
                 MessageBox.Show("Please save the character first (click Save Character).");
@@ -4159,6 +4152,7 @@ namespace Nemo
 
             try
             {
+                // Use fully qualified iText types to avoid conflict with PdfSharp
                 using (var writer = new iText.Kernel.Pdf.PdfWriter(saveDlg.FileName))
                 using (var pdf = new iText.Kernel.Pdf.PdfDocument(writer))
                 {
@@ -4168,159 +4162,60 @@ namespace Nemo
                     pdf.GetDocumentInfo().SetTitle($"{CurrentCharacter.Name} - D&D 5e Character Sheet (Fillable)");
                     pdf.GetDocumentInfo().SetAuthor("Nemo Character Creator");
 
-                    float y = 765;
-                    float left = 45;
-                    float fieldHeight = 16;
-                    float smallFieldHeight = 15;
+                    float y = 750;
+                    float left = 50;
+                    float fieldHeight = 18;
 
                     // ========== HEADER ==========
-                    CreateTextField(form, page, "CharacterName", CurrentCharacter.Name ?? "", left, y, 210, fieldHeight);
-                    CreateTextField(form, page, "PlayerName", CurrentCharacter.PlayerName ?? "", left + 230, y, 150, fieldHeight);
-                    y -= 22;
+                    CreateTextField(form, page, "CharacterName", CurrentCharacter.Name, left, y, 200, fieldHeight);
+                    y -= 25;
 
-                    string displayClass = CurrentCharacter.Class;
-                    if (displayClass != null && displayClass.Contains("("))
-                        displayClass = displayClass.Substring(0, displayClass.IndexOf("(")).Trim();
+                    CreateTextField(form, page, "ClassLevel", $"{CurrentCharacter.Class} 1", left, y, 150, fieldHeight);
+                    CreateTextField(form, page, "Race", CurrentCharacter.Race, left + 160, y, 120, fieldHeight);
+                    CreateTextField(form, page, "Background", CurrentCharacter.Background, left + 290, y, 120, fieldHeight);
+                    y -= 25;
 
-                    CreateTextField(form, page, "Class", displayClass ?? "", left, y, 130, fieldHeight);
-                    CreateTextField(form, page, "Level", "1", left + 140, y, 40, fieldHeight);
-                    CreateTextField(form, page, "Race", CurrentCharacter.Race ?? "", left + 190, y, 110, fieldHeight);
-                    CreateTextField(form, page, "Background", CurrentCharacter.Background ?? "", left + 310, y, 130, fieldHeight);
-                    y -= 26;
-
-                    // ========== COMBAT ==========
-                    DrawSectionHeader(page, "COMBAT", left, ref y);
-
-                    CreateTextField(form, page, "HitPoints", CurrentCharacter.HitPoints.ToString(), left, y, 45, fieldHeight);
-                    CreateTextField(form, page, "ArmorClass", CurrentCharacter.ArmorClass.ToString(), left + 80, y, 45, fieldHeight);
-                    CreateTextField(form, page, "Initiative", CurrentCharacter.Initiative >= 0 ? $"+{CurrentCharacter.Initiative}" : CurrentCharacter.Initiative.ToString(), left + 160, y, 45, fieldHeight);
-                    CreateTextField(form, page, "Speed", CurrentCharacter.Speed.ToString() + " ft", left + 240, y, 55, fieldHeight);
-                    CreateTextField(form, page, "ProficiencyBonus", "+" + CurrentCharacter.ProficiencyBonus, left + 330, y, 45, fieldHeight);
-                    y -= 24;
+                    CreateTextField(form, page, "PlayerName", CurrentCharacter.PlayerName, left, y, 150, fieldHeight);
+                    y -= 35;
 
                     // ========== ABILITY SCORES ==========
-                    DrawSectionHeader(page, "ABILITY SCORES", left, ref y);
+                    DrawSectionHeader("ABILITY SCORES", left, ref y);
 
                     var abilities = new[]
                     {
-                        ("Strength",     CurrentCharacter.AbilityScores.Strength.Final,     CurrentCharacter.AbilityScores.Strength.Modifier),
-                        ("Dexterity",    CurrentCharacter.AbilityScores.Dexterity.Final,    CurrentCharacter.AbilityScores.Dexterity.Modifier),
-                        ("Constitution", CurrentCharacter.AbilityScores.Constitution.Final, CurrentCharacter.AbilityScores.Constitution.Modifier),
-                        ("Intelligence", CurrentCharacter.AbilityScores.Intelligence.Final, CurrentCharacter.AbilityScores.Intelligence.Modifier),
-                        ("Wisdom",       CurrentCharacter.AbilityScores.Wisdom.Final,       CurrentCharacter.AbilityScores.Wisdom.Modifier),
-                        ("Charisma",     CurrentCharacter.AbilityScores.Charisma.Final,     CurrentCharacter.AbilityScores.Charisma.Modifier)
-                    };
+                ("Strength",     CurrentCharacter.AbilityScores.Strength.Final,     CurrentCharacter.AbilityScores.Strength.Modifier),
+                ("Dexterity",    CurrentCharacter.AbilityScores.Dexterity.Final,    CurrentCharacter.AbilityScores.Dexterity.Modifier),
+                ("Constitution", CurrentCharacter.AbilityScores.Constitution.Final, CurrentCharacter.AbilityScores.Constitution.Modifier),
+                ("Intelligence", CurrentCharacter.AbilityScores.Intelligence.Final, CurrentCharacter.AbilityScores.Intelligence.Modifier),
+                ("Wisdom",       CurrentCharacter.AbilityScores.Wisdom.Final,       CurrentCharacter.AbilityScores.Wisdom.Modifier),
+                ("Charisma",     CurrentCharacter.AbilityScores.Charisma.Final,     CurrentCharacter.AbilityScores.Charisma.Modifier)
+            };
 
                     foreach (var (name, final, mod) in abilities)
                     {
-                        CreateTextField(form, page, $"{name}Score", final.ToString(), left + 95, y, 38, smallFieldHeight);
+                        CreateTextField(form, page, $"{name}Score", final.ToString(), left + 100, y, 40, fieldHeight);
 
                         string modStr = mod >= 0 ? $"+{mod}" : mod.ToString();
-                        CreateTextField(form, page, $"{name}Modifier", modStr, left + 140, y, 38, smallFieldHeight);
+                        CreateTextField(form, page, $"{name}Modifier", modStr, left + 150, y, 40, fieldHeight);
 
-                        y -= 19;
+                        y -= 22;
                     }
 
-                    y -= 8;
+                    y -= 15;
 
                     // ========== SAVING THROWS ==========
-                    DrawSectionHeader(page, "SAVING THROWS", left, ref y);
+                    DrawSectionHeader("SAVING THROWS", left, ref y);
 
                     var saves = GetSavingThrows();
 
                     foreach (var save in saves)
                     {
-                        CreateCheckbox(form, page, $"{save.Name}SaveProf", save.IsProficient, left, y, 13, 13);
+                        CreateCheckbox(form, page, $"{save.Name}SaveProf", save.IsProficient, left, y, 14, 14);
 
                         string bonus = save.Bonus >= 0 ? $"+{save.Bonus}" : save.Bonus.ToString();
-                        CreateTextField(form, page, $"{save.Name}Save", bonus, left + 18, y, 42, smallFieldHeight);
+                        CreateTextField(form, page, $"{save.Name}Save", bonus, left + 20, y, 45, fieldHeight);
 
-                        y -= 18;
-                    }
-
-                    y -= 6;
-
-                    // ========== SKILLS ==========
-                    DrawSectionHeader(page, "SKILLS", left, ref y);
-
-                    var allSkillsList = BuildFullSkillListForPDF();
-
-                    float col1X = left;
-                    float col2X = 305;
-                    float skillY = y;
-
-                    int half = (allSkillsList.Count + 1) / 2;
-
-                    // Column 1
-                    for (int i = 0; i < half; i++)
-                    {
-                        var skill = allSkillsList[i];
-                        string bonusStr = skill.Bonus >= 0 ? $"+{skill.Bonus}" : skill.Bonus.ToString();
-
-                        CreateCheckbox(form, page, $"{skill.Name}Prof", skill.IsProficient, col1X, skillY, 12, 12);
-                        CreateTextField(form, page, $"{skill.Name}Bonus", bonusStr, col1X + 15, skillY, 32, smallFieldHeight);
-                        skillY -= 17;
-                    }
-
-                    // Column 2 (reset y)
-                    skillY = y;
-                    for (int i = half; i < allSkillsList.Count; i++)
-                    {
-                        var skill = allSkillsList[i];
-                        string bonusStr = skill.Bonus >= 0 ? $"+{skill.Bonus}" : skill.Bonus.ToString();
-
-                        CreateCheckbox(form, page, $"{skill.Name}Prof", skill.IsProficient, col2X, skillY, 12, 12);
-                        CreateTextField(form, page, $"{skill.Name}Bonus", bonusStr, col2X + 15, skillY, 32, smallFieldHeight);
-                        skillY -= 17;
-                    }
-
-                    y = Math.Min(y, skillY) - 8;
-
-                    // ========== FEATURES / FEAT ==========
-                    DrawSectionHeader(page, "FEATURES", left, ref y);
-
-                    string featName = CurrentCharacter.SelectedFeat ?? "(none selected)";
-                    CreateTextField(form, page, "SelectedFeat", featName, left, y, 350, fieldHeight);
-                    y -= 22;
-
-                    // ========== EQUIPMENT ==========
-                    DrawSectionHeader(page, "EQUIPMENT", left, ref y);
-
-                    string equipmentText = CurrentCharacter.Equipment != null && CurrentCharacter.Equipment.Count > 0
-                        ? string.Join("\n", CurrentCharacter.Equipment)
-                        : "No equipment recorded.";
-
-                    // Multiline equipment field
-                    var equipRect = new iText.Kernel.Geom.Rectangle(left, y - 85, 480, 90);
-                    var equipField = new iText.Forms.Fields.TextFormFieldBuilder(form.GetPdfDocument(), "Equipment")
-                        .SetWidgetRectangle(equipRect)
-                        .CreateText();
-
-                    equipField.SetMultiline(true);
-                    equipField.SetValue(equipmentText);
-                    equipField.SetFontSize(9f);
-                    form.AddField(equipField, page);
-
-                    y -= 100;
-
-                    // ========== SPELLS (Cantrips + 1st Level) ==========
-                    if (CurrentCharacter.Cantrips.Any() || CurrentCharacter.Level1Spells.Any())
-                    {
-                        DrawSectionHeader(page, "SPELLS", left, ref y);
-
-                        if (CurrentCharacter.Cantrips.Any())
-                        {
-                            string cantrips = string.Join(", ", CurrentCharacter.Cantrips);
-                            CreateTextField(form, page, "Cantrips", cantrips, left, y, 480, fieldHeight);
-                            y -= 20;
-                        }
-
-                        if (CurrentCharacter.Level1Spells.Any())
-                        {
-                            string spells1 = string.Join(", ", CurrentCharacter.Level1Spells);
-                            CreateTextField(form, page, "Level1Spells", spells1, left, y, 480, fieldHeight);
-                            y -= 20;
-                        }
+                        y -= 20;
                     }
 
                     pdf.Close();
@@ -4337,51 +4232,33 @@ namespace Nemo
         // ==================== Helper Methods ====================
 
         private void CreateTextField(iText.Forms.PdfAcroForm form, iText.Kernel.Pdf.PdfPage page,
-            string fieldName, string value, float x, float y, float width, float height)
+    string fieldName, string value, float x, float y, float width, float height)
         {
-            var rect = new iText.Kernel.Geom.Rectangle(x, y, width, height);
-
-            var textField = new iText.Forms.Fields.TextFormFieldBuilder(form.GetPdfDocument(), fieldName)
-                .SetWidgetRectangle(rect)
+            var field = new iText.Forms.Fields.TextFormFieldBuilder(form.GetDocument(), fieldName)
+                .SetWidgetRectangle(new iText.Kernel.Geom.Rectangle(x, y, width, height))
                 .CreateText();
 
-            textField.SetValue(value ?? "");
-            textField.SetFontSize(10f);
-            form.AddField(textField, page);
+            field.SetValue(value ?? "");
+            field.SetFontSize(10);
+            form.AddField(field, page);
         }
 
         private void CreateCheckbox(iText.Forms.PdfAcroForm form, iText.Kernel.Pdf.PdfPage page,
             string fieldName, bool isChecked, float x, float y, float width, float height)
         {
-            var rect = new iText.Kernel.Geom.Rectangle(x, y, width, height);
-
-            var checkField = new iText.Forms.Fields.CheckBoxFormFieldBuilder(form.GetPdfDocument(), fieldName)
-                .SetWidgetRectangle(rect)
+            var field = new iText.Forms.Fields.CheckBoxFormFieldBuilder(form.GetDocument(), fieldName)
+                .SetWidgetRectangle(new iText.Kernel.Geom.Rectangle(x, y, width, height))
                 .CreateCheckBox();
 
             if (isChecked)
-                checkField.SetValue("Yes");   // Use SetValue("Yes") instead of SetChecked(true)
+                field.SetChecked(true);
 
-            form.AddField(checkField, page);
+            form.AddField(field, page);
         }
 
-        private void DrawSectionHeader(iText.Kernel.Pdf.PdfPage pdfPage, string title, float x, ref float y)
+        private void DrawSectionHeader(string title, float x, ref float y)
         {
-            // Draw a visible section header using iText Layout
-            try
-            {
-                var canvas = new iText.Layout.Canvas(pdfPage, pdfPage.GetPageSize());
-                var para = new Paragraph(title)
-                    .SetFontSize(10)
-                    .SetFontColor(new iText.Kernel.Colors.DeviceRgb(60, 60, 110))
-                    .SetBold();
-
-                canvas.ShowTextAligned(para, x, y + 4, iText.Layout.Properties.TextAlignment.LEFT);
-                canvas.Close();
-            }
-            catch { /* fallback - header text omitted */ }
-
-            y -= 16;
+            y -= 5; // simple spacer for now
         }
 
         // Helper to get total character level (you can improve this)
@@ -4497,7 +4374,7 @@ namespace Nemo
             // === Save to fixed path next to the .exe ===
             try
             {
-                string savePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "character.json");
+                string savePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "character.json");
 
                 string json = JsonSerializer.Serialize(CurrentCharacter, new JsonSerializerOptions
                 {
@@ -4696,7 +4573,7 @@ namespace Nemo
         {
             try
             {
-                string loadPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "character.json");
+                string loadPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "character.json");
 
                 if (!File.Exists(loadPath))
                 {
@@ -4890,3 +4767,4 @@ namespace Nemo
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
+

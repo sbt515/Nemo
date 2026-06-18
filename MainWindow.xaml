@@ -1642,6 +1642,14 @@
                                 Foreground="White"
                                 FontWeight="SemiBold"
                                 Margin="8"/>
+                        <Button Content="Export Fillable PDF"
+                                Click="ExportFillablePDF_Click"
+                                Width="190"
+                                Height="42"
+                                Margin="8"
+                                Background="#4CAF50"
+                                Foreground="White"
+                                FontWeight="SemiBold"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem>
