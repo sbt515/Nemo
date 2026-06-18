@@ -1,0 +1,1845 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.ComponentModel;
+using System.Windows.Data;
+using System.Windows.Controls.Primitives;
+
+namespace Nemo
+{
+    public static class GameData
+    {
+
+        // ==================== COMPLETE 5e DATA (from dnd5e.wikidot.com + PHB) ====================
+
+        public static readonly Dictionary<string, RaceData> RaceData = new()
+        {
+            ["Dragonborn"] = new() { AbilityBonuses = new() { ["Strength"] = 2, ["Charisma"] = 1 }, Traits = new() { "Draconic Ancestry (choose one: Black/Acid, Blue/Lightning, Brass/Fire, Bronze/Lightning, Copper/Acid, Gold/Fire, Green/Poison, Red/Fire, Silver/Cold, White/Cold)", "Breath Weapon (action: 15-ft cone or 30-ft line, 1d6 damage of ancestry type + Con mod, Dex save for half, recharge short or long rest)", "Damage Resistance (to ancestry type)", "Common + Draconic" }, Languages = new() { "Common", "Draconic" } },
+            ["Dwarf"] = new() { AbilityBonuses = new() { ["Constitution"] = 2 }, Traits = new() { "Darkvision 60 ft", "Dwarven Resilience (advantage on saves vs poison, resistance to poison damage)", "Dwarven Combat Training (prof with battleaxe, handaxe, light hammer, warhammer)", "Stonecunning (double proficiency on History checks about stonework)", "Common + Dwarvish" }, Languages = new() { "Common", "Dwarvish" }, Speed = 25 },
+            ["Elf"] = new() { AbilityBonuses = new() { ["Dexterity"] = 2 }, Traits = new() { "Darkvision 60 ft", "Fey Ancestry (advantage vs charm, immune to magical sleep)", "Trance (4 hours meditation = long rest)", "Common + Elvish" }, Languages = new() { "Common", "Elvish" }, HasInnateSpellcasting = false },
+            ["Gnome"] = new() { AbilityBonuses = new() { ["Intelligence"] = 2 }, Traits = new() { "Darkvision 60 ft", "Gnome Cunning (advantage on Int/Wis/Cha saves vs magic)", "Common + Gnomish" }, Languages = new() { "Common", "Gnomish" }, Speed = 25 },
+            ["Half-Elf"] = new() { AbilityBonuses = new() { ["Charisma"] = 2 }, Traits = new() { "Darkvision 60 ft", "Fey Ancestry", "Skill Versatility (proficiency in two skills of your choice)", "Ability Score Increase: +2 Charisma + choose two different abilities for +1 each", "Common + Elvish + one other language" }, Languages = new() { "Common", "Elvish", "One other" } },
+            ["Half-Orc"] = new() { AbilityBonuses = new() { ["Strength"] = 2, ["Constitution"] = 1 }, Traits = new() { "Darkvision 60 ft", "Menacing (proficiency in Intimidation)", "Relentless Endurance (when reduced to 0 HP but not killed, drop to 1 HP instead, once per long rest)", "Savage Attacks (when you score a critical hit with a melee weapon, roll one extra weapon damage die)", "Common + Orc" }, Languages = new() { "Common", "Orc" }, SkillProficiencies = new() { "Intimidation" } },
+            ["Halfling"] = new() { AbilityBonuses = new() { ["Dexterity"] = 2 }, Traits = new() { "Lucky (reroll any 1 on d20)", "Brave (advantage vs frightened)", "Halfling Nimbleness (can move through space of larger creatures)", "Common + Halfling" }, Languages = new() { "Common", "Halfling" }, Speed = 25 },
+            ["Human"] = new() { AbilityBonuses = new() { ["Strength"] = 1, ["Dexterity"] = 1, ["Constitution"] = 1, ["Intelligence"] = 1, ["Wisdom"] = 1, ["Charisma"] = 1 }, Traits = new() { "Skill Versatility (proficiency in one skill of choice)", "Common + one other language" }, Languages = new() { "Common", "One other" } },
+            ["Variant Human"] = new() { AbilityBonuses = new() { }, Traits = new() { "Skill Versatility (proficiency in one skill of your choice)", "Feat (choose one feat)", "Ability Score Increase: +1 to two different abilities of your choice" }, Languages = new() { "Common", "One other" } },
+            ["Tiefling"] = new() { AbilityBonuses = new() { ["Charisma"] = 2 }, Traits = new() { "Darkvision 60 ft", "Hellish Resistance (resistance to fire)", "Infernal Legacy (Thaumaturgy cantrip at 1st, Hellish Rebuke 1/day at 3rd, Darkness 1/day at 5th)", "Common + Infernal" }, Languages = new() { "Common", "Infernal" }, HasInnateSpellcasting = true },
+            ["Tabaxi"] = new() { AbilityBonuses = new() { ["Dexterity"] = 2, ["Charisma"] = 1 }, Traits = new() { "Darkvision 60 ft", "Feline Agility (double speed for one turn, recharge after not moving)", "Cat's Claws (climb speed 20 ft, unarmed strike 1d4 slashing)", "Cat's Talent (proficiency in Perception and Stealth)", "Common + Tabaxi" }, Languages = new() { "Common", "Tabaxi" }, SkillProficiencies = new() { "Perception", "Stealth" } },
+            ["Kenku"] = new() { AbilityBonuses = new() { ["Dexterity"] = 2, ["Wisdom"] = 1 }, Traits = new() { "Expert Forgery (advantage on checks to create forgeries)", "Mimicry (perfectly mimic sounds and voices you have heard)", "Common + Auran (but can only speak by mimicking)" }, Languages = new() { "Common", "Auran" } },
+            ["Tortle"] = new() { AbilityBonuses = new() { ["Strength"] = 2, ["Wisdom"] = 1 }, Traits = new() { "Shell Defense (action: AC becomes 17, advantage on Str/Con saves, disadvantage on Dex saves until end of next turn)", "Claws (unarmed strike 1d4 slashing)", "Hold Breath (1 hour)", "Common + Aquan" }, Languages = new() { "Common", "Aquan" } },
+            ["Deep Gnome"] = new() { AbilityBonuses = new() { ["Intelligence"] = 2, ["Dexterity"] = 1 }, Traits = new() { "Superior Darkvision 120 ft", "Gnome Cunning", "Stone Camouflage (advantage on Stealth checks in rocky terrain)", "Common + Gnomish + Undercommon" }, Languages = new() { "Common", "Gnomish", "Undercommon" }, Speed = 25 },
+            ["Duergar"] = new() { AbilityBonuses = new() { ["Constitution"] = 2, ["Strength"] = 1 }, Traits = new() { "Darkvision 120 ft", "Duergar Resilience (advantage vs poison/charm, resistance to poison)", "Duergar Magic (Enlarge/Reduce 1/day at 3rd, Invisibility 1/day at 5th)", "Common + Dwarvish + Undercommon" }, Languages = new() { "Common", "Dwarvish", "Undercommon" }, HasInnateSpellcasting = true, Speed = 25 },
+            ["Aasimar"] = new()
+            {
+                AbilityBonuses = new() { ["Charisma"] = 2 },
+                Traits = new()
+    {
+        "Darkvision 60 ft",
+        "Celestial Legacy (Light cantrip at will)",
+        "Healing Hands (action: touch a creature and heal 1d4 + your level hit points, once per long rest)",
+        "Common + Celestial"
+    },
+                Languages = new() { "Common", "Celestial" },
+                HasInnateSpellcasting = true
+            },
+            ["Custom Lineage"] = new()
+            {
+                AbilityBonuses = new(),   // Player chooses +2 to one ability
+                Traits = new()
+    {
+        "Ability Score Increase: +2 to one ability score of your choice",
+        "Darkvision or Skill Proficiency (choose one)",
+        "   • Darkvision (60 ft)",
+        "   • Proficiency in one skill of your choice",
+        "Feat: You gain one feat of your choice",
+        "Languages: Common + one other language of your choice"
+    },
+                Languages = new() { "Common", "One other language of your choice" }
+            }
+        };
+
+        public static readonly Dictionary<string, List<SubraceData>> RaceSubraces = new()
+        {
+            ["Aasimar"] = new()
+{
+    new() { Name = "Protector Aasimar", AbilityBonus = new() { ["Wisdom"] = 1 },
+            Traits = new() { "Radiant Soul (once per turn, add 1d4 radiant damage to one attack or spell damage roll)" } },
+
+    new() { Name = "Scourge Aasimar", AbilityBonus = new() { ["Constitution"] = 1 },
+            Traits = new() { "Radiant Consumption (action: deal 1d4 radiant damage to all creatures within 10 ft, including yourself, until end of your next turn)" } },
+
+    new() { Name = "Fallen Aasimar", AbilityBonus = new() { ["Strength"] = 1 },
+            Traits = new() { "Necrotic Shroud (action: gain 30 ft flying speed + add 1d4 necrotic damage to melee attacks until end of your next turn)" } }
+},
+
+            ["Dwarf"] = new()
+    {
+        new() { Name = "Hill Dwarf",   AbilityBonus = new() { ["Wisdom"] = 1 },
+                Traits = new() { "Dwarven Toughness (+1 HP per level)" } },
+        new() { Name = "Mountain Dwarf", AbilityBonus = new() { ["Strength"] = 2 },
+                Traits = new() { "Dwarven Armor Training (prof with light & medium armor)" } }
+    },
+            ["Elf"] = new()
+    {
+        new() { Name = "High Elf",   AbilityBonus = new() { ["Intelligence"] = 1 },
+                Traits = new() { "Elf Weapon Training (prof with longsword, shortsword, shortbow, longbow)", "Cantrip (choose one Wizard cantrip)" }, HasInnateSpellcasting = true },
+        new() { Name = "Wood Elf",   AbilityBonus = new() { ["Wisdom"] = 1 },
+                Traits = new() { "Elf Weapon Training", "Mask of the Wild (natural stealth in foliage)"}, Speed = 35 },
+        new() { Name = "Drow (Dark Elf)", AbilityBonus = new() { ["Charisma"] = 1 },
+                Traits = new() { "Superior Darkvision 120 ft", "Drow Magic (Dancing Lights, Faerie Fire, Darkness)", "Drow Weapon Training", "Sunlight Sensitivity" }, HasInnateSpellcasting = true }
+    },
+            ["Gnome"] = new()
+    {
+        new() { Name = "Forest Gnome", AbilityBonus = new() { ["Dexterity"] = 1 },
+                Traits = new() { "Illusion Aptitude (minor illusion cantrip)", "Speak with Small Beasts" }, HasInnateSpellcasting = true },
+        new() { Name = "Rock Gnome",   AbilityBonus = new() { ["Constitution"] = 1 },
+                Traits = new() { "Artificer's Lore (add 2x proficiency to History/Investigation about magic/tech)", "Tinker (prof with tinker's tools)" } }
+    },
+            ["Halfling"] = new()
+{
+    new() { Name = "Lightfoot Halfling", AbilityBonus = new() { ["Charisma"] = 1 },
+            Traits = new() { "Naturally Stealthy (can hide when only lightly obscured by a creature larger than you)" } },
+    new() { Name = "Stout Halfling",   AbilityBonus = new() { ["Constitution"] = 1 },
+            Traits = new() { "Stout Resilience (advantage on saves vs poison, resistance to poison damage)" } },
+            new() { Name = "Ghostwise Halfling", AbilityBonus = new() { ["Wisdom"] = 1 },
+            Traits = new() { "Silent Speech (you can telepathically communicate with any creature within 30 feet that shares a language with you)" } }
+},
+
+            ["Tiefling"] = new()
+{
+    new() { Name = "Feral Tiefling", AbilityBonus = new() { ["Dexterity"] = 2 },
+            Traits = new() { "Feral (replaces Charisma bonus with Dexterity)", "Hellish Resistance", "Infernal Legacy" } },
+    new() { Name = "Devil's Tongue", AbilityBonus = new() { ["Charisma"] = 1 },
+            Traits = new() { "Devil's Tongue (Vicious Mockery + other spells)", "Hellish Resistance" } },
+    new() { Name = "Hellfire",       AbilityBonus = new() { ["Charisma"] = 1 },
+            Traits = new() { "Hellfire (Burning Hands 1/day instead of Hellish Rebuke)", "Hellish Resistance" } }
+}
+        };
+
+        public static readonly Dictionary<string, ClassData> ClassData = new()
+        {
+            ["Artificer"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Intelligence", CantripsKnown = 2, SpellsPrepared = "Int mod + 1", Subclasses = new() { "Alchemist", "Armorer", "Artillerist", "Battle Smith" }, SkillChoices = new() { "Arcana", "Deception", "History", "Investigation", "Medicine", "Nature", "Perception", "Sleight of Hand" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Constitution", "Intelligence" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons" } },
+            ["Barbarian"] = new() { HitDie = "1d12", HP1stLevel = "12 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Ancestral Guardian", "Battlerager", "Beast", "Berserker", "Storm Herald", "Totem Warrior", "Wild Magic", "Zealot" }, SkillChoices = new() { "Animal Handling", "Athletics", "Intimidation", "Nature", "Perception", "Survival" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Strength", "Constitution" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
+            ["Bard"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Charisma", CantripsKnown = 2, SpellsKnown = 4, Subclasses = new() { "College of Creation", "College of Eloquence", "College of Glamour", "College of Lore", "College of Spirits", "College of Swords", "College of Valor", "College of Whispers" }, SkillChoices = new() { "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception", "History", "Insight", "Intimidation", "Investigation", "Medicine", "Nature", "Perception", "Performance", "Persuasion", "Religion", "Sleight of Hand", "Stealth", "Survival" }, SkillChoiceCount = 3, SavingThrowProficiencies = new() { "Dexterity", "Charisma" }, ArmorProficiencies = new() { "Light armor" }, WeaponProficiencies = new() { "Simple weapons", "Hand crossbows", "Longswords", "Rapiers", "Shortswords" } },
+            ["Cleric"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Wisdom", CantripsKnown = 3, SpellsPrepared = "Wis mod + 1", Subclasses = new() { "Arcana", "Death", "Forge", "Grave", "Knowledge", "Life", "Light", "Nature", "Order", "Peace", "Tempest", "Trickery", "Twilight", "War" }, SkillChoices = new() { "History", "Insight", "Medicine", "Persuasion", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Wisdom", "Charisma" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons" } },
+            ["Druid"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Wisdom", CantripsKnown = 2, SpellsPrepared = "Wis mod + 1", Subclasses = new() { "Circle of Dreams", "Circle of Spores", "Circle of Stars", "Circle of the Land", "Circle of the Moon", "Circle of Wildfire" }, SkillChoices = new() { "Arcana", "Animal Handling", "Insight", "Medicine", "Nature", "Perception", "Religion", "Survival" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Intelligence", "Wisdom" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields (non-metal)" }, WeaponProficiencies = new() { "Clubs", "Daggers", "Darts", "Javelins", "Maces", "Quarterstaffs", "Scimitars", "Sickles", "Slings", "Spears" } },
+            ["Fighter"] = new() { HitDie = "1d10", HP1stLevel = "10 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Arcane Archer", "Banneret", "Battle Master", "Cavalier", "Champion", "Echo Knight", "Eldritch Knight", "Psi Warrior", "Rune Knight" }, SkillChoices = new() { "Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Perception", "Survival" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Strength", "Constitution" }, ArmorProficiencies = new() { "All armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
+            ["Monk"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Way of Mercy", "Way of Open Hand", "Way of Shadow", "Way of the Ascendant Dragon", "Way of the Astral Self", "Way of the Drunken Master", "Way of the Four Elements", "Way of the Kensei", "Way of the Long Death", "Way of the Sun Soul", "Way of the Way" }, SkillChoices = new() { "Acrobatics", "Athletics", "History", "Insight", "Religion", "Stealth" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Strength", "Dexterity" }, ArmorProficiencies = new() { "None" }, WeaponProficiencies = new() { "Simple weapons", "Shortswords" } },
+            ["Paladin"] = new() { HitDie = "1d10", HP1stLevel = "10 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Charisma", CantripsKnown = 0, SpellsPrepared = "Cha mod + 1", Subclasses = new() { "Oath of Conquest", "Oath of Devotion", "Oath of Glory", "Oath of the Open Sea", "Oath of Redemption", "Oath of the Watchers", "Oath of Vengeance", "Oathbreaker" }, SkillChoices = new() { "Athletics", "Insight", "Intimidation", "Medicine", "Persuasion", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Wisdom", "Charisma" }, ArmorProficiencies = new() { "All armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
+            ["Ranger"] = new() { HitDie = "1d10", HP1stLevel = "10 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Wisdom", CantripsKnown = 0, SpellsKnown = 0, Subclasses = new() { "Beast Master", "Fey Wanderer", "Gloom Stalker", "Horizon Walker", "Hunter", "Monster Slayer", "Swarmkeeper" }, SkillChoices = new() { "Animal Handling", "Athletics", "Insight", "Investigation", "Nature", "Perception", "Stealth", "Survival" }, SkillChoiceCount = 3, SavingThrowProficiencies = new() { "Strength", "Dexterity" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
+            ["Rogue"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Arcane Trickster", "Assassin", "Inquisitive", "Mastermind", "Phantom", "Scout", "Soulknife", "Swashbuckler", "Thief" }, SkillChoices = new() { "Acrobatics", "Athletics", "Deception", "Insight", "Intimidation", "Investigation", "Perception", "Performance", "Persuasion", "Sleight of Hand", "Stealth" }, SkillChoiceCount = 4, SavingThrowProficiencies = new() { "Dexterity", "Intelligence" }, ArmorProficiencies = new() { "Light armor" }, WeaponProficiencies = new() { "Simple weapons", "Hand crossbows", "Longswords", "Rapiers", "Shortswords" } },
+            ["Sorcerer"] = new() { HitDie = "1d6", HP1stLevel = "6 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Charisma", CantripsKnown = 4, SpellsKnown = 2, Subclasses = new() { "Aberrant Mind", "Clockwork Soul", "Divine Soul", "Draconic Bloodline", "Lunar", "Shadow", "Storm", "Wild Magic" }, SkillChoices = new() { "Arcana", "Deception", "Insight", "Intimidation", "Persuasion", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Constitution", "Charisma" }, ArmorProficiencies = new() { "None" }, WeaponProficiencies = new() { "Daggers", "Darts", "Slings", "Quarterstaffs", "Light crossbows" } },
+            ["Warlock"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Charisma", CantripsKnown = 2, SpellsKnown = 2, Subclasses = new() { "The Archfey", "The Celestial", "The Fathomless", "The Fiend", "The Genie", "The Great Old One", "The Hexblade", "The Undead", "The Undying" }, SkillChoices = new() { "Arcana", "Deception", "History", "Intimidation", "Investigation", "Nature", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Wisdom", "Charisma" }, ArmorProficiencies = new() { "Light armor" }, WeaponProficiencies = new() { "Simple weapons" } },
+            ["Wizard"] = new() { HitDie = "1d6", HP1stLevel = "6 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Intelligence", CantripsKnown = 3, SpellsPrepared = "Int mod + 1", Subclasses = new() { "Abjuration", "Bladesinging", "Chronurgy", "Conjuration", "Divination", "Enchantment", "Evocation", "Graviturgy", "Illusion", "Necromancy", "Order of Scribes", "Transmutation", "War Magic" }, SkillChoices = new() { "Arcana", "History", "Insight", "Investigation", "Medicine", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Intelligence", "Wisdom" }, ArmorProficiencies = new() { "None" }, WeaponProficiencies = new() { "Daggers", "Darts", "Slings", "Quarterstaffs", "Light crossbows" } }
+        };
+
+        // ==================== CLASS LEVEL 1 FEATURES (for PDF Class Features section) ====================
+        public static readonly Dictionary<string, List<ClassFeature>> ClassLevel1Features = new()
+        {
+            ["Artificer"] = new()
+            {
+                new ClassFeature { Name = "Magical Tinkering", Description = "Infuse small objects with minor magical effects (light, sound, etc.).", Uses = "At will" },
+                new ClassFeature { Name = "Spellcasting", Description = "Cast artificer spells using Intelligence. Tools can be used as spellcasting focus.", Uses = "Spell slots (see Spells section)" }
+            },
+            ["Barbarian"] = new()
+            {
+                new ClassFeature { Name = "Rage", Description = "Enter a primal rage granting bonus melee damage, resistance to bludgeoning/piercing/slashing damage, and advantage on Strength checks and saves.", Uses = "2 times per long rest" },
+                new ClassFeature { Name = "Unarmored Defense", Description = "While not wearing any armor, your AC equals 10 + your Dexterity modifier + your Constitution modifier.", Uses = "Passive" }
+            },
+            ["Bard"] = new()
+            {
+                new ClassFeature { Name = "Bardic Inspiration", Description = "Use a bonus action to give one creature a d6 inspiration die to add to ability checks, attacks, or saves within the next 10 minutes.", Uses = "Charisma modifier times per long rest" },
+                new ClassFeature { Name = "Spellcasting", Description = "Cast bard spells using Charisma. Know a number of spells equal to your level + Charisma modifier.", Uses = "Spell slots (see Spells section)" }
+            },
+            ["Cleric"] = new()
+            {
+                new ClassFeature { Name = "Spellcasting", Description = "Cast cleric spells using Wisdom. Prepare a number of spells equal to Wisdom modifier + cleric level.", Uses = "Spell slots (see Spells section)" },
+                new ClassFeature { Name = "Divine Domain", Description = "Choose a domain that grants domain spells and special abilities (see subclass for details).", Uses = "Varies by domain" }
+            },
+            ["Druid"] = new()
+            {
+                new ClassFeature { Name = "Spellcasting", Description = "Cast druid spells using Wisdom. Prepare spells equal to Wisdom modifier + druid level (except cantrips).", Uses = "Spell slots (see Spells section)" },
+                new ClassFeature { Name = "Wild Shape", Description = "Transform into beasts of CR 1/4 or lower (no flying or swimming speed yet).", Uses = "2 times per short rest" },
+                new ClassFeature { Name = "Druidic", Description = "You know Druidic, the secret language of druids. You can speak it and use it to leave hidden messages.", Uses = "Passive" }
+            },
+            ["Fighter"] = new()
+            {
+                new ClassFeature { Name = "Second Wind", Description = "Regain hit points equal to 1d10 + your fighter level as a bonus action. Regain on short or long rest.", Uses = "1 time per short rest" },
+                new ClassFeature { Name = "Fighting Style", Description = "Adopt a particular style of fighting (Archery, Defense, Dueling, Great Weapon Fighting, Protection, or Two-Weapon Fighting).", Uses = "Passive" }
+            },
+            ["Monk"] = new()
+            {
+                new ClassFeature { Name = "Martial Arts", Description = "Use Dexterity for unarmed strikes and monk weapons. Unarmed strikes deal 1d4 + Dex damage. Can make bonus action unarmed strike after Attack action.", Uses = "Passive" },
+                new ClassFeature { Name = "Unarmored Defense", Description = "While not wearing armor and not wielding a shield, your AC equals 10 + your Dexterity modifier + your Wisdom modifier.", Uses = "Passive" },
+                new ClassFeature { Name = "Ki", Description = "Harness mystical energy. Start with 1 ki point. Ki powers include Flurry of Blows, Patient Defense, and Step of the Wind.", Uses = "1 point per short or long rest (regain all on short/long rest)" }
+            },
+            ["Paladin"] = new()
+            {
+                new ClassFeature { Name = "Divine Sense", Description = "Detect celestials, fiends, and undead within 60 ft as an action. Also detect consecrated or desecrated objects/places.", Uses = "1 + Charisma modifier times per long rest" },
+                new ClassFeature { Name = "Lay on Hands", Description = "Touch a creature to restore hit points from a pool of 5 \u00d7 paladin level HP. Can also cure disease or poison.", Uses = "5 \u00d7 level HP pool per long rest" },
+                new ClassFeature { Name = "Fighting Style", Description = "Adopt a fighting style (Blessed Warrior, Blind Fighting, Defense, Dueling, Great Weapon Fighting, Interception, Protection).", Uses = "Passive" }
+            },
+            ["Ranger"] = new()
+            {
+                new ClassFeature { Name = "Favored Enemy", Description = "Choose a type of enemy. Gain advantage on Wisdom (Survival) checks to track them and Intelligence checks to recall info about them.", Uses = "Passive" },
+                new ClassFeature { Name = "Natural Explorer", Description = "Choose a favored terrain. While in it, difficult terrain doesn't slow you, and you have advantage on initiative and can't be surprised.", Uses = "Passive" },
+                new ClassFeature { Name = "Spellcasting", Description = "Cast ranger spells using Wisdom (from level 2 normally, but some archetypes grant earlier).", Uses = "Spell slots (see Spells section)" }
+            },
+            ["Rogue"] = new()
+            {
+                new ClassFeature { Name = "Sneak Attack", Description = "Deal extra 1d6 damage once per turn when you have advantage or an ally is within 5 ft of the target.", Uses = "1 time per turn" },
+                new ClassFeature { Name = "Thieves' Cant", Description = "Know thieves' cant, a secret mix of dialect, jargon, and code that allows you to hide messages in seemingly normal conversation.", Uses = "Passive" },
+                new ClassFeature { Name = "Expertise", Description = "Double your proficiency bonus for two skills you are proficient in (Stealth and one other).", Uses = "Passive" }
+            },
+            ["Sorcerer"] = new()
+            {
+                new ClassFeature { Name = "Spellcasting", Description = "Cast sorcerer spells using Charisma. Know a limited number of spells; can use sorcery points (from level 2) for metamagic later.", Uses = "Spell slots (see Spells section)" },
+                new ClassFeature { Name = "Sorcerous Origin", Description = "Choose your sorcerous origin (Draconic Bloodline, Wild Magic, etc.) granting unique level 1 abilities.", Uses = "Varies by origin (see subclass)" }
+            },
+            ["Warlock"] = new()
+            {
+                new ClassFeature { Name = "Spellcasting", Description = "Cast warlock spells using Charisma. Regain all spell slots on short rest. Know a small number of spells permanently.", Uses = "Spell slots (short rest recharge)" },
+                new ClassFeature { Name = "Pact Magic", Description = "Your arcane research and the magic bestowed on you by your patron have given you facility with spells.", Uses = "Spell slots (see Spells section)" },
+                new ClassFeature { Name = "Otherworldly Patron", Description = "Choose a patron (Fiend, Archfey, Great Old One, etc.) granting unique abilities and expanded spell list.", Uses = "Varies by patron (see subclass)" }
+            },
+            ["Wizard"] = new()
+            {
+                new ClassFeature { Name = "Spellcasting", Description = "Cast wizard spells using Intelligence. Prepare a number of spells equal to Intelligence modifier + wizard level. Ritual casting.", Uses = "Spell slots (see Spells section)" },
+                new ClassFeature { Name = "Arcane Recovery", Description = "Once per day after a short rest, recover expended spell slots totaling no more than half your wizard level (rounded up).", Uses = "1 time per day" }
+            }
+        };
+
+        // ==================== SUBCLASS LEVEL 1 FEATURES (Cleric Domains, Sorcerer Origins, Warlock Patrons) ====================
+        // Used only for PDF export when the character has a subclass selected for one of the three classes.
+        public static readonly Dictionary<string, List<ClassFeature>> SubclassLevel1Features = new()
+        {
+            // === CLERIC DOMAINS (keyed by the exact subclass name used in UI) ===
+            ["Forge"] = new()
+            {
+                new ClassFeature { Name = "Blessing of the Forge", Description = "At the end of a long rest you can touch a nonmagical weapon or suit of armor and imbue it with +1 magical bonus until the end of your next long rest.", Uses = "Proficiency bonus times per long rest" },
+                new ClassFeature { Name = "Domain Spells", Description = "Always have Identify and Searing Smite prepared. They do not count against the number of spells you can prepare.", Uses = "Passive" }
+            },
+            ["Life"] = new()
+            {
+                new ClassFeature { Name = "Disciple of Life", Description = "Whenever you cast a 1st-level or higher spell that restores hit points, the target regains additional hit points equal to 2 + the spell's level.", Uses = "Passive (applies to all healing spells)" },
+                new ClassFeature { Name = "Domain Spells", Description = "Always have Bless and Cure Wounds prepared. They do not count against the number of spells you can prepare.", Uses = "Passive" }
+            },
+            ["Light"] = new()
+            {
+                new ClassFeature { Name = "Warding Flare", Description = "When a creature attacks you or an ally you can see within 30 ft, you can use your reaction to impose disadvantage on the attack roll.", Uses = "Wisdom modifier times per long rest" },
+                new ClassFeature { Name = "Domain Spells", Description = "Always have Burning Hands and Faerie Fire prepared. They do not count against the number of spells you can prepare.", Uses = "Passive" }
+            },
+            ["Twilight"] = new()
+            {
+                new ClassFeature { Name = "Eye of Night", Description = "You gain darkvision out to 300 feet. You can share this darkvision with willing creatures within 10 feet (no action required).", Uses = "Passive" },
+                new ClassFeature { Name = "Vigilant Blessing", Description = "You can grant a creature within 30 feet (including yourself) advantage on its next initiative roll.", Uses = "Proficiency bonus times per long rest" }
+            },
+            ["Grave"] = new()
+            {
+                new ClassFeature { Name = "Circle of Mortality", Description = "You gain the ability to cast Spare the Dying as a bonus action. When you cast it on a creature with 0 hit points, it has advantage on death saves until the start of your next turn.", Uses = "At will (bonus action)" },
+                new ClassFeature { Name = "Eyes of the Grave", Description = "As a bonus action you can sense the presence of undead within 60 feet that are not behind total cover.", Uses = "Wisdom modifier times per long rest" }
+            },
+            ["War"] = new()
+            {
+                new ClassFeature { Name = "War Priest", Description = "When you take the Attack action, you can make one weapon attack as a bonus action. You can do this a number of times equal to your Wisdom modifier.", Uses = "Wisdom modifier times per long rest (recharge on long rest)" },
+                new ClassFeature { Name = "Domain Spells", Description = "Always have Divine Favor and Shield of Faith prepared.", Uses = "Passive" }
+            },
+            ["Tempest"] = new()
+            {
+                new ClassFeature { Name = "Wrath of the Storm", Description = "When a creature within 5 feet hits you with an attack, you can use your reaction to deal 2d8 lightning or thunder damage (Dex save for half).", Uses = "Wisdom modifier times per long rest" },
+                new ClassFeature { Name = "Domain Spells", Description = "Always have Fog Cloud and Thunderwave prepared.", Uses = "Passive" }
+            },
+            ["Trickery"] = new()
+            {
+                new ClassFeature { Name = "Blessing of the Trickster", Description = "You can grant a creature within 30 feet (including yourself) advantage on Dexterity (Stealth) checks. The blessing lasts up to 1 hour or until you use this feature on another creature.", Uses = "Proficiency bonus times per long rest" }
+            },
+            ["Peace"] = new()
+            {
+                new ClassFeature { Name = "Emboldening Bond", Description = "You can magically bond up to two creatures (including yourself) within 30 feet. While bonded, when one makes an attack roll, ability check, or saving throw, the other can add 1d4 to the roll.", Uses = "Proficiency bonus times per long rest" }
+            },
+            ["Order"] = new()
+            {
+                new ClassFeature { Name = "Voice of Authority", Description = "When you cast a 1st-level or higher spell that targets only one creature, you can use your reaction to allow an ally within 30 feet to use their reaction to make one weapon attack against a target of the spell.", Uses = "Passive (works once per spell cast)" }
+            },
+            ["Nature"] = new()
+            {
+                new ClassFeature { Name = "Acolyte of Nature", Description = "You learn one Druid cantrip of your choice. You also gain proficiency in one skill from Animal Handling, Nature, or Survival.", Uses = "Passive" }
+            },
+            ["Knowledge"] = new()
+            {
+                new ClassFeature { Name = "Blessings of Knowledge", Description = "You gain proficiency in two skills of your choice from Arcana, History, Nature, or Religion. Your proficiency bonus is doubled for those skills.", Uses = "Passive (Expertise)" }
+            },
+            ["Death"] = new()
+            {
+                new ClassFeature { Name = "Reaper", Description = "You learn one Necromancy cantrip. When you cast a cantrip that deals necrotic damage, you can deal damage to two creatures within range instead of one (both must be within 5 feet of each other).", Uses = "Passive" }
+            },
+            ["Arcana"] = new()
+            {
+                new ClassFeature { Name = "Arcane Initiate", Description = "You gain proficiency in Arcana. You also learn one Wizard cantrip of your choice.", Uses = "Passive" }
+            },
+
+            // === SORCERER ORIGINS ===
+            ["Clockwork Soul"] = new()
+            {
+                new ClassFeature { Name = "Clockwork Magic", Description = "You learn additional spells: Alarm, Protection from Evil and Good, and others at higher levels. These count as sorcerer spells.", Uses = "Passive (always known)" },
+                new ClassFeature { Name = "Restore Balance", Description = "When a creature you can see within 60 feet is about to roll a d20 with advantage or disadvantage, you can use your reaction to prevent the advantage or disadvantage for that roll.", Uses = "Charisma modifier times per long rest" }
+            },
+            ["Draconic Bloodline"] = new()
+            {
+                new ClassFeature { Name = "Draconic Resilience", Description = "Your hit point maximum increases by 1 for each sorcerer level. When not wearing armor, your AC equals 13 + your Dexterity modifier.", Uses = "Passive" },
+                new ClassFeature { Name = "Draconic Ancestry", Description = "Choose one dragon type. You gain resistance to the damage type associated with that dragon (acid, cold, fire, lightning, or poison).", Uses = "Passive" }
+            },
+            ["Wild Magic"] = new()
+            {
+                new ClassFeature { Name = "Wild Magic Surge", Description = "Immediately after you cast a sorcerer spell of 1st level or higher, the DM can have you roll a d20. If you roll a 1, roll on the Wild Magic Surge table.", Uses = "Passive (triggers on spell cast)" },
+                new ClassFeature { Name = "Tides of Chaos", Description = "You can manipulate the forces of chance and chaos to gain advantage on one attack roll, ability check, or saving throw. The DM can then force a Wild Magic Surge.", Uses = "1 time per long rest (regain on long rest or when you roll on surge table)" }
+            },
+            ["Shadow"] = new()
+            {
+                new ClassFeature { Name = "Eyes of the Dark", Description = "You gain darkvision out to 120 feet. You can cast Darkness by spending 2 sorcery points (no spell slot). You can see through that Darkness.", Uses = "Passive darkvision + 2 SP for Darkness" },
+                new ClassFeature { Name = "Strength of the Grave", Description = "When reduced to 0 hit points, you can make a Charisma saving throw (DC 5 + damage taken). On success you drop to 1 hit point instead.", Uses = "1 time per long rest" }
+            },
+            ["Storm"] = new()
+            {
+                new ClassFeature { Name = "Tempestuous Magic", Description = "Immediately after casting a 1st-level or higher spell, you can use a bonus action to fly up to 10 feet without provoking opportunity attacks.", Uses = "Passive (after casting)" },
+                new ClassFeature { Name = "Heart of the Storm", Description = "You gain resistance to lightning and thunder damage. When you cast a spell that deals lightning or thunder damage, creatures within 10 feet take extra damage equal to your Charisma modifier.", Uses = "Passive" }
+            },
+            ["Divine Soul"] = new()
+            {
+                new ClassFeature { Name = "Divine Magic", Description = "You learn an additional spell based on your chosen divine alignment (e.g. Cure Wounds for Good, etc.). This counts as a sorcerer spell.", Uses = "Passive (always known)" },
+                new ClassFeature { Name = "Favored by the Gods", Description = "When you fail a saving throw or miss with an attack roll, you can roll 2d4 and add the total to the roll, potentially turning failure into success.", Uses = "1 time per short or long rest" }
+            },
+            ["Aberrant Mind"] = new()
+            {
+                new ClassFeature { Name = "Psionic Spells", Description = "You learn additional spells (Mind Sliver, Dissonant Whispers, etc.) that count as sorcerer spells for you. They are always known.", Uses = "Passive" },
+                new ClassFeature { Name = "Telepathic Speech", Description = "You can communicate telepathically with any creature within 30 feet that can understand a language. You don't need to share a language.", Uses = "At will (while conscious)" }
+            },
+            ["Lunar"] = new()
+            {
+                new ClassFeature { Name = "Lunar Magic", Description = "You learn the Moonbeam spell (and others at higher levels). These count as sorcerer spells.", Uses = "Passive" },
+                new ClassFeature { Name = "Moonlight", Description = "You can shed bright light in a 30-foot radius and dim light for an additional 30 feet (bonus action to toggle).", Uses = "At will" }
+            },
+
+            // === WARLOCK PATRONS ===
+            ["The Great Old One"] = new()
+            {
+                new ClassFeature { Name = "Awakened Mind", Description = "You can telepathically speak to any creature within 30 feet that can understand a language. You don't need to share a language.", Uses = "At will" },
+                new ClassFeature { Name = "Expanded Spell List", Description = "You always have Dissonant Whispers, Tasha's Hideous Laughter, and other Great Old One spells available to learn.", Uses = "Passive" }
+            },
+            ["The Fiend"] = new()
+            {
+                new ClassFeature { Name = "Dark One's Blessing", Description = "When you reduce a hostile creature to 0 hit points, you gain temporary hit points equal to your Charisma modifier + warlock level.", Uses = "Passive (triggers on kill)" },
+                new ClassFeature { Name = "Expanded Spell List", Description = "You always have access to Burning Hands, Command, and other Fiend patron spells.", Uses = "Passive" }
+            },
+            ["The Archfey"] = new()
+            {
+                new ClassFeature { Name = "Fey Presence", Description = "As an action you can project an aura that charms or frightens creatures of your choice within 10 feet (Wisdom save negates).", Uses = "1 time per short or long rest" },
+                new ClassFeature { Name = "Expanded Spell List", Description = "You always have Faerie Fire, Sleep, and other Archfey spells available.", Uses = "Passive" }
+            },
+            ["The Celestial"] = new()
+            {
+                new ClassFeature { Name = "Healing Light", Description = "As a bonus action you can heal a creature within 60 feet for 1d6 + your Charisma modifier hit points. You can use this a number of times equal to your proficiency bonus.", Uses = "Proficiency bonus times per long rest" },
+                new ClassFeature { Name = "Expanded Spell List", Description = "You always have Cure Wounds, Guiding Bolt, and other Celestial spells available.", Uses = "Passive" }
+            },
+            ["The Hexblade"] = new()
+            {
+                new ClassFeature { Name = "Hex Warrior", Description = "You gain proficiency with medium armor, shields, and martial weapons. When you attack with a one-handed weapon, you can use Charisma instead of Strength or Dexterity for the attack and damage rolls.", Uses = "Passive" },
+                new ClassFeature { Name = "Expanded Spell List", Description = "You always have Shield, Wrathful Smite, and other Hexblade spells available.", Uses = "Passive" }
+            },
+            ["The Fathomless"] = new()
+            {
+                new ClassFeature { Name = "Tentacle of the Deeps", Description = "You can summon a spectral tentacle that can attack or grapple. It lasts 1 minute or until you dismiss it.", Uses = "1 time per short or long rest (scales with level)" },
+                new ClassFeature { Name = "Gifts of the Deep", Description = "You gain a swim speed of 40 feet and the ability to breathe underwater. You also gain resistance to cold damage.", Uses = "Passive" }
+            },
+            ["The Genie"] = new()
+            {
+                new ClassFeature { Name = "Genie's Vessel", Description = "You gain a magical vessel (a lamp, bottle, etc.). You can enter it as an action and remain there for up to 1 hour. You can also use it to cast the Genie's vessel spells.", Uses = "1 hour per long rest inside vessel" },
+                new ClassFeature { Name = "Expanded Spell List", Description = "You always have Phantasmal Force, Detect Evil and Good, and other Genie spells available.", Uses = "Passive" }
+            },
+            ["The Undead"] = new()
+            {
+                new ClassFeature { Name = "Form of Dread", Description = "As a bonus action you can transform for 1 minute, gaining temporary hit points and frightening creatures when you hit them.", Uses = "1 time per short or long rest" },
+                new ClassFeature { Name = "Grave Touched", Description = "You don't need to eat, drink, or breathe. You are immune to disease. You also learn the Spare the Dying cantrip.", Uses = "Passive" }
+            },
+            ["The Undying"] = new()
+            {
+                new ClassFeature { Name = "Among the Dead", Description = "You have advantage on saving throws against effects from undead and on death saving throws. You can also speak with the dead once per long rest.", Uses = "Passive + 1/day speak with dead" },
+                new ClassFeature { Name = "Undying Sentinel", Description = "When you are reduced to 0 hit points, you can immediately regain hit points equal to your warlock level + your Charisma modifier.", Uses = "1 time per long rest" }
+            }
+        };
+
+        public static readonly Dictionary<string, ClericSubclassData> ClericSubclasses = new()
+        {
+            ["Arcana"] = new() { Name = "Arcana Domain", AdditionalCantrips = new() { "Any 1 Wizard cantrip" }, DomainSpells = new() { "Detect Magic", "Magic Missile" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Arcane Initiate", "Arcane Ward" } },
+            ["Death"] = new() { Name = "Death Domain", AdditionalCantrips = new() { "Any 1 Necromancy cantrip" }, DomainSpells = new() { "False Life", "Ray of Sickness" }, ArmorProficiencies = new(), WeaponProficiencies = new() { "Martial weapons" }, UniqueAbilities = new() { "Reaper" } },
+            ["Forge"] = new() { Name = "Forge Domain", AdditionalCantrips = new(), DomainSpells = new() { "Identify", "Searing Smite" }, ArmorProficiencies = new() { "Heavy armor" }, WeaponProficiencies = new(), UniqueAbilities = new() { "Blessing of the Forge" } },
+            ["Grave"] = new() { Name = "Grave Domain", AdditionalCantrips = new(), DomainSpells = new() { "False Life", "Gentle Repose" }, ArmorProficiencies = new(), WeaponProficiencies = new() { "Martial weapons" }, UniqueAbilities = new() { "Circle of Mortality", "Eyes of the Grave" } },
+            ["Knowledge"] = new() { Name = "Knowledge Domain", AdditionalCantrips = new(), DomainSpells = new() { "Command", "Identify" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Blessings of Knowledge" } },
+            ["Life"] = new() { Name = "Life Domain", AdditionalCantrips = new(), DomainSpells = new() { "Bless", "Cure Wounds" }, ArmorProficiencies = new() { "Heavy armor" }, WeaponProficiencies = new(), UniqueAbilities = new() { "Disciple of Life" } },
+            ["Light"] = new() { Name = "Light Domain", AdditionalCantrips = new() { "Light" }, DomainSpells = new() { "Burning Hands", "Faerie Fire" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Warding Flare" } },
+            ["Nature"] = new() { Name = "Nature Domain", AdditionalCantrips = new() { "Any 1 Druid cantrip" }, DomainSpells = new() { "Animal Friendship", "Speak with Animals" }, ArmorProficiencies = new() { "Heavy armor" }, WeaponProficiencies = new(), UniqueAbilities = new() { "Acolyte of Nature" } },
+            ["Order"] = new() { Name = "Order Domain", AdditionalCantrips = new(), DomainSpells = new() { "Command", "Heroism" }, ArmorProficiencies = new() { "Heavy armor" }, WeaponProficiencies = new(), UniqueAbilities = new() { "Voice of Authority" } },
+            ["Peace"] = new() { Name = "Peace Domain", AdditionalCantrips = new(), DomainSpells = new() { "Heroism", "Sanctuary" }, ArmorProficiencies = new() { "Heavy armor" }, WeaponProficiencies = new(), UniqueAbilities = new() { "Emboldening Bond" } },
+            ["Tempest"] = new() { Name = "Tempest Domain", AdditionalCantrips = new(), DomainSpells = new() { "Fog Cloud", "Thunderwave" }, ArmorProficiencies = new() { "Heavy armor" }, WeaponProficiencies = new() { "Martial weapons" }, UniqueAbilities = new() { "Wrath of the Storm" } },
+            ["Trickery"] = new() { Name = "Trickery Domain", AdditionalCantrips = new(), DomainSpells = new() { "Charm Person", "Disguise Self" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Blessing of the Trickster" } },
+            ["Twilight"] = new() { Name = "Twilight Domain", AdditionalCantrips = new(), DomainSpells = new() { "Faerie Fire", "Sleep" }, ArmorProficiencies = new() { "Heavy armor" }, WeaponProficiencies = new() { "Martial weapons" }, UniqueAbilities = new() { "Eye of Night", "Vigilant Blessing" } },
+            ["War"] = new() { Name = "War Domain", AdditionalCantrips = new(), DomainSpells = new() { "Divine Favor", "Shield of Faith" }, ArmorProficiencies = new() { "Heavy armor" }, WeaponProficiencies = new() { "Martial weapons" }, UniqueAbilities = new() { "War Priest" } }
+        };
+
+        public static readonly Dictionary<string, WarlockSubclassData> WarlockSubclasses = new()
+        {
+            ["The Archfey"] = new() { Name = "The Archfey", AdditionalCantrips = new(), DomainSpells = new() { "Faerie Fire", "Sleep" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Fey Presence (charm or frighten creatures within 10 ft)" } },
+            ["The Celestial"] = new() { Name = "The Celestial", AdditionalCantrips = new(), DomainSpells = new() { "Cure Wounds", "Guiding Bolt" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Healing Light (bonus action healing)" } },
+            ["The Fathomless"] = new() { Name = "The Fathomless", AdditionalCantrips = new(), DomainSpells = new() { "Create or Destroy Water", "Tasha's Hideous Laughter" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Tentacle of the Deeps", "Gifts of the Deep (swim speed + breathing)" } },
+            ["The Fiend"] = new() { Name = "The Fiend", AdditionalCantrips = new(), DomainSpells = new() { "Burning Hands", "Command" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Dark One's Blessing (temp HP on kills)" } },
+            ["The Genie"] = new() { Name = "The Genie", AdditionalCantrips = new(), DomainSpells = new() { "Phantasmal Force", "Detect Evil and Good" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Genie's Vessel", "Elemental resistance based on genie type" } },
+            ["The Great Old One"] = new() { Name = "The Great Old One", AdditionalCantrips = new(), DomainSpells = new() { "Dissonant Whispers", "Tasha's Hideous Laughter" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Awakened Mind (telepathic communication)" } },
+            ["The Hexblade"] = new() { Name = "The Hexblade", AdditionalCantrips = new(), DomainSpells = new() { "Shield", "Wrathful Smite" }, ArmorProficiencies = new() { "Medium armor", "Shields" }, WeaponProficiencies = new() { "Martial weapons" }, UniqueAbilities = new() { "Hex Warrior (Cha for weapon attacks)" } },
+            ["The Undead"] = new() { Name = "The Undead", AdditionalCantrips = new(), DomainSpells = new() { "False Life", "Ray of Sickness" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Form of Dread", "Grave Touched" } },
+            ["The Undying"] = new() { Name = "The Undying", AdditionalCantrips = new(), DomainSpells = new() { "False Life", "Inflict Wounds" }, ArmorProficiencies = new(), WeaponProficiencies = new(), UniqueAbilities = new() { "Among the Dead (advantage vs undead)", "Undying Sentinel" } }
+        };
+
+        public static readonly Dictionary<string, SorcererSubclassData> SorcererSubclasses = new()
+        {
+            ["Aberrant Mind"] = new() { Name = "Aberrant Mind", AdditionalSpells = new() { "Mind Sliver", "Tasha's Hideous Laughter", "Detect Thoughts" }, UniqueAbilities = new() { "Psionic Spells", "Telepathic Speech" } },
+            ["Clockwork Soul"] = new() { Name = "Clockwork Soul", AdditionalSpells = new() { "Alarm", "Protection from Evil and Good" }, UniqueAbilities = new() { "Clockwork Magic", "Restore Balance" } },
+            ["Divine Soul"] = new() { Name = "Divine Soul", AdditionalSpells = new() { "Cure Wounds", "Guiding Bolt" }, UniqueAbilities = new() { "Divine Magic", "Favored by the Gods" } },
+            ["Draconic Bloodline"] = new() { Name = "Draconic Bloodline", AdditionalSpells = new(), UniqueAbilities = new() { "Draconic Resilience (+1 HP per level, natural armor 13 + Dex mod)", "Draconic Ancestry (choose dragon type)" } },
+            ["Lunar"] = new() { Name = "Lunar Sorcery", AdditionalSpells = new() { "Moonbeam" }, UniqueAbilities = new() { "Lunar Magic", "Moonlight" } },
+            ["Shadow"] = new() { Name = "Shadow Magic", AdditionalSpells = new(), UniqueAbilities = new() { "Eyes of the Dark (darkvision + see in magical darkness)", "Strength of the Grave" } },
+            ["Storm"] = new() { Name = "Storm Sorcery", AdditionalSpells = new(), UniqueAbilities = new() { "Tempestuous Magic", "Heart of the Storm" } },
+            ["Wild Magic"] = new() { Name = "Wild Magic", AdditionalSpells = new(), UniqueAbilities = new() { "Wild Magic Surge", "Tides of Chaos" } }
+        };
+
+        // ==================== SPELL LISTS (Cantrips + 1st-Level) ====================
+        public static readonly Dictionary<string, List<string>> ClassCantrips = new()
+        {
+            ["Artificer"] = new() { "Acid Splash", "Booming Blade", "Create Bonfire", "Dancing Lights", "Fire Bolt", "Frostbite", "Green-Flame Blade", "Guidance", "Light", "Lightning Lure", "Mending", "Message", "Poison Spray", "Prestidigitation", "Ray of Frost", "Shocking Grasp", "Spare the Dying", "Sword Burst", "Thorn Whip", "Thunderclap" },
+            ["Bard"] = new() { "Blade Ward", "Dancing Lights", "Friends", "Light", "Mage Hand", "Mending", "Message", "Minor Illusion", "Prestidigitation", "True Strike", "Vicious Mockery" },
+            ["Cleric"] = new() { "Guidance", "Light", "Mending", "Resistance", "Sacred Flame", "Spare the Dying", "Thaumaturgy" },
+            ["Druid"] = new() { "Druidcraft", "Guidance", "Mending", "Poison Spray", "Produce Flame", "Resistance", "Shillelagh", "Thorn Whip" },
+            ["Sorcerer"] = new() { "Acid Splash", "Blade Ward", "Booming Blade", "Chill Touch", "Create Bonfire", "Dancing Lights", "Fire Bolt", "Friends", "Frostbite", "Green-Flame Blade", "Gust", "Light", "Lightning Lure", "Mage Hand", "Mending", "Message", "Minor Illusion", "Poison Spray", "Prestidigitation", "Ray of Frost", "Shocking Grasp", "Sword Burst", "Thunderclap", "True Strike" },
+            ["Warlock"] = new() { "Blade Ward", "Chill Touch", "Create Bonfire", "Eldritch Blast", "Friends", "Frostbite", "Green-Flame Blade", "Lightning Lure", "Mage Hand", "Minor Illusion", "Poison Spray", "Prestidigitation", "Sword Burst", "Thunderclap", "True Strike" },
+            ["Wizard"] = new() { "Acid Splash", "Blade Ward", "Booming Blade", "Chill Touch", "Create Bonfire", "Dancing Lights", "Fire Bolt", "Friends", "Frostbite", "Green-Flame Blade", "Gust", "Light", "Lightning Lure", "Mage Hand", "Mending", "Message", "Minor Illusion", "Poison Spray", "Prestidigitation", "Ray of Frost", "Shocking Grasp", "Sword Burst", "Thunderclap", "True Strike" }
+        };
+
+        public static readonly Dictionary<string, List<string>> ClassLevel1Spells = new()
+        {
+            ["Cleric"] = new()
+    {
+        "Bane", "Bless", "Command", "Create or Destroy Water", "Cure Wounds",
+        "Detect Evil and Good", "Detect Magic", "Detect Poison and Disease",
+        "Divine Favor", "Guiding Bolt", "Healing Word", "Inflict Wounds",
+        "Protection from Evil and Good", "Purify Food and Drink", "Sanctuary",
+        "Shield of Faith", "Ceremony", "Detect Magic", "Bless", "Sanctuary",
+        "Wrathful Smite", "Searing Smite", "Thunderous Smite", "Compelled Duel",
+        "Heroism", "Bless", "Shield of Faith"
+    },
+
+            ["Druid"] = new()
+    {
+        "Animal Friendship", "Charm Person", "Create or Destroy Water", "Cure Wounds",
+        "Detect Magic", "Detect Poison and Disease", "Entangle", "Faerie Fire",
+        "Fog Cloud", "Goodberry", "Healing Word", "Jump", "Longstrider",
+        "Purify Food and Drink", "Speak with Animals", "Thunderwave", "Absorb Elements",
+        "Beast Bond", "Detect Magic", "Earth Tremor", "Fog Cloud", "Healing Word",
+        "Ice Knife", "Longstrider", "Snare", "Thunderwave"
+    },
+
+            ["Bard"] = new()
+    {
+        "Animal Friendship", "Charm Person", "Comprehend Languages", "Cure Wounds",
+        "Detect Magic", "Disguise Self", "Dissonant Whispers", "Faerie Fire",
+        "Feather Fall", "Healing Word", "Heroism", "Identify", "Longstrider",
+        "Mage Armor", "Sleep", "Tasha's Hideous Laughter", "Thunderwave",
+        "Unseen Servant", "Bless", "Charm Person", "Cure Wounds", "Detect Magic",
+        "Disguise Self", "Healing Word", "Heroism", "Identify", "Longstrider",
+        "Mage Armor", "Sleep", "Tasha's Hideous Laughter"
+    },
+
+            ["Sorcerer"] = new()
+    {
+        "Burning Hands", "Charm Person", "Chromatic Orb", "Color Spray",
+        "Comprehend Languages", "Detect Magic", "Disguise Self", "Expeditious Retreat",
+        "False Life", "Feather Fall", "Fog Cloud", "Ice Knife", "Jump",
+        "Mage Armor", "Magic Missile", "Shield", "Sleep", "Thunderwave", "Witch Bolt",
+        "Absorb Elements", "Burning Hands", "Charm Person", "Chromatic Orb",
+        "Color Spray", "Comprehend Languages", "Detect Magic", "Disguise Self",
+        "Expeditious Retreat", "False Life", "Feather Fall", "Fog Cloud",
+        "Ice Knife", "Jump", "Mage Armor", "Magic Missile", "Shield", "Sleep",
+        "Thunderwave", "Witch Bolt"
+    },
+
+            ["Warlock"] = new()
+    {
+        "Armor of Agathys", "Burning Hands", "Charm Person", "Comprehend Languages",
+        "Expeditious Retreat", "Hellish Rebuke", "Hex", "Protection from Evil and Good",
+        "Unseen Servant", "Witch Bolt", "Arms of Hadar", "Dissonant Whispers",
+        "Hex", "Hellish Rebuke", "Armor of Agathys", "Burning Hands",
+        "Charm Person", "Comprehend Languages", "Expeditious Retreat",
+        "Hellish Rebuke", "Hex", "Protection from Evil and Good", "Unseen Servant",
+        "Witch Bolt", "Arms of Hadar", "Dissonant Whispers"
+    },
+
+            ["Wizard"] = new()
+    {
+        "Alarm", "Burning Hands", "Charm Person", "Chromatic Orb", "Color Spray",
+        "Comprehend Languages", "Detect Magic", "Disguise Self", "Expeditious Retreat",
+        "False Life", "Feather Fall", "Find Familiar", "Fog Cloud", "Grease",
+        "Ice Knife", "Identify", "Jump", "Mage Armor", "Magic Missile", "Shield",
+        "Sleep", "Thunderwave", "Witch Bolt", "Absorb Elements", "Alarm",
+        "Burning Hands", "Charm Person", "Chromatic Orb", "Color Spray",
+        "Comprehend Languages", "Detect Magic", "Disguise Self", "Expeditious Retreat",
+        "False Life", "Feather Fall", "Find Familiar", "Fog Cloud", "Grease",
+        "Ice Knife", "Identify", "Jump", "Mage Armor", "Magic Missile", "Shield",
+        "Sleep", "Thunderwave", "Witch Bolt"
+    },
+
+            ["Artificer"] = new()
+    {
+        "Absorb Elements", "Catapult", "Cure Wounds", "Detect Magic", "Disguise Self",
+        "Expeditious Retreat", "Faerie Fire", "False Life", "Feather Fall", "Grease",
+        "Identify", "Jump", "Longstrider", "Mage Armor", "Magic Missile", "Purify Food and Drink",
+        "Sanctuary", "Shield", "Thunderwave", "Unseen Servant"
+    },
+
+            ["Paladin"] = new()
+    {
+        "Bless", "Command", "Cure Wounds", "Detect Evil and Good", "Detect Magic",
+        "Detect Poison and Disease", "Divine Favor", "Heroism", "Protection from Evil and Good",
+        "Purify Food and Drink", "Sanctuary", "Shield of Faith", "Wrathful Smite",
+        "Searing Smite", "Thunderous Smite", "Compelled Duel", "Bless", "Command",
+        "Cure Wounds", "Detect Evil and Good", "Divine Favor", "Heroism",
+        "Protection from Evil and Good", "Sanctuary", "Shield of Faith"
+    },
+
+            ["Ranger"] = new()
+    {
+        "Absorb Elements", "Alarm", "Animal Friendship", "Cure Wounds", "Detect Magic",
+        "Detect Poison and Disease", "Ensnaring Strike", "Entangle", "Fog Cloud",
+        "Goodberry", "Hail of Thorns", "Hunter's Mark", "Jump", "Longstrider",
+        "Speak with Animals", "Zephyr Strike", "Absorb Elements", "Alarm",
+        "Animal Friendship", "Cure Wounds", "Detect Magic", "Ensnaring Strike",
+        "Hunter's Mark", "Jump", "Longstrider", "Speak with Animals"
+    }
+        };
+
+        // ==================== FULL STARTING EQUIPMENT FOR ALL 13 CLASSES ====================
+        public static Dictionary<string, List<EquipmentChoice>> StartingEquipment = new()
+        {
+            ["Artificer"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Armor", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Studded leather armor" },
+            new EquipmentOption { Text = "Scale mail" }
+        }},
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Any simple weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 2 }
+        }},
+        new EquipmentChoice { Label = "Ranged Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Light crossbow and 20 bolts" }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Dungeoneer's pack" },
+            new EquipmentOption { Text = "Scholar's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Thieves' tools" }
+        }}
+    },
+
+            ["Barbarian"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Greataxe" },
+            new EquipmentOption { Text = "Any martial melee weapon", IsAnyWeapon = true, WeaponType = "Martial", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Secondary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Handaxe" },
+            new EquipmentOption { Text = "Any simple weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Explorer's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Four javelins" }
+        }}
+    },
+
+            ["Bard"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Rapier" },
+            new EquipmentOption { Text = "Longsword" },
+            new EquipmentOption { Text = "Any simple weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Diplomat's pack" },
+            new EquipmentOption { Text = "Entertainer's pack" }
+        }},
+        new EquipmentChoice { Label = "Musical Instrument", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Any musical instrument of your choice" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Leather armor" },
+            new EquipmentOption { Text = "Dagger" }
+        }}
+    },
+
+            ["Cleric"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Mace" },
+            new EquipmentOption { Text = "Warhammer (if proficient with martial weapons)" }
+        }},
+        new EquipmentChoice { Label = "Armor", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Scale mail" },
+            new EquipmentOption { Text = "Leather armor" },
+            new EquipmentOption { Text = "Chain mail (if proficient)" }
+        }},
+        new EquipmentChoice { Label = "Ranged / Simple Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Light crossbow and 20 bolts" },
+            new EquipmentOption { Text = "Any simple weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Priest's pack" },
+            new EquipmentOption { Text = "Explorer's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Shield and a holy symbol" }
+        }}
+    },
+
+            ["Druid"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Shield or Simple Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Wooden shield" },
+            new EquipmentOption { Text = "Any simple weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Melee Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Scimitar" },
+            new EquipmentOption { Text = "Any simple melee weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Explorer's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Leather armor" },
+            new EquipmentOption { Text = "Druidic focus" }
+        }}
+    },
+
+            ["Fighter"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Armor", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Chain mail" },
+            new EquipmentOption { Text = "Leather armor + longbow and 20 arrows" }
+        }},
+        new EquipmentChoice { Label = "Primary Martial Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Any martial weapon and shield", IsAnyWeapon = true, WeaponType = "Martial", RequiredCount = 1, ExtraItem = "Shield" },
+            new EquipmentOption { Text = "Two martial weapons", IsAnyWeapon = true, WeaponType = "Martial", RequiredCount = 2 }
+        }},
+        new EquipmentChoice { Label = "Secondary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Two handaxes" },
+            new EquipmentOption { Text = "Light crossbow and 20 bolts" }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Dungeoneer's pack" },
+            new EquipmentOption { Text = "Explorer's pack" }
+        }}
+    },
+
+            ["Monk"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Shortsword" },
+            new EquipmentOption { Text = "Any simple weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Dungeoneer's pack" },
+            new EquipmentOption { Text = "Explorer's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "10 darts" }
+        }}
+    },
+
+            ["Paladin"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Martial weapon and shield", IsAnyWeapon = true, WeaponType = "Martial", RequiredCount = 1, ExtraItem = "Shield" },
+            new EquipmentOption { Text = "Two martial weapons", IsAnyWeapon = true, WeaponType = "Martial", RequiredCount = 2 }
+        }},
+        new EquipmentChoice { Label = "Secondary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Five javelins" },
+            new EquipmentOption { Text = "Any simple melee weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Priest's pack" },
+            new EquipmentOption { Text = "Explorer's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Chain mail" },
+            new EquipmentOption { Text = "Holy symbol" }
+        }}
+    },
+
+            ["Ranger"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Armor", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Scale mail" },
+            new EquipmentOption { Text = "Leather armor" }
+        }},
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Two shortswords" },
+            new EquipmentOption { Text = "Two simple melee weapons", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 2 }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Dungeoneer's pack" },
+            new EquipmentOption { Text = "Explorer's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Longbow and 20 arrows" }
+        }}
+    },
+
+            ["Rogue"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Rapier" },
+            new EquipmentOption { Text = "Shortsword" }
+        }},
+        new EquipmentChoice { Label = "Ranged Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Shortbow and 20 arrows" },
+            new EquipmentOption { Text = "Light crossbow and 20 bolts" }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Burglar's pack" },
+            new EquipmentOption { Text = "Dungeoneer's pack" },
+            new EquipmentOption { Text = "Explorer's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Leather armor" },
+            new EquipmentOption { Text = "Two daggers" },
+            new EquipmentOption { Text = "Thieves' tools" }
+        }}
+    },
+
+            ["Sorcerer"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Light crossbow and 20 bolts" },
+            new EquipmentOption { Text = "Any simple weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Dungeoneer's pack" },
+            new EquipmentOption { Text = "Explorer's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Two daggers" }
+        }}
+    },
+
+            ["Warlock"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Light crossbow and 20 bolts" },
+            new EquipmentOption { Text = "Any simple weapon", IsAnyWeapon = true, WeaponType = "Simple", RequiredCount = 1 }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Dungeoneer's pack" },
+            new EquipmentOption { Text = "Scholar's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Leather armor" },
+            new EquipmentOption { Text = "Two daggers" }
+        }}
+    },
+
+            ["Wizard"] = new List<EquipmentChoice>
+    {
+        new EquipmentChoice { Label = "Primary Weapon", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Quarterstaff" },
+            new EquipmentOption { Text = "Dagger" }
+        }},
+        new EquipmentChoice { Label = "Pack", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Scholar's pack" },
+            new EquipmentOption { Text = "Explorer's pack" }
+        }},
+        new EquipmentChoice { Label = "Automatic Equipment", Options = new List<EquipmentOption> {
+            new EquipmentOption { Text = "Spellbook" }
+        }}
+    }
+        };
+
+        // ==================== FULL 5E WEAPON LISTS ====================
+        public static readonly List<Weapon> SimpleWeapons = new()
+{
+    new() { Name = "Club", Damage = "1d4", Type = "Bludgeoning", Range = "-", Properties = "Light" },
+    new() { Name = "Dagger", Damage = "1d4", Type = "Piercing", Range = "20/60", Properties = "Finesse, Light, Thrown" },
+    new() { Name = "Greatclub", Damage = "1d8", Type = "Bludgeoning", Range = "-", Properties = "Two-handed" },
+    new() { Name = "Handaxe", Damage = "1d6", Type = "Slashing", Range = "20/60", Properties = "Light, Thrown" },
+    new() { Name = "Javelin", Damage = "1d6", Type = "Piercing", Range = "30/120", Properties = "Thrown" },
+    new() { Name = "Light Hammer", Damage = "1d4", Type = "Bludgeoning", Range = "20/60", Properties = "Light, Thrown" },
+    new() { Name = "Mace", Damage = "1d6", Type = "Bludgeoning", Range = "-", Properties = "-" },
+    new() { Name = "Quarterstaff", Damage = "1d6", Type = "Bludgeoning", Range = "-", Properties = "Versatile (1d8)" },
+    new() { Name = "Sickle", Damage = "1d4", Type = "Slashing", Range = "-", Properties = "Light" },
+    new() { Name = "Spear", Damage = "1d6", Type = "Piercing", Range = "20/60", Properties = "Thrown, Versatile (1d8)" },
+    new() { Name = "Light Crossbow", Damage = "1d8", Type = "Piercing", Range = "80/320", Properties = "Ammunition, Loading, Two-handed" },
+    new() { Name = "Dart", Damage = "1d4", Type = "Piercing", Range = "20/60", Properties = "Finesse, Thrown" },
+    new() { Name = "Shortbow", Damage = "1d6", Type = "Piercing", Range = "80/320", Properties = "Ammunition, Two-handed" },
+    new() { Name = "Sling", Damage = "1d4", Type = "Bludgeoning", Range = "30/120", Properties = "Ammunition" }
+};
+
+        public static readonly List<Weapon> MartialWeapons = new()
+{
+    new() { Name = "Battleaxe", Damage = "1d8", Type = "Slashing", Range = "-", Properties = "Versatile (1d10)" },
+    new() { Name = "Flail", Damage = "1d8", Type = "Bludgeoning", Range = "-", Properties = "-" },
+    new() { Name = "Glaive", Damage = "1d10", Type = "Slashing", Range = "-", Properties = "Heavy, Reach, Two-handed" },
+    new() { Name = "Greataxe", Damage = "1d12", Type = "Slashing", Range = "-", Properties = "Heavy, Two-handed" },
+    new() { Name = "Greatsword", Damage = "2d6", Type = "Slashing", Range = "-", Properties = "Heavy, Two-handed" },
+    new() { Name = "Halberd", Damage = "1d10", Type = "Slashing", Range = "-", Properties = "Heavy, Reach, Two-handed" },
+    new() { Name = "Lance", Damage = "1d12", Type = "Piercing", Range = "-", Properties = "Reach, Special" },
+    new() { Name = "Longsword", Damage = "1d8", Type = "Slashing", Range = "-", Properties = "Versatile (1d10)" },
+    new() { Name = "Maul", Damage = "2d6", Type = "Bludgeoning", Range = "-", Properties = "Heavy, Two-handed" },
+    new() { Name = "Morningstar", Damage = "1d8", Type = "Piercing", Range = "-", Properties = "-" },
+    new() { Name = "Pike", Damage = "1d10", Type = "Piercing", Range = "-", Properties = "Heavy, Reach, Two-handed" },
+    new() { Name = "Rapier", Damage = "1d8", Type = "Piercing", Range = "-", Properties = "Finesse" },
+    new() { Name = "Scimitar", Damage = "1d6", Type = "Slashing", Range = "-", Properties = "Finesse, Light" },
+    new() { Name = "Shortsword", Damage = "1d6", Type = "Piercing", Range = "-", Properties = "Finesse, Light" },
+    new() { Name = "Trident", Damage = "1d6", Type = "Piercing", Range = "20/60", Properties = "Thrown, Versatile (1d8)" },
+    new() { Name = "War Pick", Damage = "1d8", Type = "Piercing", Range = "-", Properties = "-" },
+    new() { Name = "Warhammer", Damage = "1d8", Type = "Bludgeoning", Range = "-", Properties = "Versatile (1d10)" },
+    new() { Name = "Whip", Damage = "1d4", Type = "Slashing", Range = "-", Properties = "Finesse, Reach" },
+    new() { Name = "Blowgun", Damage = "1", Type = "Piercing", Range = "25/100", Properties = "Ammunition, Loading" },
+    new() { Name = "Hand Crossbow", Damage = "1d6", Type = "Piercing", Range = "30/120", Properties = "Ammunition, Light, Loading" },
+    new() { Name = "Heavy Crossbow", Damage = "1d10", Type = "Piercing", Range = "100/400", Properties = "Ammunition, Heavy, Loading, Two-handed" },
+    new() { Name = "Longbow", Damage = "1d8", Type = "Piercing", Range = "150/600", Properties = "Ammunition, Heavy, Two-handed" },
+    new() { Name = "Net", Damage = "-", Type = "-", Range = "5/15", Properties = "Special, Thrown" }
+};
+
+        // Carrying Capacity Weights (lbs) - Base table, expandable
+        public static readonly Dictionary<string, double> ItemWeights = new(StringComparer.OrdinalIgnoreCase)
+        {
+            // === WEAPONS ===
+            ["Club"] = 2,
+            ["Dagger"] = 1,
+            ["Greatclub"] = 10,
+            ["Handaxe"] = 2,
+            ["Javelin"] = 2,
+            ["Light Hammer"] = 2,
+            ["Mace"] = 4,
+            ["Quarterstaff"] = 4,
+            ["Sickle"] = 2,
+            ["Spear"] = 3,
+            ["Light Crossbow"] = 5,
+            ["Shortbow"] = 2,
+            ["Sling"] = 0,
+            ["Blowgun"] = 1,
+            ["Hand Crossbow"] = 3,
+            ["Heavy Crossbow"] = 18,
+            ["Longbow"] = 2,
+            ["Battleaxe"] = 4,
+            ["Flail"] = 2,
+            ["Glaive"] = 6,
+            ["Greataxe"] = 7,
+            ["Greatsword"] = 6,
+            ["Halberd"] = 6,
+            ["Lance"] = 6,
+            ["Longsword"] = 3,
+            ["Maul"] = 10,
+            ["Morningstar"] = 4,
+            ["Pike"] = 18,
+            ["Rapier"] = 2,
+            ["Scimitar"] = 3,
+            ["Shortsword"] = 2,
+            ["Trident"] = 4,
+            ["War Pick"] = 2,
+            ["Warhammer"] = 2,
+            ["Whip"] = 3,
+
+            // === ARMOR ===
+            ["Padded"] = 8,
+            ["Leather"] = 10,
+            ["Studded Leather"] = 13,
+            ["Hide"] = 12,
+            ["Chain Shirt"] = 20,
+            ["Scale Mail"] = 45,
+            ["Breastplate"] = 20,
+            ["Half Plate"] = 40,
+            ["Ring Mail"] = 40,
+            ["Chain Mail"] = 65,
+            ["Splint"] = 60,
+            ["Plate"] = 65,
+            ["Shield"] = 6,
+
+            // === COMMON BACKGROUND / ADVENTURING GEAR ===
+            ["Backpack"] = 5,
+            ["Bedroll"] = 7,
+            ["Blanket"] = 3,
+            ["Block and Tackle"] = 5,
+            ["Book"] = 5,
+            ["Candle"] = 0,
+            ["Case, Map or Scroll"] = 1,
+            ["Chain (10 ft)"] = 10,
+            ["Chalk (1 piece)"] = 0,
+            ["Chest"] = 25,
+            ["Clothes, Common"] = 3,
+            ["Clothes, Fine"] = 6,
+            ["Clothes, Traveler's"] = 4,
+            ["Component Pouch"] = 2,
+            ["Crowbar"] = 5,
+            ["Fishing Tackle"] = 4,
+            ["Flask or Tankard"] = 1,
+            ["Grappling Hook"] = 4,
+            ["Hammer"] = 3,
+            ["Healer’s Kit"] = 3,
+            ["Holy Symbol"] = 1,
+            ["Hourglass"] = 1,
+            ["Hunting Trap"] = 25,
+            ["Ink (1 oz bottle)"] = 0,
+            ["Ink Pen"] = 0,
+            ["Jug or Pitcher"] = 4,
+            ["Ladder (10 ft)"] = 25,
+            ["Lantern, Bullseye"] = 3,
+            ["Lantern, Hooded"] = 2,
+            ["Lock"] = 1,
+            ["Magnifying Glass"] = 0,
+            ["Manacles"] = 6,
+            ["Mess Kit"] = 1,
+            ["Mirror, Steel"] = 0.5,
+            ["Oil (flask)"] = 1,
+            ["Paper (one sheet)"] = 0,
+            ["Parchment (one sheet)"] = 0,
+            ["Perfume (vial)"] = 0,
+            ["Pick, Miner’s"] = 10,
+            ["Piton"] = 0.25,
+            ["Poison, Basic (vial)"] = 0,
+            ["Pole (10 ft)"] = 7,
+            ["Pot, Iron"] = 1,
+            ["Pouch"] = 1,
+            ["Quiver"] = 1,
+            ["Ram, Portable"] = 35,
+            ["Rations (1 day)"] = 2,
+            ["Robes"] = 4,
+            ["Rope, Hempen (50 ft)"] = 10,
+            ["Rope, Silk (50 ft)"] = 5,
+            ["Sack"] = 0.5,
+            ["Scale, Merchant’s"] = 6,
+            ["Sealing Wax"] = 0,
+            ["Shovel"] = 5,
+            ["Signal Whistle"] = 0,
+            ["Signet Ring"] = 0,
+            ["Soap"] = 0,
+            ["Spellbook"] = 3,
+            ["Spike, Iron"] = 1,
+            ["Spyglass"] = 1,
+            ["Tent, Two-Person"] = 20,
+            ["Tinderbox"] = 1,
+            ["Torch"] = 1,
+            ["Vial"] = 0,
+            ["Waterskin"] = 5,
+            ["Whetstone"] = 1,
+
+            // === AMMUNITION ===
+            ["Arrows (20)"] = 1,
+            ["Bolts (20)"] = 1.5,
+            ["Sling Bullets (20)"] = 1.5,
+            ["Blowgun Needles (50)"] = 1,
+
+            // === PACKS (flat weights for now) ===
+            ["Explorer's Pack"] = 59,
+            ["Dungeoneer's Pack"] = 61,
+            ["Priest's Pack"] = 29,
+            ["Scholar's Pack"] = 21,
+            ["Diplomat's Pack"] = 39,
+            ["Entertainer's Pack"] = 38,
+            ["Burglar's Pack"] = 44
+        };
+
+        // Official 5e Musical Instruments
+        public static readonly List<string> MusicalInstruments = new()
+{
+    "Bagpipes", "Drum", "Dulcimer", "Flute", "Horn", "Lute", "Lyre",
+    "Pan flute", "Shawm", "Viol"
+};
+
+        public static readonly List<string> AllLanguages = new()
+        {
+            "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling", "Orc",
+            "Abyssal", "Celestial", "Draconic", "Deep Speech", "Infernal", "Primordial", "Sylvan", "Undercommon",
+            "Aquan", "Auran", "Ignan", "Terran"
+        };
+
+        // ==================== ALL SKILLS (Single Source of Truth) ====================
+        public static List<SkillProficiency> CreateAllSkills()
+        {
+            return new List<SkillProficiency>
+            {
+                new("Acrobatics", "Dex"),
+                new("Animal Handling", "Wis"),
+                new("Arcana", "Int"),
+                new("Athletics", "Str"),
+                new("Deception", "Cha"),
+                new("History", "Int"),
+                new("Insight", "Wis"),
+                new("Intimidation", "Cha"),
+                new("Investigation", "Int"),
+                new("Medicine", "Wis"),
+                new("Nature", "Int"),
+                new("Perception", "Wis"),
+                new("Performance", "Cha"),
+                new("Persuasion", "Cha"),
+                new("Religion", "Int"),
+                new("Sleight of Hand", "Dex"),
+                new("Stealth", "Dex"),
+                new("Survival", "Wis")
+            };
+        }
+
+        // ==================== ABILITY SCORE HELPER (Single Source of Truth) ====================
+        public static int GetAbilityScore(string ability, Dictionary<string, int> finalStats)
+        {
+            if (finalStats == null || string.IsNullOrEmpty(ability))
+                return 10;
+
+            return finalStats.TryGetValue(ability, out int value) ? value : 10;
+        }
+
+        // ==================== CENTRALIZED LISTS (Single Source of Truth) ====================
+
+        public static readonly List<string> AllBackgrounds = new()
+{
+    "Acolyte", "Athlete", "City Watch", "Courtier", "Criminal", "Entertainer",
+    "Faction Agent", "Far Traveler", "Feylost", "Folk Hero", "Gladiator", "Hermit",
+    "Inheritor", "Knight", "Marine", "Noble", "Outlander", "Pirate", "Rune Carver",
+    "Sage", "Sailor", "Shipwright", "Smuggler", "Soldier", "Spy",
+    "Urban Bounty Hunter", "Urchin"
+};
+
+        public static readonly List<string> FeatGrantingRaces = new()
+{
+    "Variant Human", "Custom Lineage"
+};
+
+        public static readonly Dictionary<string, List<string>> BackgroundSkillMap = new()
+        {
+            ["Acolyte"] = new() { "Insight", "Religion" },
+            ["Athlete"] = new() { "Acrobatics", "Athletics" },
+            ["City Watch"] = new() { "Athletics", "Insight" },
+            ["Courtier"] = new() { "Insight", "Persuasion" },
+            ["Criminal"] = new() { "Deception", "Stealth" },
+            ["Entertainer"] = new() { "Acrobatics", "Performance" },
+            ["Faction Agent"] = new() { "Deception", "Persuasion" },
+            ["Far Traveler"] = new() { "Insight", "Perception" },
+            ["Feylost"] = new() { "Deception", "Survival" },
+            ["Folk Hero"] = new() { "Animal Handling", "Survival" },
+            ["Gladiator"] = new() { "Acrobatics", "Performance" },
+            ["Hermit"] = new() { "Medicine", "Religion" },
+            ["Inheritor"] = new() { "Arcana", "History" },
+            ["Knight"] = new() { "History", "Persuasion" },
+            ["Marine"] = new() { "Athletics", "Survival" },
+            ["Noble"] = new() { "History", "Persuasion" },
+            ["Outlander"] = new() { "Athletics", "Survival" },
+            ["Pirate"] = new() { "Athletics", "Perception" },
+            ["Rune Carver"] = new() { "Arcana", "History" },
+            ["Sage"] = new() { "Arcana", "History" },
+            ["Sailor"] = new() { "Athletics", "Perception" },
+            ["Shipwright"] = new() { "History", "Perception" },
+            ["Smuggler"] = new() { "Deception", "Stealth" },
+            ["Soldier"] = new() { "Athletics", "Intimidation" },
+            ["Spy"] = new() { "Deception", "Stealth" },
+            ["Urban Bounty Hunter"] = new() { "Insight", "Investigation" },
+            ["Urchin"] = new() { "Sleight of Hand", "Stealth" }
+        };
+
+        public static readonly Dictionary<string, string> BackgroundDetails = new()
+        {
+            ["Acolyte"] = "SKILL PROFICIENCIES: Insight, Religion\nLANGUAGES: Two of your choice\nEQUIPMENT: Holy symbol, prayer book, 5 sticks of incense, vestments, common clothes, pouch with 15 gp\nFEATURE: Shelter of the Faithful (free healing and care at temples of your faith)",
+            ["Athlete"] = "SKILL PROFICIENCIES: Acrobatics, Athletics\nTOOL PROFICIENCIES: One type of gaming set\nEQUIPMENT: Sports equipment, trophy, common clothes, pouch with 10 gp\nFEATURE: Echoes of Victory (advantage on Charisma checks with fans)",
+            ["City Watch"] = "SKILL PROFICIENCIES: Athletics, Insight\nLANGUAGES: One of your choice\nEQUIPMENT: Uniform, manacles, 10 gp\nFEATURE: Watcher's Eye (advantage on Perception checks in cities)",
+            ["Courtier"] = "SKILL PROFICIENCIES: Insight, Persuasion\nLANGUAGES: Two of your choice\nEQUIPMENT: Fine clothes, signet ring, 15 gp\nFEATURE: Court Functionary (know how to navigate noble courts)",
+            ["Criminal"] = "SKILL PROFICIENCIES: Deception, Stealth\nTOOL PROFICIENCIES: Thieves' tools\nEQUIPMENT: Crowbar, dark common clothes with hood, pouch with 15 gp\nFEATURE: Criminal Contact (reliable contact in criminal network)",
+            ["Entertainer"] = "SKILL PROFICIENCIES: Acrobatics, Performance\nTOOL PROFICIENCIES: One type of musical instrument\nEQUIPMENT: Musical instrument, costume, pouch with 15 gp\nFEATURE: By Popular Demand (free lodging and food when performing)",
+            ["Faction Agent"] = "SKILL PROFICIENCIES: Deception, Persuasion\nLANGUAGES: One of your choice\nEQUIPMENT: Badge of faction, common clothes, pouch with 15 gp\nFEATURE: Safe Haven (free lodging and meals from faction)",
+            ["Far Traveler"] = "SKILL PROFICIENCIES: Insight, Perception\nLANGUAGES: One of your choice\nEQUIPMENT: Traveler's clothes, trinket from homeland, pouch with 10 gp\nFEATURE: All Eyes on You (people are curious about you)",
+            ["Feylost"] = "SKILL PROFICIENCIES: Deception, Survival\nLANGUAGES: Sylvan\nEQUIPMENT: Feywild trinket, common clothes, pouch with 8 gp\nFEATURE: Feywild Connection (can sense when fey magic is nearby)",
+            ["Folk Hero"] = "SKILL PROFICIENCIES: Animal Handling, Survival\nTOOL PROFICIENCIES: One type of artisan's tools, vehicles (land)\nEQUIPMENT: Set of artisan's tools, shovel, iron pot, common clothes, pouch with 10 gp\nFEATURE: Rustic Hospitality (free lodging and meals from common folk)",
+            ["Gladiator"] = "SKILL PROFICIENCIES: Acrobatics, Performance\nTOOL PROFICIENCIES: One type of musical instrument\nEQUIPMENT: Costume, instrument, pouch with 15 gp\nFEATURE: By Popular Demand (free lodging when performing)",
+            ["Hermit"] = "SKILL PROFICIENCIES: Medicine, Religion\nLANGUAGES: One of your choice\nEQUIPMENT: Herbalism kit, winter clothes, common clothes, pouch with 5 gp\nFEATURE: Discovery (unique knowledge or item from seclusion)",
+            ["Inheritor"] = "SKILL PROFICIENCIES: Arcana, History\nLANGUAGES: One of your choice\nEQUIPMENT: Inheritance (trinket or item), fine clothes, pouch with 15 gp\nFEATURE: Inheritance (you have a valuable inheritance)",
+            ["Knight"] = "SKILL PROFICIENCIES: History, Persuasion\nLANGUAGES: One of your choice\nEQUIPMENT: Fine clothes, signet ring, scroll of pedigree, purse with 25 gp\nFEATURE: Position of Privilege (high society welcome)",
+            ["Marine"] = "SKILL PROFICIENCIES: Athletics, Survival\nTOOL PROFICIENCIES: Vehicles (water)\nEQUIPMENT: Uniform, 50 ft rope, common clothes, pouch with 10 gp\nFEATURE: Steady (advantage on checks to avoid being knocked prone)",
+            ["Noble"] = "SKILL PROFICIENCIES: History, Persuasion\nLANGUAGES: One of your choice\nEQUIPMENT: Fine clothes, signet ring, scroll of pedigree, purse with 25 gp\nFEATURE: Position of Privilege (high society welcome, letters of introduction)",
+            ["Outlander"] = "SKILL PROFICIENCIES: Athletics, Survival\nLANGUAGES: One of your choice\nEQUIPMENT: Staff, hunting trap, trophy from animal, traveler's clothes, pouch with 10 gp\nFEATURE: Wanderer (excellent memory for maps and terrain)",
+            ["Pirate"] = "SKILL PROFICIENCIES: Athletics, Perception\nTOOL PROFICIENCIES: Navigator's tools, vehicles (water)\nEQUIPMENT: Belaying pin, 50 ft silk rope, lucky charm, common clothes, pouch with 10 gp\nFEATURE: Bad Reputation (feared by common folk)",
+            ["Rune Carver"] = "SKILL PROFICIENCIES: Arcana, History\nTOOL PROFICIENCIES: Calligrapher's supplies\nEQUIPMENT: Calligrapher's supplies, rune-etched item, common clothes, pouch with 10 gp\nFEATURE: Rune Magic (can carve simple runes)",
+            ["Sage"] = "SKILL PROFICIENCIES: Arcana, History\nLANGUAGES: Two of your choice\nEQUIPMENT: Bottle of black ink, quill, small knife, letter from dead colleague, common clothes, pouch with 10 gp\nFEATURE: Researcher (can recall lore or find information)",
+            ["Sailor"] = "SKILL PROFICIENCIES: Athletics, Perception\nTOOL PROFICIENCIES: Navigator's tools, vehicles (water)\nEQUIPMENT: Belaying pin, 50 ft silk rope, lucky charm, common clothes, pouch with 10 gp\nFEATURE: Ship's Passage (free passage on ships)",
+            ["Shipwright"] = "SKILL PROFICIENCIES: History, Perception\nTOOL PROFICIENCIES: Carpenter's tools, vehicles (water)\nEQUIPMENT: Carpenter's tools, 50 ft rope, common clothes, pouch with 10 gp\nFEATURE: I'll Patch It (can repair ships quickly)",
+            ["Smuggler"] = "SKILL PROFICIENCIES: Deception, Stealth\nTOOL PROFICIENCIES: Thieves' tools\nEQUIPMENT: Crowbar, dark common clothes, pouch with 15 gp\nFEATURE: Hidden Compartment (know secret routes and hiding spots)",
+            ["Soldier"] = "SKILL PROFICIENCIES: Athletics, Intimidation\nTOOL PROFICIENCIES: Vehicles (land)\nEQUIPMENT: Insignia of rank, trophy from fallen enemy, set of common clothes, pouch with 10 gp\nFEATURE: Military Rank (can requisition simple equipment and horses)",
+            ["Spy"] = "SKILL PROFICIENCIES: Deception, Stealth\nTOOL PROFICIENCIES: Thieves' tools, disguise kit\nEQUIPMENT: Crowbar, dark common clothes, pouch with 15 gp\nFEATURE: Spy Contact (reliable contact in espionage network)",
+            ["Urban Bounty Hunter"] = "SKILL PROFICIENCIES: Insight, Investigation\nTOOL PROFICIENCIES: Thieves' tools\nEQUIPMENT: Manacles, 50 ft rope, common clothes, pouch with 15 gp\nFEATURE: Ear to the Ground (know rumors in cities)",
+            ["Urchin"] = "SKILL PROFICIENCIES: Sleight of Hand, Stealth\nTOOL PROFICIENCIES: Thieves' tools, disguise kit\nEQUIPMENT: Small knife, map of hometown, pet mouse, common clothes, pouch with 10 gp\nFEATURE: City Secrets (know hidden routes through any city)"
+        };
+
+        // ==================== BACKGROUND EQUIPMENT (Single Source of Truth) ====================
+        public static readonly Dictionary<string, string> BackgroundEquipment = new()
+        {
+            ["Acolyte"] = "Holy symbol, prayer book, 5 sticks of incense, vestments, common clothes, pouch with 15 gp",
+            ["Athlete"] = "Sports equipment, trophy, common clothes, pouch with 10 gp",
+            ["City Watch"] = "Uniform, manacles, 10 gp",
+            ["Courtier"] = "Fine clothes, signet ring, 15 gp",
+            ["Criminal"] = "Crowbar, dark common clothes with hood, pouch with 15 gp",
+            ["Entertainer"] = "Musical instrument, costume, pouch with 15 gp",
+            ["Faction Agent"] = "Badge of faction, common clothes, pouch with 15 gp",
+            ["Far Traveler"] = "Traveler's clothes, trinket from homeland, pouch with 10 gp",
+            ["Feylost"] = "Feywild trinket, common clothes, pouch with 8 gp",
+            ["Folk Hero"] = "Set of artisan's tools, shovel, iron pot, common clothes, pouch with 10 gp",
+            ["Gladiator"] = "Costume, instrument, pouch with 15 gp",
+            ["Hermit"] = "Herbalism kit, winter clothes, common clothes, pouch with 5 gp",
+            ["Inheritor"] = "Inheritance (trinket or item), fine clothes, pouch with 15 gp",
+            ["Knight"] = "Fine clothes, signet ring, scroll of pedigree, purse with 25 gp",
+            ["Marine"] = "Uniform, 50 ft rope, common clothes, pouch with 10 gp",
+            ["Noble"] = "Fine clothes, signet ring, scroll of pedigree, purse with 25 gp",
+            ["Outlander"] = "Staff, hunting trap, trophy from animal, traveler's clothes, pouch with 10 gp",
+            ["Pirate"] = "Belaying pin, 50 ft silk rope, lucky charm, common clothes, pouch with 10 gp",
+            ["Rune Carver"] = "Calligrapher's supplies, rune-etched item, common clothes, pouch with 10 gp",
+            ["Sage"] = "Bottle of black ink, quill, small knife, letter from dead colleague, common clothes, pouch with 10 gp",
+            ["Sailor"] = "Belaying pin, 50 ft silk rope, lucky charm, common clothes, pouch with 10 gp",
+            ["Shipwright"] = "Carpenter's tools, 50 ft rope, common clothes, pouch with 10 gp",
+            ["Smuggler"] = "Crowbar, dark common clothes, pouch with 15 gp",
+            ["Soldier"] = "Insignia of rank, trophy from fallen enemy, set of common clothes, pouch with 10 gp",
+            ["Spy"] = "Crowbar, dark common clothes, pouch with 15 gp",
+            ["Urban Bounty Hunter"] = "Manacles, 50 ft rope, common clothes, pouch with 15 gp",
+            ["Urchin"] = "Small knife, map of hometown, pet mouse, common clothes, pouch with 10 gp"
+        };
+
+        public static string GetBackgroundEquipment(string background)
+        {
+            return BackgroundEquipment.TryGetValue(background, out var equipment)
+                ? equipment
+                : "See Background tab for full equipment details";
+        }
+
+
+
+        public static readonly List<Armor> AllArmors = new()
+{
+    // Light Armor
+    new Armor { Name = "Padded", Type = "Light", AC = "11 + Dex", StealthDisadvantage = "Yes" },
+    new Armor { Name = "Leather", Type = "Light", AC = "11 + Dex" },
+    new Armor { Name = "Studded Leather", Type = "Light", AC = "12 + Dex" },
+
+    // Medium Armor
+    new Armor { Name = "Hide", Type = "Medium", AC = "12 + Dex (max 2)" },
+    new Armor { Name = "Chain Shirt", Type = "Medium", AC = "13 + Dex (max 2)" },
+    new Armor { Name = "Scale Mail", Type = "Medium", AC = "14 + Dex (max 2)", StealthDisadvantage = "Yes" },
+    new Armor { Name = "Breastplate", Type = "Medium", AC = "14 + Dex (max 2)" },
+    new Armor { Name = "Half-Plate", Type = "Medium", AC = "15 + Dex (max 2)", StealthDisadvantage = "Yes" },
+
+    // Heavy Armor
+    new Armor { Name = "Ring Mail", Type = "Heavy", AC = "14", StrengthRequirement = "Str 13", StealthDisadvantage = "Yes" },
+    new Armor { Name = "Chain Mail", Type = "Heavy", AC = "16", StrengthRequirement = "Str 13", StealthDisadvantage = "Yes" },
+    new Armor { Name = "Splint", Type = "Heavy", AC = "17", StrengthRequirement = "Str 15", StealthDisadvantage = "Yes" },
+    new Armor { Name = "Plate", Type = "Heavy", AC = "18", StrengthRequirement = "Str 15", StealthDisadvantage = "Yes" }
+};
+
+        public static List<Feat> AllFeats { get; private set; } = new();
+
+        public static void InitializeFeats()
+        {
+            AllFeats = new List<Feat>
+    {
+        // === CORE FEATS ===
+        new Feat {
+            Name = "Actor",
+            ShortDescription = "Skilled at mimicry and dramatic performance.",
+            Prerequisites = "None",
+            FullDescription = "Increase your Charisma score by 1, to a maximum of 20.\n\nYou have advantage on Charisma (Deception) and Charisma (Performance) checks when trying to pass yourself off as a different person.\n\nYou can mimic the speech of another person or the sounds made by other creatures. You must have heard the person speaking, or heard the creature make the sound, for at least 1 minute."
+        },
+        new Feat {
+            Name = "Alert",
+            ShortDescription = "Always on the lookout for danger.",
+            Prerequisites = "None",
+            FullDescription = "Increase your Dexterity score by 1, to a maximum of 20.\n\nYou gain a +5 bonus to initiative.\n\nYou can't be surprised while you are conscious.\n\nOther creatures don't gain advantage on attack rolls against you as a result of being hidden from you."
+        },
+        new Feat {
+            Name = "Athlete",
+            ShortDescription = "You have undergone extensive physical training.",
+            Prerequisites = "None",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase your Strength, Dexterity, or Constitution score by 1, to a maximum of 20.\n\nWhen you are prone, standing up uses only 5 feet of your movement.\n\nClimbing doesn't halve your speed.\n\nYou can make a running long jump or a running high jump after moving only 5 feet on foot, rather than 10 feet."
+        },
+        new Feat {
+            Name = "Charger",
+            ShortDescription = "You can take the Dash action as a bonus action.",
+            Prerequisites = "None",
+            FullDescription = "When you use the Dash action, you can make one melee weapon attack or shove a creature as a bonus action.\n\nIf you move at least 10 feet in a straight line immediately before taking this bonus action, you either gain a +5 bonus to the attack's damage roll (if it was a melee attack) or push the target up to 10 feet away from you (if you shove and you chose to push)."
+        },
+        new Feat {
+            Name = "Crossbow Expert",
+            ShortDescription = "Thanks to extensive practice, you can reload crossbows with ease.",
+            Prerequisites = "None",
+            FullDescription = "You ignore the loading property of crossbows with which you are proficient.\n\nBeing within 5 feet of a hostile creature doesn't impose disadvantage on your ranged attack rolls.\n\nWhen you use the Attack action and attack with a one-handed weapon, you can use a bonus action to attack with a loaded hand crossbow you are holding."
+        },
+        new Feat {
+            Name = "Defensive Duelist",
+            ShortDescription = "You excel at using a weapon to deflect attacks.",
+            Prerequisites = "Proficiency with a finesse weapon",
+            FullDescription = "Increase your Dexterity score by 1, to a maximum of 20.\n\nWhen you are wielding a finesse weapon with which you are proficient and another creature hits you with a melee attack, you can use your reaction to add your proficiency bonus to your AC for that attack, potentially causing the attack to miss you."
+        },
+        new Feat {
+            Name = "Dual Wielder",
+            ShortDescription = "You master fighting with two weapons.",
+            Prerequisites = "None",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase your Strength or Dexterity score by 1, to a maximum of 20.\n\nYou can use two-weapon fighting even when the one-handed melee weapons you are wielding aren't light.\n\nYou can draw or stow two one-handed weapons when you would normally be able to draw or stow only one."
+        },
+        new Feat {
+            Name = "Elemental Adept",
+            ShortDescription = "Your spells ignore resistance to one damage type.",
+            Prerequisites = "Spellcasting feature",
+            FullDescription = "Choose one of the following damage types: acid, cold, fire, lightning, or thunder.\n\nSpells you cast ignore resistance to damage of the chosen type. In addition, when you roll damage for a spell you cast that deals damage of that type, you can treat any 1 on a damage die as a 2."
+        },
+        new Feat {
+            Name = "Fey Touched",
+            ShortDescription = "You have been touched by the feywild.",
+            Prerequisites = "None",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase your Intelligence, Wisdom, or Charisma score by 1, to a maximum of 20.\n\nYou learn the misty step spell and one 1st-level spell of your choice. The 1st-level spell must be from the enchantment or illusion school of magic. You can cast each of these spells without expending a spell slot once per long rest."
+        },
+        new Feat {
+            Name = "Fighting Initiate",
+            ShortDescription = "Your martial training has given you a fighting style.",
+            Prerequisites = "Proficiency with a martial weapon or Unarmed Strike",
+            FullDescription = "You learn one Fighting Style option of your choice from the fighter class. If you already have a fighting style, you can replace it with another one.\n\nYou can replace this feat's fighting style with another one when you gain a level."
+        },
+        new Feat {
+            Name = "Great Weapon Master",
+            ShortDescription = "You've learned to put the weight of a weapon to your advantage.",
+            Prerequisites = "Proficiency with a martial weapon",
+            FullDescription = "On your turn, when you score a critical hit with a melee weapon or reduce a creature to 0 hit points with one, you can make one melee weapon attack as a bonus action.\n\nBefore you make a melee attack with a heavy weapon that you are proficient with, you can choose to take a -5 penalty to the attack roll. If the attack hits, you add +10 to the attack's damage roll."
+        },
+        new Feat {
+            Name = "Healer",
+            ShortDescription = "You are an able physician.",
+            Prerequisites = "Proficiency with a healer's kit",
+            FullDescription = "When you use a healer's kit to stabilize a dying creature, that creature also regains 1 hit point.\n\nAs an action, you can spend one use of a healer's kit to tend to a creature and restore 1d6 + 4 hit points to it, plus additional hit points equal to the creature's maximum number of Hit Dice. The creature can't regain hit points from this feat again until it finishes a short or long rest."
+        },
+        new Feat {
+            Name = "Heavy Armor Master",
+            ShortDescription = "You can use your armor to deflect blows.",
+            Prerequisites = "Proficiency with heavy armor",
+            FullDescription = "Increase your Strength score by 1, to a maximum of 20.\n\nWhile you are wearing heavy armor, bludgeoning, piercing, and slashing damage that you take from nonmagical weapons is reduced by 3."
+        },
+        new Feat {
+            Name = "Inspiring Leader",
+            ShortDescription = "You can inspire others through stirring words.",
+            Prerequisites = "Charisma 13 or higher",
+            FullDescription = "You can spend 10 minutes inspiring your companions. Choose up to six friendly creatures (including yourself) within 30 feet of you who can hear and understand you. Each creature can gain temporary hit points equal to your level + your Charisma modifier. A creature can't gain temporary hit points from this feat again until it has finished a short or long rest."
+        },
+        new Feat {
+            Name = "Lucky",
+            ShortDescription = "You have inexplicable luck that seems to kick in at just the right moment.",
+            Prerequisites = "None",
+            FullDescription = "You have 3 luck points. Whenever you make an attack roll, an ability check, or a saving throw, you can spend one luck point to roll an additional d20. You can choose to spend one of your luck points after you roll the die, but before the outcome is determined.\n\nYou regain your expended luck points when you finish a long rest."
+        },
+        new Feat {
+            Name = "Mobile",
+            ShortDescription = "You are exceptionally speedy and agile.",
+            Prerequisites = "None",
+            FullDescription = "Your speed increases by 10 feet.\n\nWhen you use the Dash action, difficult terrain doesn't cost you extra movement on that turn.\n\nWhen you make a melee attack against a creature, you don't provoke opportunity attacks from that creature for the rest of the turn, whether you hit or not."
+        },
+        new Feat {
+            Name = "Piercer",
+            ShortDescription = "You have a knack for finding the weak points in your opponents.",
+            Prerequisites = "Proficiency with a weapon that has the thrown property or is a ranged weapon",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase your Strength or Dexterity score by 1, to a maximum of 20.\n\nOnce per turn, when you hit a creature with an attack that deals piercing damage, you can reroll one of the attack's damage dice and use the new roll.\n\nWhen you score a critical hit that deals piercing damage to a creature, you can roll one additional damage die when determining the extra piercing damage the target takes."
+        },
+        new Feat {
+            Name = "Polearm Master",
+            ShortDescription = "You can keep your enemies at bay with reach weapons.",
+            Prerequisites = "Proficiency with a glaive, halberd, quarterstaff, or spear",
+            FullDescription = "When you take the Attack action and attack with a glaive, halberd, quarterstaff, or spear, you can use a bonus action to make a melee attack with the opposite end of the weapon. This attack uses the same ability modifier as the primary attack. The weapon's damage die for this attack is a d4, and it deals bludgeoning damage.\n\nWhile you are wielding a glaive, halberd, pike, quarterstaff, or spear, other creatures provoke an opportunity attack from you when they enter the reach you have with that weapon."
+        },
+        new Feat {
+            Name = "Prodigy",
+            ShortDescription = "You have a knack for learning new things.",
+            Prerequisites = "Half-elf, half-orc, or human (or Custom Lineage)",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase one ability score of your choice by 1, to a maximum of 20.\n\nYou gain proficiency in one skill of your choice, one tool of your choice, and fluency in one language of your choice.\n\nChoose one skill in which you have proficiency. You gain expertise with that skill, which means your proficiency bonus is doubled for any ability check you make with it."
+        },
+        new Feat {
+            Name = "Resilient",
+            ShortDescription = "Choose one ability score. You gain proficiency in saving throws using that ability.",
+            Prerequisites = "None",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase the chosen ability score by 1, to a maximum of 20.\n\nYou gain proficiency in saving throws using the chosen ability."
+        },
+        new Feat {
+            Name = "Sentinel",
+            ShortDescription = "You have mastered techniques to take advantage of every drop in any enemy's guard.",
+            Prerequisites = "None",
+            FullDescription = "When you hit a creature with an opportunity attack, the creature's speed becomes 0 for the rest of the turn.\n\nCreatures provoke opportunity attacks from you even if they take the Disengage action before leaving your reach.\n\nWhen a creature within 5 feet of you makes an attack against a target other than you (and that target doesn't have this feat), you can use your reaction to make a melee weapon attack against the attacking creature."
+        },
+        new Feat {
+            Name = "Shadow Touched",
+            ShortDescription = "You have been touched by the Shadowfell.",
+            Prerequisites = "None",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase your Intelligence, Wisdom, or Charisma score by 1, to a maximum of 20.\n\nYou learn the invisibility spell and one 1st-level spell of your choice. The 1st-level spell must be from the illusion or necromancy school of magic. You can cast each of these spells without expending a spell slot once per long rest."
+        },
+        new Feat {
+            Name = "Sharpshooter",
+            ShortDescription = "You have mastered ranged weapons and can make shots that others find impossible.",
+            Prerequisites = "None",
+            FullDescription = "Attacking at long range doesn't impose disadvantage on your ranged weapon attack rolls.\n\nYour ranged attacks ignore half cover and three-quarters cover.\n\nBefore you make an attack with a ranged weapon that you are proficient with, you can choose to take a -5 penalty to the attack roll. If the attack hits, you add +10 to the attack's damage roll."
+        },
+        new Feat {
+            Name = "Shield Master",
+            ShortDescription = "You use shields not just for protection but also for offense.",
+            Prerequisites = "Proficiency with shields",
+            FullDescription = "If you take the Attack action on your turn, you can use a bonus action to try to shove a creature within 5 feet of you with your shield.\n\nIf you aren't incapacitated, you can add your shield's AC bonus to any Dexterity saving throw you make against a spell or other harmful effect that targets only you.\n\nIf you are subjected to an effect that allows you to make a Dexterity saving throw to take only half damage, you can use your reaction to take no damage if you succeed on the saving throw."
+        },
+        new Feat {
+            Name = "Skill Expert",
+            ShortDescription = "You have honed your proficiency with particular skills.",
+            Prerequisites = "None",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase one ability score of your choice by 1, to a maximum of 20.\n\nYou gain proficiency in one skill of your choice.\n\nChoose one skill in which you have proficiency. You gain expertise with that skill, which means your proficiency bonus is doubled for any ability check you make with it."
+        },
+        new Feat {
+            Name = "Skulker",
+            ShortDescription = "You are expert at slinking through shadows.",
+            Prerequisites = "Dexterity 13 or higher + proficiency in Stealth",
+            FullDescription = "You can try to hide when you are lightly obscured from the creature from which you are hiding.\n\nWhen you are hidden from a creature and miss it with a ranged weapon attack, making the attack doesn't reveal your position.\n\nDim light doesn't impose disadvantage on your Wisdom (Perception) checks relying on sight."
+        },
+        new Feat {
+            Name = "Slasher",
+            ShortDescription = "You know how to cut deep and make it hurt.",
+            Prerequisites = "Proficiency with a weapon that deals slashing damage",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase your Strength or Dexterity score by 1, to a maximum of 20.\n\nOnce per turn, when you hit a creature with an attack that deals slashing damage, you can reduce the target's speed by 10 feet until the start of your next turn.\n\nWhen you score a critical hit that deals slashing damage to a creature, you can roll one additional damage die when determining the extra slashing damage the target takes."
+        },
+        new Feat {
+            Name = "Spell Sniper",
+            ShortDescription = "You have learned techniques to enhance your attacks with certain spells.",
+            Prerequisites = "Spellcasting feature",
+            FullDescription = "When you cast a spell that requires you to make an attack roll, the spell's range is doubled.\n\nYour ranged spell attacks ignore half cover and three-quarters cover.\n\nYou learn one cantrip that requires an attack roll. Choose the cantrip from the bard, cleric, druid, sorcerer, warlock, or wizard spell list."
+        },
+        new Feat {
+            Name = "Telekinetic",
+            ShortDescription = "You have learned to move things with your mind.",
+            Prerequisites = "None",
+            FullDescription = "Increase your Intelligence, Wisdom, or Charisma score by 1, to a maximum of 20.\n\nYou learn the mage hand spell. You can cast it without verbal or somatic components, and you can make the spectral hand invisible. The hand lasts until it is dismissed as a bonus action.\n\nAs a bonus action, you can try to shove one creature you can see within 30 feet of you. When you do so, the target must succeed on a Strength saving throw (DC 8 + your proficiency bonus + the ability modifier of the score increased by this feat) or be moved 5 feet toward or away from you."
+        },
+        new Feat {
+            Name = "Tough",
+            ShortDescription = "Your hit point maximum increases by an amount equal to twice your level when you gain this feat.",
+            Prerequisites = "None",
+            FullDescription = "Your hit point maximum increases by an amount equal to twice your level when you gain this feat. Thereafter, it increases by 2 hit points each time you gain a level."
+        },
+        new Feat {
+            Name = "War Caster",
+            ShortDescription = "You've practiced casting spells in the midst of combat.",
+            Prerequisites = "Spellcasting feature",
+            FullDescription = "You have advantage on Constitution saving throws that you make to maintain your concentration on a spell when you take damage.\n\nYou can perform the somatic components of spells even when you have weapons or a shield in one or both hands.\n\nWhen a hostile creature's movement provokes an opportunity attack from you, you can use your reaction to cast a spell at the creature, rather than making an opportunity attack. The spell must have a casting time of 1 action and must target only that creature."
+        },
+        new Feat {
+            Name = "Weapon Master",
+            ShortDescription = "You have practiced extensively with a variety of weapons.",
+            Prerequisites = "None",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase your Strength or Dexterity score by 1, to a maximum of 20.\n\nYou gain proficiency with four weapons of your choice. Each weapon must be a simple or a martial weapon."
+        },
+        new Feat
+        {
+            Name = "Magic Initiate",
+            ShortDescription = "You learn two cantrips and one 1st-level spell from another class's spell list.",
+            Prerequisites = "None",
+            FullDescription = "Choose a class: Bard, Cleric, Druid, Sorcerer, Warlock, or Wizard.\n\n" +
+                              "• You learn two cantrips of your choice from that class's spell list.\n" +
+                              "• You learn one 1st-level spell from that same list. You can cast this spell once per long rest without expending a spell slot.\n\n" +
+                              "Your spellcasting ability for these spells is the same as the class you chose."
+        },
+
+        new Feat
+        {
+            Name = "Artificer Initiate",
+            ShortDescription = "You gain rudimentary knowledge of arcane magic through study and experimentation.",
+            Prerequisites = "None",
+            FullDescription = "You learn one cantrip of your choice from the artificer spell list.\n\n" +
+                              "You learn one 1st-level spell of your choice from the artificer spell list. You can cast this spell once per long rest without expending a spell slot.\n\n" +
+                              "You gain proficiency with one type of artisan's tools of your choice."
+        },
+
+        new Feat
+        {
+            Name = "Ritual Caster",
+            ShortDescription = "You can cast spells as rituals.",
+            Prerequisites = "Intelligence or Wisdom 13 or higher",
+            FullDescription = "You have learned a number of spells that you can cast as rituals. " +
+                              "These spells are written in a ritual book, which you must have in hand while casting one of them.\n\n" +
+                              "When you choose this feat, you acquire a ritual book holding two 1st-level spells of your choice. " +
+                              "You must have the spells in your ritual book to cast them as rituals.\n\n" +
+                              "If you come across a spell in written form (such as a magical spell scroll or a wizard's spellbook), " +
+                              "you might be able to add it to your ritual book."
+        },
+
+        new Feat
+        {
+            Name = "Gift of the Metallic Dragon",
+            ShortDescription = "You have been blessed by a metallic dragon.",
+            Prerequisites = "None",
+            FullDescription = "You learn the *cure wounds* spell. You can cast it once per long rest without expending a spell slot.\n\n" +
+                              "You can also cast *detect magic* and *cure wounds* using spell slots you have of the appropriate level.\n\n" +
+                              "Increase your Charisma, Intelligence, or Wisdom score by 1, to a maximum of 20."
+        },
+
+        new Feat
+        {
+            Name = "Gift of the Chromatic Dragon",
+            ShortDescription = "You have been blessed by a chromatic dragon.",
+            Prerequisites = "None",
+            FullDescription = "You learn the *chromatic orb* spell. You can cast it once per long rest without expending a spell slot.\n\n" +
+                              "You can also cast *chromatic orb* using spell slots you have of 1st level or higher.\n\n" +
+                              "Increase your Charisma, Intelligence, or Wisdom score by 1, to a maximum of 20."
+        },
+
+        new Feat
+        {
+            Name = "Gift of the Gem Dragon",
+            ShortDescription = "You have been blessed by a gem dragon.",
+            Prerequisites = "None",
+            FullDescription = "You learn the *detect thoughts* spell. You can cast it once per long rest without expending a spell slot.\n\n" +
+                              "You can also cast *detect thoughts* using spell slots you have of 2nd level or higher.\n\n" +
+                              "Increase your Charisma, Intelligence, or Wisdom score by 1, to a maximum of 20."
+        },
+        new Feat
+        {
+            Name = "Telepathic",
+            ShortDescription = "You can speak telepathically and probe minds.",
+            Prerequisites = "None",
+            HasDynamicStatChoice = true,
+            FullDescription = "Increase your Intelligence, Wisdom, or Charisma score by 1, to a maximum of 20.\n\n" +
+                              "You can speak telepathically to any creature you can see within 60 feet of you. " +
+                              "The creature doesn't need to share a language with you, but it must be able to understand at least one language. " +
+                              "This telepathy doesn't give the creature the ability to respond telepathically.\n\n" +
+                              "As a bonus action, you can try to telepathically contact one creature you can see within 60 feet of you. " +
+                              "The target must succeed on a Wisdom saving throw (DC 8 + your proficiency bonus + the ability modifier of the score increased by this feat) " +
+                              "or be affected as if by the *detect thoughts* spell for 1 minute. The target can repeat the saving throw at the end of each of its turns."
+        }
+    };
+            // === SORT ALPHABETICALLY ===
+            AllFeats = AllFeats.OrderBy(f => f.Name).ToList();
+        }
+
+
+        // ==================== MASTER CANTRIP LIST (Complete - 50+ Cantrips) ====================
+        public static readonly List<Spell> AllCantrips = new()
+{
+    // === CLERIC ===
+    new Spell { Name = "Guidance", School = "Divination", CastingTime = "Action", Range = "Touch", Components = "V, S", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "1d4", RollType = "None", Description = "You touch one willing creature. Once before the spell ends, the target can roll a d4 and add the number rolled to one ability check of its choice.", Classes = new() { "Cleric", "Druid" } },
+    new Spell { Name = "Light", School = "Evocation", CastingTime = "Action", Range = "Touch", Components = "V, M (a firefly or phosphorescent moss)", Duration = "1 hour", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You touch one object that is no larger than 10 feet in any dimension. Until the spell ends, the object sheds bright light in a 20-foot radius and dim light for an additional 20 feet.", Classes = new() { "Cleric", "Bard", "Druid", "Sorcerer", "Wizard" } },
+    new Spell { Name = "Mending", School = "Transmutation", CastingTime = "1 minute", Range = "Touch", Components = "V, S, M (two lodestones)", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "This spell repairs a single break or tear in an object you touch.", Classes = new() { "Cleric", "Bard", "Druid", "Sorcerer", "Wizard", "Artificer" } },
+    new Spell { Name = "Resistance", School = "Abjuration", CastingTime = "Action", Range = "Touch", Components = "V, S, M (a miniature cloak)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "You touch one willing creature. Once before the spell ends, the target can roll a d4 and add the number rolled to one saving throw of its choice.", Classes = new() { "Cleric", "Druid" } },
+    new Spell { Name = "Sacred Flame", School = "Evocation", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Radiant", DamageDice = "1d8", RollType = "Dex Save", Description = "Flame-like radiance descends on a creature that you can see within range. The target must succeed on a Dexterity saving throw or take 1d8 radiant damage.", Classes = new() { "Cleric" } },
+    new Spell { Name = "Spare the Dying", School = "Necromancy", CastingTime = "Action", Range = "Touch", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You touch a living creature that has 0 hit points. The creature becomes stable.", Classes = new() { "Cleric", "Druid", "Warlock" } },
+    new Spell { Name = "Thaumaturgy", School = "Transmutation", CastingTime = "Action", Range = "30 ft", Components = "V", Duration = "Up to 1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You manifest a minor wonder, a sign of supernatural power, within range.", Classes = new() { "Cleric" } },
+    new Spell { Name = "Toll the Dead", School = "Necromancy", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Necrotic", DamageDice = "1d8 or 1d12", RollType = "Wis Save", Description = "You point at one creature you can see within range, and the sound of a dolorous bell fills the air around it for a moment.", Classes = new() { "Cleric", "Warlock", "Wizard" } },
+    new Spell { Name = "Word of Radiance", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "V, M (a holy symbol)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Radiant", DamageDice = "1d6", RollType = "Con Save", Description = "You utter a divine word, and burning radiance erupts from you.", Classes = new() { "Cleric" } },
+
+    // === WIZARD / SORCERER / WARLOCK ===
+    new Spell { Name = "Acid Splash", School = "Conjuration", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Acid", DamageDice = "1d6", RollType = "Dex Save", Description = "You hurl a bubble of acid.", Classes = new() { "Wizard", "Sorcerer", "Artificer" } },
+    new Spell { Name = "Blade Ward", School = "Abjuration", CastingTime = "Action", Range = "Self", Components = "V, S", Duration = "1 round", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You extend your hand and trace a sigil of warding in the air.", Classes = new() { "Wizard", "Sorcerer", "Warlock", "Bard" } },
+    new Spell { Name = "Booming Blade", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "V, M (a melee weapon worth at least 1 sp)", Duration = "1 round", IsConcentration = false, DamageType = "Thunder", DamageDice = "1d8", RollType = "Spell Attack", Description = "You brandish the weapon used in the spell’s casting and make a melee attack with it against one creature within 5 feet of you.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
+    new Spell { Name = "Chill Touch", School = "Necromancy", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Necrotic", DamageDice = "1d8", RollType = "Spell Attack", Description = "You create a ghostly, skeletal hand in the space of a creature within range.", Classes = new() { "Sorcerer", "Warlock", "Wizard" } },
+    new Spell { Name = "Create Bonfire", School = "Conjuration", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "Fire", DamageDice = "1d8", RollType = "Dex Save", Description = "You create a bonfire on ground that you can see within range.", Classes = new() { "Druid", "Sorcerer", "Wizard", "Warlock" } },
+    new Spell { Name = "Dancing Lights", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S, M (a bit of phosphorus or wychwood, or a glowworm)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "You create up to four torch-sized lights within range.", Classes = new() { "Bard", "Sorcerer", "Wizard" } },
+    new Spell { Name = "Eldritch Blast", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Force", DamageDice = "1d10", RollType = "Spell Attack", Description = "A beam of crackling energy streaks toward a creature within range.", Classes = new() { "Warlock" } },
+    new Spell { Name = "Fire Bolt", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Fire", DamageDice = "1d10", RollType = "Spell Attack", Description = "You hurl a mote of fire at a creature or object within range.", Classes = new() { "Wizard", "Sorcerer" } },
+    new Spell { Name = "Frostbite", School = "Evocation", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Cold", DamageDice = "1d6", RollType = "Con Save", Description = "You cause numbing frost to form on one creature that you can see within range.", Classes = new() { "Druid", "Sorcerer", "Wizard" } },
+    new Spell { Name = "Green-Flame Blade", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "V, M (a melee weapon worth at least 1 sp)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Fire", DamageDice = "1d8", RollType = "Spell Attack", Description = "You brandish the weapon used in the spell’s casting and make a melee attack with it against one creature within 5 feet of you.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
+    new Spell { Name = "Gust", School = "Transmutation", CastingTime = "Action", Range = "30 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "Str Save", Description = "You seize the air and compel it to create one of the following effects at a point you can see within range.", Classes = new() { "Druid", "Sorcerer", "Wizard" } },
+    new Spell { Name = "Infestation", School = "Conjuration", CastingTime = "Action", Range = "30 ft", Components = "V, S, M (a living flea)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Poison", DamageDice = "1d6", RollType = "Con Save", Description = "You cause a cloud of mites, fleas, and other parasites to appear momentarily on one creature you can see within range.", Classes = new() { "Druid", "Sorcerer", "Warlock", "Wizard" } },
+    new Spell { Name = "Lightning Lure", School = "Evocation", CastingTime = "Action", Range = "15 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "Lightning", DamageDice = "1d8", RollType = "Str Save", Description = "You create a lash of lightning energy that strikes at one creature of your choice that you can see within 15 feet of you.", Classes = new() { "Sorcerer", "Wizard", "Warlock" } },
+    new Spell { Name = "Mage Hand", School = "Conjuration", CastingTime = "Action", Range = "30 ft", Components = "V, S", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "A spectral, floating hand appears at a point you choose within range.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
+    new Spell { Name = "Minor Illusion", School = "Illusion", CastingTime = "Action", Range = "30 ft", Components = "S, M (a bit of fleece)", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You create a sound or an image of an object within range that lasts for the duration.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
+    new Spell { Name = "Poison Spray", School = "Conjuration", CastingTime = "Action", Range = "10 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Poison", DamageDice = "1d12", RollType = "Con Save", Description = "You extend your hand toward a creature you can see within range and project a puff of noxious gas from your palm.", Classes = new() { "Druid", "Sorcerer", "Warlock", "Wizard" } },
+    new Spell { Name = "Prestidigitation", School = "Transmutation", CastingTime = "Action", Range = "10 ft", Components = "V, S", Duration = "Up to 1 hour", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "This spell is a minor magical trick that novice spellcasters use for practice.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
+    new Spell { Name = "Ray of Frost", School = "Evocation", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Cold", DamageDice = "1d8", RollType = "Spell Attack", Description = "A frigid beam of blue-white light streaks toward a creature within range.", Classes = new() { "Wizard", "Sorcerer" } },
+    new Spell { Name = "Shocking Grasp", School = "Evocation", CastingTime = "Action", Range = "Touch", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Lightning", DamageDice = "1d8", RollType = "Spell Attack", Description = "Lightning springs from your hand to deliver a shock to a creature you try to touch.", Classes = new() { "Wizard", "Sorcerer" } },
+    new Spell { Name = "Sword Burst", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "Force", DamageDice = "1d6", RollType = "Dex Save", Description = "You create a momentary circle of spectral blades that sweep around you.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
+    new Spell { Name = "Thunderclap", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Thunder", DamageDice = "1d6", RollType = "Con Save", Description = "You create a burst of thunderous sound that can be heard up to 100 feet away.", Classes = new() { "Bard", "Druid", "Sorcerer", "Wizard", "Warlock" } },
+    new Spell { Name = "True Strike", School = "Divination", CastingTime = "Action", Range = "30 ft", Components = "S", Duration = "Concentration, up to 1 round", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "You extend your hand and point a finger at a target in range. Your magic grants you a brief insight into the target's defenses.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
+
+    // === DRUID ===
+    new Spell { Name = "Druidcraft", School = "Transmutation", CastingTime = "Action", Range = "30 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "Whispering to the spirits of nature, you create one of several minor effects within range.", Classes = new() { "Druid" } },
+    new Spell { Name = "Produce Flame", School = "Conjuration", CastingTime = "Action", Range = "Self (30 ft)", Components = "V, S", Duration = "10 minutes", IsConcentration = false, DamageType = "Fire", DamageDice = "1d8", RollType = "Spell Attack", Description = "A flickering flame appears in your hand.", Classes = new() { "Druid" } },
+    new Spell { Name = "Shillelagh", School = "Transmutation", CastingTime = "Bonus Action", Range = "Touch", Components = "V, S, M (mistletoe, a shamrock leaf, and a club or quarterstaff)", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "The wood of a club or quarterstaff you are holding is imbued with nature's power.", Classes = new() { "Druid" } },
+    new Spell { Name = "Thorn Whip", School = "Transmutation", CastingTime = "Action", Range = "30 ft", Components = "V, S, M (the stem of a plant with thorns)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Piercing", DamageDice = "1d6", RollType = "Spell Attack", Description = "You create a long, vine-like whip covered in thorns that lashes out at your command toward a creature in range.", Classes = new() { "Druid" } },
+
+    // === BARD ===
+    new Spell { Name = "Friends", School = "Enchantment", CastingTime = "Action", Range = "Self", Components = "S, M (a small amount of makeup applied to the face as this spell is cast)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "For the duration, you have advantage on all Charisma checks directed at one creature of your choice that isn't hostile toward you.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
+    new Spell { Name = "Vicious Mockery", School = "Enchantment", CastingTime = "Action", Range = "60 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "Psychic", DamageDice = "1d4", RollType = "Wis Save", Description = "You unleash a string of insults laced with subtle enchantments at a creature you can see within range.", Classes = new() { "Bard" } },
+};
+
+        // ==================== 1ST LEVEL SPELLS ====================
+        public static readonly List<LeveledSpell> All1stLevelSpells = new()
+{
+    // === CLERIC / PALADIN ===
+    new LeveledSpell { Level = 1, Name = "Bless", School = "Enchantment", CastingTime = "Action", Range = "30 ft", Components = "V, S, M (a sprinkling of holy water)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "You bless up to three creatures of your choice within range. Whenever a target makes an attack roll or a saving throw before the spell ends, the target can roll a d4 and add the number rolled to the attack roll or saving throw.", Classes = new() { "Cleric", "Paladin" } },
+    new LeveledSpell { Level = 1, Name = "Cure Wounds", School = "Evocation", CastingTime = "Action", Range = "Touch", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "1d8 + mod", RollType = "Healing", Description = "A creature you touch regains hit points equal to 1d8 + your spellcasting ability modifier.", Classes = new() { "Cleric", "Druid", "Bard", "Paladin", "Ranger", "Artificer" } },
+    new LeveledSpell { Level = 1, Name = "Healing Word", School = "Evocation", CastingTime = "Bonus Action", Range = "60 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "1d4 + mod", RollType = "Healing", Description = "A creature of your choice that you can see within range regains hit points equal to 1d4 + your spellcasting ability modifier.", Classes = new() { "Cleric", "Druid", "Bard" } },
+    new LeveledSpell { Level = 1, Name = "Guiding Bolt", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "1 round", IsConcentration = false, DamageType = "Radiant", DamageDice = "4d6", RollType = "Spell Attack", Description = "A flash of light streaks toward a creature of your choice within range. Make a ranged spell attack against the target.", Classes = new() { "Cleric" } },
+    new LeveledSpell { Level = 1, Name = "Shield of Faith", School = "Abjuration", CastingTime = "Bonus Action", Range = "60 ft", Components = "V, S, M (a small parchment with a holy text)", Duration = "Concentration, up to 10 minutes", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "A shimmering field appears and surrounds a creature of your choice within range, granting it a +2 bonus to AC for the duration.", Classes = new() { "Cleric", "Paladin" } },
+
+    // === WIZARD / SORCERER ===
+    new LeveledSpell { Level = 1, Name = "Magic Missile", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Force", DamageDice = "3d4 + 3", RollType = "Automatic Hit", Description = "You create three glowing darts of magical force. Each dart hits a creature of your choice that you can see within range.", Classes = new() { "Wizard", "Sorcerer" } },
+    new LeveledSpell { Level = 1, Name = "Shield", School = "Abjuration", CastingTime = "Reaction", Range = "Self", Components = "V, S", Duration = "1 round", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "An invisible barrier of magical force appears and protects you. Until the start of your next turn, you have a +5 bonus to AC, including against the triggering attack, and you take no damage from magic missile.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
+    new LeveledSpell { Level = 1, Name = "Mage Armor", School = "Abjuration", CastingTime = "Action", Range = "Touch", Components = "V, S, M (a piece of cured leather)", Duration = "8 hours", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You touch a willing creature who isn’t wearing armor. Until the spell ends, the target’s base AC becomes 13 + its Dexterity modifier.", Classes = new() { "Wizard", "Sorcerer", "Bard" } },
+    new LeveledSpell { Level = 1, Name = "Burning Hands", School = "Evocation", CastingTime = "Action", Range = "Self (15-ft cone)", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Fire", DamageDice = "3d6", RollType = "Dex Save", Description = "As you hold your hands with thumbs touching and fingers spread, a thin sheet of flames shoots forth from your outstretched fingertips.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
+    new LeveledSpell { Level = 1, Name = "Chromatic Orb", School = "Evocation", CastingTime = "Action", Range = "90 ft", Components = "V, S, M (a diamond worth at least 50 gp)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Varies", DamageDice = "3d8", RollType = "Spell Attack", Description = "You hurl a 4-inch-diameter sphere of energy at a creature that you can see within range.", Classes = new() { "Wizard", "Sorcerer" } },
+
+    // === DRUID / RANGER ===
+    new LeveledSpell { Level = 1, Name = "Entangle", School = "Conjuration", CastingTime = "Action", Range = "90 ft", Components = "V, S", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "Str Save", Description = "Grasping weeds and vines sprout from the ground in a 20-foot square starting from a point within range.", Classes = new() { "Druid", "Ranger" } },
+    new LeveledSpell { Level = 1, Name = "Faerie Fire", School = "Evocation", CastingTime = "Action", Range = "60 ft", Components = "V", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "Dex Save", Description = "Each object in a 20-foot cube within range is outlined in blue, green, or violet light.", Classes = new() { "Druid", "Bard" } },
+    new LeveledSpell { Level = 1, Name = "Thunderwave", School = "Evocation", CastingTime = "Action", Range = "Self (15-ft cube)", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Thunder", DamageDice = "2d8", RollType = "Con Save", Description = "A wave of thunderous force sweeps out from you.", Classes = new() { "Druid", "Bard", "Sorcerer", "Wizard" } },
+    new LeveledSpell { Level = 1, Name = "Goodberry", School = "Transmutation", CastingTime = "Action", Range = "Touch", Components = "V, S, M (a sprig of mistletoe)", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "Up to ten berries appear in your hand and are infused with magic for the duration.", Classes = new() { "Druid", "Ranger" } },
+    new LeveledSpell { Level = 1, Name = "Hunter's Mark", School = "Divination", CastingTime = "Bonus Action", Range = "90 ft", Components = "V", Duration = "Concentration, up to 1 hour", IsConcentration = true, DamageType = "", DamageDice = "+1d6", RollType = "None", Description = "You choose a creature you can see within range and mystically mark it as your quarry.", Classes = new() { "Ranger" } },
+
+    // === BARD ===
+    new LeveledSpell { Level = 1, Name = "Dissonant Whispers", School = "Enchantment", CastingTime = "Action", Range = "60 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "Psychic", DamageDice = "3d6", RollType = "Wis Save", Description = "You whisper a discordant melody that only one creature of your choice within range can hear.", Classes = new() { "Bard" } },
+    new LeveledSpell { Level = 1, Name = "Tasha's Hideous Laughter", School = "Enchantment", CastingTime = "Action", Range = "30 ft", Components = "V, S, M (tiny tarts and a feather)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "Wis Save", Description = "A creature of your choice that you can see within range perceives everything as hilariously funny.", Classes = new() { "Bard", "Wizard" } },
+    new LeveledSpell { Level = 1, Name = "Sleep", School = "Enchantment", CastingTime = "Action", Range = "90 ft", Components = "V, S, M (a pinch of fine sand, rose petals, or a cricket)", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "This spell sends creatures into a magical slumber.", Classes = new() { "Bard", "Sorcerer", "Wizard" } },
+
+    // === WARLOCK ===
+    new LeveledSpell { Level = 1, Name = "Hex", School = "Enchantment", CastingTime = "Bonus Action", Range = "90 ft", Components = "V, S, M (the petrified eye of a newt)", Duration = "Concentration, up to 1 hour", IsConcentration = true, DamageType = "Necrotic", DamageDice = "+1d6", RollType = "None", Description = "You place a curse on a creature that you can see within range.", Classes = new() { "Warlock" } },
+    new LeveledSpell { Level = 1, Name = "Hellish Rebuke", School = "Evocation", CastingTime = "Reaction", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Fire", DamageDice = "2d10", RollType = "Dex Save", Description = "You point your finger, and the creature that damaged you is momentarily surrounded by hellish flames.", Classes = new() { "Warlock" } },
+    new LeveledSpell { Level = 1, Name = "Armor of Agathys", School = "Abjuration", CastingTime = "Action", Range = "Self", Components = "V, S, M (a cup of water)", Duration = "1 hour", IsConcentration = false, DamageType = "Cold", DamageDice = "5", RollType = "None", Description = "A protective magical force surrounds you, manifesting as a spectral frost that covers you and your gear.", Classes = new() { "Warlock" } },
+
+    // === WIZARD ===
+    new LeveledSpell { Level = 1, Name = "Find Familiar", School = "Conjuration", CastingTime = "1 hour", Range = "10 ft", Components = "V, S, M (10 gp worth of charcoal, incense, and herbs)", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You gain the service of a familiar, a spirit that takes an animal form you choose.", Classes = new() { "Wizard" } },
+    new LeveledSpell { Level = 1, Name = "Grease", School = "Conjuration", CastingTime = "Action", Range = "60 ft", Components = "V, S, M (a bit of pork rind or butter)", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "Dex Save", Description = "Slick grease covers the ground in a 10-foot square centered on a point within range.", Classes = new() { "Wizard" } },
+    new LeveledSpell { Level = 1, Name = "Identify", School = "Divination", CastingTime = "1 minute", Range = "Touch", Components = "V, S, M (a pearl worth at least 100 gp and an owl feather)", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You choose one object that you must touch throughout the casting of the spell.", Classes = new() { "Bard", "Wizard", "Artificer" } },
+};
+
+    }
+}
+
+public class Armor
+{
+    public string Name { get; set; }
+    public string Type { get; set; }           // Light / Medium / Heavy
+    public string AC { get; set; }
+    public string StrengthRequirement { get; set; } = "—";
+    public string StealthDisadvantage { get; set; } = "No";
+    public string StealthDisplay => StealthDisadvantage == "Yes" ? "Disadvantage" : "";
+}
+
+// ==================== CHARACTER DATA MODEL ====================
+
+public class Character
+{
+    // === Identity ===
+    public string Name { get; set; } = "";
+    public string PlayerName { get; set; } = "";
+    public string AvatarBase64 { get; set; } = "";
+
+    // === Core Choices ===
+    public string Race { get; set; } = "";
+    public string Subrace { get; set; } = "";
+    public string Background { get; set; } = "";
+    public string Class { get; set; } = "";
+    public string Subclass { get; set; } = "";
+    public string SelectedFeat { get; set; } = "";
+    public int Speed { get; set; } = 30;
+
+    // === Ability Scores (Detailed) ===
+    public AbilityScoreBlock AbilityScores { get; set; } = new AbilityScoreBlock();
+
+    // === Proficiencies ===
+    public List<SkillEntry> Skills { get; set; } = new();
+    public List<SavingThrow> SavingThrows { get; set; } = new();
+
+    // === Equipment ===
+    public List<string> Equipment { get; set; } = new();
+    public string BackgroundEquipment { get; set; } = "";
+
+    // === Spells ===
+    public List<string> Cantrips { get; set; } = new();
+    public List<string> Level1Spells { get; set; } = new();
+
+    // === Derived / Calculated Values (Important for PDF & other apps) ===
+    public int ProficiencyBonus { get; set; } = 2;
+    public int Initiative { get; set; }
+    public int ArmorClass { get; set; }
+    public string EquippedACDisplay { get; set; } = "";
+    public int HitPoints { get; set; }
+    public string SpellcastingAbility { get; set; } = "";
+    public int SpellSaveDC { get; set; }
+    public int SpellAttackBonus { get; set; }
+
+    // === Special Choices ===
+    public string HighElfCantrip { get; set; } = "";
+    public string RaceGrantedSkill { get; set; } = "";
+    public List<string> BackgroundLanguages { get; set; } = new();
+}
+
+// Helper class for structured ability scores
+public class AbilityScoreBlock
+{
+    public AbilityScore Strength { get; set; } = new();
+    public AbilityScore Dexterity { get; set; } = new();
+    public AbilityScore Constitution { get; set; } = new();
+    public AbilityScore Intelligence { get; set; } = new();
+    public AbilityScore Wisdom { get; set; } = new();
+    public AbilityScore Charisma { get; set; } = new();
+}
+
+public class AbilityScore
+{
+    public int Base { get; set; }
+    public int Racial { get; set; }
+    public int Feat { get; set; }
+    public int Final { get; set; }
+    public int Modifier { get; set; }
+}
+
+// Helper class for skills with calculated bonuses
+public class SkillEntry
+{
+    public string Name { get; set; } = "";
+    public string Ability { get; set; } = "";
+    public bool IsProficient { get; set; }
+    public int Bonus { get; set; }
+}
+
+public class RaceData
+{
+    public Dictionary<string, int> AbilityBonuses { get; set; } = new();
+    public List<string> Traits { get; set; } = new();
+    public List<string> Languages { get; set; } = new();
+    public List<string> SkillProficiencies { get; set; } = new();
+    public bool HasInnateSpellcasting { get; set; } = false;   // ← NEW
+    public int Speed { get; set; } = 30;
+}
+
+public class SubraceData
+{
+    public string Name { get; set; } = "";
+    public Dictionary<string, int> AbilityBonus { get; set; } = new();
+    public List<string> Traits { get; set; } = new();
+    public bool HasInnateSpellcasting { get; set; } = false;   // ← NEW
+    public int? Speed { get; set; } = null;
+}
+
+
+public class ClassData
+{
+    public string HitDie { get; set; } = "";
+    public string HP1stLevel { get; set; } = "";
+    public string Proficiencies { get; set; } = "";
+    public bool Spellcasting { get; set; }
+    public string SpellAbility { get; set; } = "";
+    public int CantripsKnown { get; set; }
+    public string SpellsPrepared { get; set; } = "";
+    public int SpellsKnown { get; set; }
+    public List<string> Subclasses { get; set; } = new();
+    public List<string> SkillChoices { get; set; } = new();
+    public int SkillChoiceCount { get; set; }
+    public string Description { get; set; } = "";
+    public List<string> SavingThrowProficiencies { get; set; } = new();
+    public List<string> ArmorProficiencies { get; set; } = new();
+    public List<string> WeaponProficiencies { get; set; } = new();
+}
+
+
+
+public class EquipmentChoice
+{
+    public string Label { get; set; } = "";
+    public List<EquipmentOption> Options { get; set; } = new();
+}
+
+public class EquipmentOption
+{
+    public string Text { get; set; } = "";
+    public bool IsProficientRequired { get; set; } = false;
+    public bool RequiresMartial { get; set; } = false;
+    public bool IsAnyWeapon { get; set; } = false;
+    public string WeaponType { get; set; } = "";
+    public int RequiredCount { get; set; } = 1;
+    public string ExtraItem { get; set; } = "";   // ← NEW: for "Shield", etc.
+}
+
+public class Weapon : INotifyPropertyChanged
+{
+    public string Name { get; set; } = "";
+    public string Damage { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string Range { get; set; } = "";
+    public string Properties { get; set; } = "";
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected != value)
+            {
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
+            }
+        }
+    }
+
+    public event PropertyChangedEventHandler PropertyChanged;
+
+    protected virtual void OnPropertyChanged(string propertyName)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    public override string ToString() => $"{Name} ({Damage} {Type})";
+}
+
+public class ClericSubclassData
+{
+    public string Name { get; set; } = "";
+    public List<string> AdditionalCantrips { get; set; } = new();
+    public List<string> DomainSpells { get; set; } = new();           // 1st-level domain spells
+    public List<string> ArmorProficiencies { get; set; } = new();
+    public List<string> WeaponProficiencies { get; set; } = new();
+    public List<string> UniqueAbilities { get; set; } = new();
+}
+
+public class WarlockSubclassData
+{
+    public string Name { get; set; } = "";
+    public List<string> AdditionalCantrips { get; set; } = new();
+    public List<string> DomainSpells { get; set; } = new();   // Patron spells at level 1
+    public List<string> ArmorProficiencies { get; set; } = new();
+    public List<string> WeaponProficiencies { get; set; } = new();
+    public List<string> UniqueAbilities { get; set; } = new();
+}
+
+public class SorcererSubclassData
+{
+    public string Name { get; set; } = "";
+    public List<string> AdditionalSpells { get; set; } = new();   // level 1 origin spells
+    public List<string> UniqueAbilities { get; set; } = new();
+}
+
+/// <summary>
+/// Represents a class feature available at level 1 (for PDF export Class Features section).
+/// </summary>
+public class ClassFeature
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Uses { get; set; } = "";   // e.g. "2 / long rest", "1 / short rest", "Passive", "At will"
+}
+
+public class Feat : INotifyPropertyChanged
+{
+    public string Name { get; set; } = "";
+    public string ShortDescription { get; set; } = "";
+    public string FullDescription { get; set; } = "";
+    public string Prerequisites { get; set; } = "None";
+    public bool HasDynamicStatChoice { get; set; } = false;
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected != value)
+            {
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
+
+                if (Application.Current.MainWindow is global::Nemo.MainWindow mainWindow)
+                {
+                    if (value) // Trying to select the feat
+                    {
+                        if (mainWindow.MeetsPrerequisite(this))
+                        {
+                            mainWindow.ApplyFeatBonus(this);
+                        }
+                        else
+                        {
+                            _isSelected = false;                    // Revert the model
+                            OnPropertyChanged(nameof(IsSelected));
+
+                            // === FORCE IMMEDIATE UI REFRESH ===
+                            mainWindow.dgFeats.Items.Refresh();     // ← This is the key fix
+                            mainWindow.dgFeats.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+
+                            MessageBox.Show($"You do not meet the prerequisite for **{Name}**.\n\n" +
+                                            $"Prerequisite: {Prerequisites}",
+                                            "Prerequisite Not Met",
+                                            MessageBoxButton.OK,
+                                            MessageBoxImage.Warning);
+                        }
+                    }
+                    else // Deselecting
+                    {
+                        mainWindow.RemoveFeatBonus(this);
+                    }
+
+                    mainWindow.UpdateStatDisplays();
+                    mainWindow.UpdateInitiative();
+                }
+            }
+        }
+    }
+
+    public event PropertyChangedEventHandler PropertyChanged;
+    protected void OnPropertyChanged(string propertyName) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+}
+
+public class Spell
+{
+    public string Name { get; set; } = "";
+    public string School { get; set; } = "";
+    public string CastingTime { get; set; } = "";
+    public string Range { get; set; } = "";
+    public string Components { get; set; } = "";
+    public string Duration { get; set; } = "";
+    public bool IsConcentration { get; set; } = false;
+    public string DamageType { get; set; } = "";
+    public string DamageDice { get; set; } = "";
+    public string RollType { get; set; } = "";
+    public string Description { get; set; } = "";
+
+    // NEW: List of classes that can learn this spell
+    public List<string> Classes { get; set; } = new();
+    public int Level { get; set; } = 0;
+}
+
+/// <summary>
+/// Leveled spells (1st level and higher) - inherits all properties from Spell + Level
+/// </summary>
+public class LeveledSpell : Spell
+{
+    public int Level { get; set; } = 1;
+}
+
+public class SavingThrow
+{
+    public string Name { get; set; } = "";
+    public int Bonus { get; set; }
+    public bool IsProficient { get; set; }
+}
