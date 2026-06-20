@@ -2823,9 +2823,8 @@ namespace Nemo
                         }
                         else
                         {
-                            int max = GameData.ClassData[classNameSpells].SpellsKnown > 0
-                                      ? GameData.ClassData[classNameSpells].SpellsKnown
-                                      : 4;
+                            var classDataRef = GameData.ClassData[classNameSpells];
+                            int max = GetMax1stLevelSpells(classNameSpells, classDataRef);
                             int selected = spell1Options.Count(s => s.IsChecked);
                             foreach (var item in spell1Options)
                             {
@@ -2948,7 +2947,7 @@ namespace Nemo
             if (!GameData.ClassData.ContainsKey(className)) return;
 
             var classData = GameData.ClassData[className];
-            int maxSpells = classData.SpellsKnown > 0 ? classData.SpellsKnown : 4;
+            int maxSpells = GetMax1stLevelSpells(className, classData);
 
             // Build master list only once
             if (spell1Options.Count == 0)
@@ -3011,7 +3010,7 @@ namespace Nemo
             if (cmbClass.SelectedItem is not string className) return;
             if (!GameData.ClassData.TryGetValue(className, out var classData)) return;
 
-            int max = classData.SpellsKnown > 0 ? classData.SpellsKnown : 4;
+            int max = GetMax1stLevelSpells(className, classData);
 
             int currentSelected = spell1Options.Count(s => s.IsChecked);
 
@@ -3101,12 +3100,15 @@ namespace Nemo
             string spellType = (className == "Wizard" || className == "Cleric" || className == "Druid" || className == "Artificer")
                 ? "prepared" : "known";
 
-            int spellCount = (className == "Wizard" || className == "Cleric" || className == "Druid" || className == "Artificer")
-    ? Math.Max(1, mod + 1)                    // ← Always at least 1
-    : data.SpellsKnown;
+            int spellCount = GetMax1stLevelSpells(className, data);
 
             if (lblSpellHeader != null)
-                lblSpellHeader.Text = $"1ST LEVEL SPELLS ({spellCount} {spellType}, {spellSlots} slot{(spellSlots > 1 ? "s" : "")})";
+            {
+                if (spellCount > 0)
+                    lblSpellHeader.Text = $"1ST LEVEL SPELLS ({spellCount} {spellType}, {spellSlots} slot{(spellSlots > 1 ? "s" : "")})";
+                else
+                    lblSpellHeader.Text = "1ST LEVEL SPELLS (none at this level)";
+            }
 
             int selectedSpells = spell1Options.Count(s => s.IsChecked);
             lblSpellCount.Text = $"Selected: {selectedSpells} / {spellCount}";
@@ -3177,18 +3179,7 @@ namespace Nemo
                 return;
 
             int selected = spell1Options?.Count(s => s.IsChecked) ?? 0;
-            int max;
-
-            // === Same logic as prepared spells (minimum 1) ===
-            if (className == "Wizard" || className == "Cleric" || className == "Druid" || className == "Artificer")
-            {
-                int mod = CalculateModifier(GetFinalStat(classData.SpellAbility));
-                max = Math.Max(1, mod + 1);           // ← Minimum 1
-            }
-            else
-            {
-                max = classData.SpellsKnown > 0 ? classData.SpellsKnown : 4;
-            }
+            int max = GetMax1stLevelSpells(className, classData);
 
             lblSpellCount.Text = $"Selected: {selected} / {max}";
         }
@@ -3199,6 +3190,32 @@ namespace Nemo
             // C# integer division truncates toward zero, so we fix negative numbers explicitly
             //return (score - 10) / 2 - (score < 10 && (score - 10) % 2 != 0 ? 1 : 0);
             return (int)Math.Floor((score - 10) / 2.0);
+        }
+
+        /// <summary>
+        /// Returns the correct maximum number of 1st-level spells for the given class.
+        /// - Known spells classes (Bard, Sorcerer, Warlock, Ranger): uses SpellsKnown from GameData
+        /// - Prepared spells classes (Cleric, Druid, Wizard, Artificer): uses modifier + 1 (min 1)
+        /// - Classes with no spells at current level (e.g. Ranger level 1): returns 0
+        /// </summary>
+        private int GetMax1stLevelSpells(string className, ClassData classData)
+        {
+            if (classData.SpellsKnown > 0)
+            {
+                // Known spells classes (Bard, Sorcerer, Warlock, Ranger)
+                return classData.SpellsKnown;
+            }
+            else if (className == "Wizard" || className == "Cleric" || className == "Druid" || className == "Artificer")
+            {
+                // Prepared spells classes
+                int mod = CalculateModifier(GetFinalStat(classData.SpellAbility));
+                return Math.Max(1, mod + 1);
+            }
+            else
+            {
+                // No 1st-level spells at this level (e.g. Ranger level 1)
+                return 0;
+            }
         }
 
         private int GetFinalStat(string ability)
@@ -4162,44 +4179,63 @@ namespace Nemo
                 using (var writer = new iText.Kernel.Pdf.PdfWriter(saveDlg.FileName))
                 using (var pdf = new iText.Kernel.Pdf.PdfDocument(writer))
                 {
-                    var page = pdf.AddNewPage(iText.Kernel.Geom.PageSize.LETTER);
+                    var currentPage = pdf.AddNewPage(iText.Kernel.Geom.PageSize.LETTER);
                     var form = iText.Forms.PdfAcroForm.GetAcroForm(pdf, true);
 
                     pdf.GetDocumentInfo().SetTitle($"{CurrentCharacter.Name} - D&D 5e Character Sheet (Fillable)");
                     pdf.GetDocumentInfo().SetAuthor("Nemo Character Creator");
 
-                    float y = 765;
-                    float left = 45;
-                    float fieldHeight = 16;
-                    float smallFieldHeight = 15;
+                    float y = 725;   // ~3 lines of top margin (~55 points) for better visual balance and page fit
+                    float left = 50;
+                    float fieldHeight = 15;
+                    float smallFieldHeight = 14;
 
                     // ========== HEADER ==========
-                    CreateTextField(form, page, "CharacterName", CurrentCharacter.Name ?? "", left, y, 210, fieldHeight);
-                    CreateTextField(form, page, "PlayerName", CurrentCharacter.PlayerName ?? "", left + 230, y, 150, fieldHeight);
-                    y -= 22;
+                    DrawLabel(currentPage, "Character Name:", left, y + 3);
+                    CreateTextField(form, currentPage, "CharacterName", CurrentCharacter.Name ?? "", left + 100, y, 190, fieldHeight);
+
+                    DrawLabel(currentPage, "Player Name:", left + 310, y + 3);
+                    CreateTextField(form, currentPage, "PlayerName", CurrentCharacter.PlayerName ?? "", left + 395, y, 145, fieldHeight);
+                    y -= 20;
 
                     string displayClass = CurrentCharacter.Class;
                     if (displayClass != null && displayClass.Contains("("))
                         displayClass = displayClass.Substring(0, displayClass.IndexOf("(")).Trim();
 
-                    CreateTextField(form, page, "Class", displayClass ?? "", left, y, 130, fieldHeight);
-                    CreateTextField(form, page, "Level", "1", left + 140, y, 40, fieldHeight);
-                    CreateTextField(form, page, "Race", CurrentCharacter.Race ?? "", left + 190, y, 110, fieldHeight);
-                    CreateTextField(form, page, "Background", CurrentCharacter.Background ?? "", left + 310, y, 130, fieldHeight);
-                    y -= 26;
+                    DrawLabel(currentPage, "Class:", left, y + 3);
+                    CreateTextField(form, currentPage, "Class", displayClass ?? "", left + 38, y, 95, fieldHeight);
+
+                    DrawLabel(currentPage, "Level:", left + 145, y + 3);
+                    CreateTextField(form, currentPage, "Level", "1", left + 178, y, 30, fieldHeight);
+
+                    DrawLabel(currentPage, "Race:", left + 220, y + 3);
+                    CreateTextField(form, currentPage, "Race", CurrentCharacter.Race ?? "", left + 250, y, 100, fieldHeight);
+
+                    DrawLabel(currentPage, "Background:", left + 365, y + 3);
+                    CreateTextField(form, currentPage, "Background", CurrentCharacter.Background ?? "", left + 430, y, 110, fieldHeight);
+                    y -= 22;
 
                     // ========== COMBAT ==========
-                    DrawSectionHeader(page, "COMBAT", left, ref y);
+                    DrawSectionHeader(currentPage, "COMBAT", left, ref y);
 
-                    CreateTextField(form, page, "HitPoints", CurrentCharacter.HitPoints.ToString(), left, y, 45, fieldHeight);
-                    CreateTextField(form, page, "ArmorClass", CurrentCharacter.ArmorClass.ToString(), left + 80, y, 45, fieldHeight);
-                    CreateTextField(form, page, "Initiative", CurrentCharacter.Initiative >= 0 ? $"+{CurrentCharacter.Initiative}" : CurrentCharacter.Initiative.ToString(), left + 160, y, 45, fieldHeight);
-                    CreateTextField(form, page, "Speed", CurrentCharacter.Speed.ToString() + " ft", left + 240, y, 55, fieldHeight);
-                    CreateTextField(form, page, "ProficiencyBonus", "+" + CurrentCharacter.ProficiencyBonus, left + 330, y, 45, fieldHeight);
-                    y -= 24;
+                    DrawLabel(currentPage, "HP:", left, y + 3);
+                    CreateTextField(form, currentPage, "HitPoints", CurrentCharacter.HitPoints.ToString(), left + 22, y, 38, fieldHeight);
+
+                    DrawLabel(currentPage, "AC:", left + 70, y + 3);
+                    CreateTextField(form, currentPage, "ArmorClass", CurrentCharacter.ArmorClass.ToString(), left + 92, y, 38, fieldHeight);
+
+                    DrawLabel(currentPage, "Initiative:", left + 140, y + 3);
+                    CreateTextField(form, currentPage, "Initiative", CurrentCharacter.Initiative >= 0 ? $"+{CurrentCharacter.Initiative}" : CurrentCharacter.Initiative.ToString(), left + 195, y, 42, fieldHeight);
+
+                    DrawLabel(currentPage, "Speed:", left + 248, y + 3);
+                    CreateTextField(form, currentPage, "Speed", CurrentCharacter.Speed.ToString() + " ft", left + 285, y, 50, fieldHeight);
+
+                    DrawLabel(currentPage, "Prof Bonus:", left + 348, y + 3);
+                    CreateTextField(form, currentPage, "ProficiencyBonus", "+" + CurrentCharacter.ProficiencyBonus, left + 415, y, 40, fieldHeight);
+                    y -= 20;
 
                     // ========== ABILITY SCORES ==========
-                    DrawSectionHeader(page, "ABILITY SCORES", left, ref y);
+                    DrawSectionHeader(currentPage, "ABILITY SCORES", left, ref y);
 
                     var abilities = new[]
                     {
@@ -4213,40 +4249,58 @@ namespace Nemo
 
                     foreach (var (name, final, mod) in abilities)
                     {
-                        CreateTextField(form, page, $"{name}Score", final.ToString(), left + 95, y, 38, smallFieldHeight);
+                        DrawLabel(currentPage, name + ":", left, y + 2);
+                        CreateTextField(form, currentPage, $"{name}Score", final.ToString(), left + 72, y, 32, smallFieldHeight);
 
                         string modStr = mod >= 0 ? $"+{mod}" : mod.ToString();
-                        CreateTextField(form, page, $"{name}Modifier", modStr, left + 140, y, 38, smallFieldHeight);
+                        CreateTextField(form, currentPage, $"{name}Modifier", modStr, left + 108, y, 32, smallFieldHeight);
 
-                        y -= 19;
-                    }
-
-                    y -= 8;
-
-                    // ========== SAVING THROWS ==========
-                    DrawSectionHeader(page, "SAVING THROWS", left, ref y);
-
-                    var saves = GetSavingThrows();
-
-                    foreach (var save in saves)
-                    {
-                        CreateCheckbox(form, page, $"{save.Name}SaveProf", save.IsProficient, left, y, 13, 13);
-
-                        string bonus = save.Bonus >= 0 ? $"+{save.Bonus}" : save.Bonus.ToString();
-                        CreateTextField(form, page, $"{save.Name}Save", bonus, left + 18, y, 42, smallFieldHeight);
-
-                        y -= 18;
+                        y -= 17;
                     }
 
                     y -= 6;
 
+                    // ========== SAVING THROWS ==========
+                    DrawSectionHeader(currentPage, "SAVING THROWS", left, ref y);
+
+                    var saves = GetSavingThrows();
+
+                    float saveCol1 = left;
+                    float saveCol2 = left + 255;
+                    float saveY = y;
+
+                    for (int i = 0; i < 3; i++)
+                    {
+                        var save = saves[i];
+                        DrawLabel(currentPage, save.Name + " Save:", saveCol1, saveY + 2);
+                        CreateCheckbox(form, currentPage, $"{save.Name}SaveProf", save.IsProficient, saveCol1 + 85, saveY, 14, 14);
+
+                        string bonus = save.Bonus >= 0 ? $"+{save.Bonus}" : save.Bonus.ToString();
+                        CreateTextField(form, currentPage, $"{save.Name}Save", bonus, saveCol1 + 102, saveY, 32, smallFieldHeight);
+                        saveY -= 17;
+                    }
+
+                    saveY = y;
+                    for (int i = 3; i < 6; i++)
+                    {
+                        var save = saves[i];
+                        DrawLabel(currentPage, save.Name + " Save:", saveCol2, saveY + 2);
+                        CreateCheckbox(form, currentPage, $"{save.Name}SaveProf", save.IsProficient, saveCol2 + 85, saveY, 14, 14);
+
+                        string bonus = save.Bonus >= 0 ? $"+{save.Bonus}" : save.Bonus.ToString();
+                        CreateTextField(form, currentPage, $"{save.Name}Save", bonus, saveCol2 + 102, saveY, 32, smallFieldHeight);
+                        saveY -= 17;
+                    }
+
+                    y = Math.Min(y, saveY) - 6;
+
                     // ========== SKILLS ==========
-                    DrawSectionHeader(page, "SKILLS", left, ref y);
+                    DrawSectionHeader(currentPage, "SKILLS", left, ref y);
 
                     var allSkillsList = BuildFullSkillListForPDF();
 
-                    float col1X = left;
-                    float col2X = 305;
+                    float skillCol1 = left;
+                    float skillCol2 = left + 255;
                     float skillY = y;
 
                     int half = (allSkillsList.Count + 1) / 2;
@@ -4256,42 +4310,47 @@ namespace Nemo
                     {
                         var skill = allSkillsList[i];
                         string bonusStr = skill.Bonus >= 0 ? $"+{skill.Bonus}" : skill.Bonus.ToString();
+                        string label = $"{skill.Name} ({skill.Ability}):";
 
-                        CreateCheckbox(form, page, $"{skill.Name}Prof", skill.IsProficient, col1X, skillY, 12, 12);
-                        CreateTextField(form, page, $"{skill.Name}Bonus", bonusStr, col1X + 15, skillY, 32, smallFieldHeight);
-                        skillY -= 17;
+                        DrawLabel(currentPage, label, skillCol1, skillY + 2);
+                        CreateCheckbox(form, currentPage, $"{skill.Name}Prof", skill.IsProficient, skillCol1 + 115, skillY, 14, 14);
+                        CreateTextField(form, currentPage, $"{skill.Name}Bonus", bonusStr, skillCol1 + 132, skillY, 28, smallFieldHeight);
+                        skillY -= 16;
                     }
 
-                    // Column 2 (reset y)
+                    // Column 2
                     skillY = y;
                     for (int i = half; i < allSkillsList.Count; i++)
                     {
                         var skill = allSkillsList[i];
                         string bonusStr = skill.Bonus >= 0 ? $"+{skill.Bonus}" : skill.Bonus.ToString();
+                        string label = $"{skill.Name} ({skill.Ability}):";
 
-                        CreateCheckbox(form, page, $"{skill.Name}Prof", skill.IsProficient, col2X, skillY, 12, 12);
-                        CreateTextField(form, page, $"{skill.Name}Bonus", bonusStr, col2X + 15, skillY, 32, smallFieldHeight);
-                        skillY -= 17;
+                        DrawLabel(currentPage, label, skillCol2, skillY + 2);
+                        CreateCheckbox(form, currentPage, $"{skill.Name}Prof", skill.IsProficient, skillCol2 + 115, skillY, 14, 14);
+                        CreateTextField(form, currentPage, $"{skill.Name}Bonus", bonusStr, skillCol2 + 132, skillY, 28, smallFieldHeight);
+                        skillY -= 16;
                     }
 
-                    y = Math.Min(y, skillY) - 8;
+                    y = Math.Min(y, skillY) - 6;
 
                     // ========== FEATURES / FEAT ==========
-                    DrawSectionHeader(page, "FEATURES", left, ref y);
+                    DrawSectionHeader(currentPage, "FEATURES", left, ref y);
 
+                    DrawLabel(currentPage, "Feat:", left, y + 3);
                     string featName = CurrentCharacter.SelectedFeat ?? "(none selected)";
-                    CreateTextField(form, page, "SelectedFeat", featName, left, y, 350, fieldHeight);
-                    y -= 22;
+                    CreateTextField(form, currentPage, "SelectedFeat", featName, left + 32, y, 300, fieldHeight);
+                    y -= 20;
 
                     // ========== EQUIPMENT ==========
-                    DrawSectionHeader(page, "EQUIPMENT", left, ref y);
+                    CheckForNewPage(pdf, ref currentPage, ref y, 130);
+                    DrawSectionHeader(currentPage, "EQUIPMENT", left, ref y);
 
                     string equipmentText = CurrentCharacter.Equipment != null && CurrentCharacter.Equipment.Count > 0
                         ? string.Join("\n", CurrentCharacter.Equipment)
                         : "No equipment recorded.";
 
-                    // Multiline equipment field
-                    var equipRect = new iText.Kernel.Geom.Rectangle(left, y - 85, 480, 90);
+                    var equipRect = new iText.Kernel.Geom.Rectangle(left, y - 80, 485, 85);
                     var equipField = new iText.Forms.Fields.TextFormFieldBuilder(form.GetPdfDocument(), "Equipment")
                         .SetWidgetRectangle(equipRect)
                         .CreateText();
@@ -4299,27 +4358,293 @@ namespace Nemo
                     equipField.SetMultiline(true);
                     equipField.SetValue(equipmentText);
                     equipField.SetFontSize(9f);
-                    form.AddField(equipField, page);
+                    form.AddField(equipField, currentPage);
 
-                    y -= 100;
+                    y -= 95;
 
-                    // ========== SPELLS (Cantrips + 1st Level) ==========
+                    // ========== EQUIPPED WEAPONS ==========
+                    CheckForNewPage(pdf, ref currentPage, ref y, 140);
+                    DrawSectionHeader(currentPage, "EQUIPPED WEAPONS", left, ref y);
+
+                    var equippedWeapons = GetFormattedEquippedWeapons();
+                    string weaponsText = equippedWeapons.Count > 0
+                        ? string.Join("\n", equippedWeapons)
+                        : "No weapons equipped.";
+
+                    var weaponsRect = new iText.Kernel.Geom.Rectangle(left, y - 55, 485, 60);
+                    var weaponsField = new iText.Forms.Fields.TextFormFieldBuilder(form.GetPdfDocument(), "EquippedWeapons")
+                        .SetWidgetRectangle(weaponsRect)
+                        .CreateText();
+
+                    weaponsField.SetMultiline(true);
+                    weaponsField.SetValue(weaponsText);
+                    weaponsField.SetFontSize(8f);
+                    form.AddField(weaponsField, currentPage);
+
+                    y -= 70;
+
+                    // ========== CLASS FEATURES ==========
+                    CheckForNewPage(pdf, ref currentPage, ref y, 140);
+                    DrawSectionHeader(currentPage, "CLASS FEATURES", left, ref y);
+
+                    var classFeaturesText = new System.Text.StringBuilder();
+
+                    // Class features
+                    string classKey = CurrentCharacter.Class;
+                    if (GameData.ClassLevel1Features.TryGetValue(classKey, out var classFeats) && classFeats.Count > 0)
+                    {
+                        classFeaturesText.AppendLine($"{classKey}:");
+                        foreach (var f in classFeats.Take(4)) // Limit to keep it readable
+                        {
+                            classFeaturesText.AppendLine($"• {f.Name}");
+                        }
+                    }
+
+                    // Subclass features
+                    string subclassKey = CurrentCharacter.Subclass ?? "";
+                    if (!string.IsNullOrWhiteSpace(subclassKey) &&
+                        !subclassKey.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) &&
+                        GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var subFeats) &&
+                        subFeats.Count > 0)
+                    {
+                        classFeaturesText.AppendLine($"\n{subclassKey}:");
+                        foreach (var f in subFeats.Take(3))
+                        {
+                            classFeaturesText.AppendLine($"• {f.Name}");
+                        }
+                    }
+
+                    string featuresText = classFeaturesText.Length > 0
+                        ? classFeaturesText.ToString()
+                        : "No class features recorded.";
+
+                    var featuresRect = new iText.Kernel.Geom.Rectangle(left, y - 55, 485, 60);
+                    var featuresField = new iText.Forms.Fields.TextFormFieldBuilder(form.GetPdfDocument(), "ClassFeatures")
+                        .SetWidgetRectangle(featuresRect)
+                        .CreateText();
+
+                    featuresField.SetMultiline(true);
+                    featuresField.SetValue(featuresText.Trim());
+                    featuresField.SetFontSize(8f);
+                    form.AddField(featuresField, currentPage);
+
+                    y -= 70;
+
+                    // ========== PROFICIENCIES ==========
+                    CheckForNewPage(pdf, ref currentPage, ref y, 150);
+                    DrawSectionHeader(currentPage, "PROFICIENCIES", left, ref y);
+
+                    var profBuilder = new System.Text.StringBuilder();
+
+                    // Armor Proficiencies
+                    var armorProfs = new List<string>();
+                    if (GameData.ClassData.TryGetValue(CurrentCharacter.Class, out var classData))
+                        armorProfs.AddRange(classData.ArmorProficiencies);
+
+                    if (!string.IsNullOrEmpty(CurrentCharacter.Subclass))
+                    {
+                        if (CurrentCharacter.Class == "Cleric" && GameData.ClericSubclasses.TryGetValue(CurrentCharacter.Subclass, out var cs))
+                            armorProfs.AddRange(cs.ArmorProficiencies);
+                        else if (CurrentCharacter.Class == "Warlock" && GameData.WarlockSubclasses.TryGetValue(CurrentCharacter.Subclass, out var ws))
+                            armorProfs.AddRange(ws.ArmorProficiencies);
+                    }
+
+                    if (CurrentCharacter.Race != null && CurrentCharacter.Race.Contains("Dwarf"))
+                        armorProfs.Add("Dwarven Armor Training");
+
+                    if (armorProfs.Count > 0)
+                        profBuilder.AppendLine("Armor: " + string.Join(", ", armorProfs.Distinct()));
+
+                    // Weapon Proficiencies
+                    var weaponProfs = new List<string>();
+                    if (classData != null)
+                        weaponProfs.AddRange(classData.WeaponProficiencies);
+
+                    if (!string.IsNullOrEmpty(CurrentCharacter.Subclass))
+                    {
+                        if (CurrentCharacter.Class == "Cleric" && GameData.ClericSubclasses.TryGetValue(CurrentCharacter.Subclass, out var cs))
+                            weaponProfs.AddRange(cs.WeaponProficiencies);
+                        else if (CurrentCharacter.Class == "Warlock" && GameData.WarlockSubclasses.TryGetValue(CurrentCharacter.Subclass, out var ws))
+                            weaponProfs.AddRange(ws.WeaponProficiencies);
+                    }
+
+                    if (CurrentCharacter.Race != null && CurrentCharacter.Race.Contains("Dwarf"))
+                        weaponProfs.Add("Dwarven Combat Training");
+                    if (CurrentCharacter.Race != null && CurrentCharacter.Race.Contains("Elf"))
+                        weaponProfs.Add("Elf Weapon Training");
+
+                    if (weaponProfs.Count > 0)
+                        profBuilder.AppendLine("Weapons: " + string.Join(", ", weaponProfs.Distinct()));
+
+                    // Languages
+                    var languages = new List<string>();
+                    if (GameData.RaceData.TryGetValue(CurrentCharacter.Race ?? "", out var raceData))
+                        languages.AddRange(raceData.Languages);
+
+                    if (languages.Count > 0)
+                        profBuilder.AppendLine("Languages: " + string.Join(", ", languages));
+
+                    string profText = profBuilder.Length > 0 ? profBuilder.ToString() : "None";
+
+                    var profRect = new Rectangle(left, y - 55, 485, 60);
+                    var profField = new TextFormFieldBuilder(form.GetPdfDocument(), "Proficiencies")
+                        .SetWidgetRectangle(profRect)
+                        .CreateText();
+                    profField.SetMultiline(true);
+                    profField.SetValue(profText.Trim());
+                    profField.SetFontSize(9f);
+                    form.AddField(profField, currentPage);
+
+                    y -= 70;
+
+                    // ========== RACIAL & SUBRACIAL TRAITS ==========
+                    CheckForNewPage(pdf, ref currentPage, ref y, 120);
+                    DrawSectionHeader(currentPage, "RACIAL & SUBRACIAL TRAITS", left, ref y);
+
+                    var traitsBuilder = new System.Text.StringBuilder();
+
+                    if (raceData != null && raceData.Traits.Any())
+                    {
+                        traitsBuilder.AppendLine("Racial Traits:");
+                        foreach (var t in raceData.Traits)
+                            traitsBuilder.AppendLine("• " + t);
+                    }
+
+                    if (!string.IsNullOrEmpty(CurrentCharacter.Subrace) &&
+                        GameData.RaceSubraces.TryGetValue(CurrentCharacter.Race ?? "", out var subList))
+                    {
+                        var subrace = subList.FirstOrDefault(s => s.Name == CurrentCharacter.Subrace);
+                        if (subrace != null && subrace.Traits.Any())
+                        {
+                            traitsBuilder.AppendLine($"\nSubracial Traits ({CurrentCharacter.Subrace}):");
+                            foreach (var t in subrace.Traits)
+                                traitsBuilder.AppendLine("• " + t);
+                        }
+                    }
+
+                    string traitsText = traitsBuilder.Length > 0 ? traitsBuilder.ToString() : "None";
+
+                    var traitsRect = new Rectangle(left, y - 95, 485, 100);
+                    var traitsField = new TextFormFieldBuilder(form.GetPdfDocument(), "RacialTraits")
+                        .SetWidgetRectangle(traitsRect)
+                        .CreateText();
+                    traitsField.SetMultiline(true);
+                    traitsField.SetValue(traitsText.Trim());
+                    traitsField.SetFontSize(9f);
+                    form.AddField(traitsField, currentPage);
+
+                    y -= 110;
+
+                    // ========== SPELLS (Detailed with stats + description) ==========
                     if (CurrentCharacter.Cantrips.Any() || CurrentCharacter.Level1Spells.Any())
                     {
-                        DrawSectionHeader(page, "SPELLS", left, ref y);
+                        CheckForNewPage(pdf, ref currentPage, ref y, 220);
+                        DrawSectionHeader(currentPage, "SPELLS", left, ref y);
 
+                        // --- CANTRIPS ---
                         if (CurrentCharacter.Cantrips.Any())
                         {
-                            string cantrips = string.Join(", ", CurrentCharacter.Cantrips);
-                            CreateTextField(form, page, "Cantrips", cantrips, left, y, 480, fieldHeight);
-                            y -= 20;
+                            DrawLabel(currentPage, "Cantrips:", left, y + 3);
+                            y -= 14;
+
+                            var cantripBuilder = new System.Text.StringBuilder();
+
+                            foreach (var cantripName in CurrentCharacter.Cantrips)
+                            {
+                                var spell = GameData.AllCantrips.FirstOrDefault(s =>
+                                    s.Name.Equals(cantripName, StringComparison.OrdinalIgnoreCase));
+
+                                if (spell != null)
+                                {
+                                    cantripBuilder.AppendLine($"• {spell.Name}");
+                                    cantripBuilder.AppendLine($"  Casting Time: {spell.CastingTime} | Range: {spell.Range} | Duration: {spell.Duration}" +
+                                        (spell.IsConcentration ? " (Concentration)" : ""));
+
+                                    if (!string.IsNullOrWhiteSpace(spell.DamageDice))
+                                        cantripBuilder.AppendLine($"  Dice: {spell.DamageDice} {spell.DamageType}");
+
+                                    if (!string.IsNullOrWhiteSpace(spell.RollType))
+                                        cantripBuilder.AppendLine($"  Roll: {spell.RollType}");
+
+                                    string shortDesc = spell.Description.Length > 200
+                                        ? spell.Description.Substring(0, 197) + "..."
+                                        : spell.Description;
+
+                                    cantripBuilder.AppendLine($"  {shortDesc}");
+                                    cantripBuilder.AppendLine($"  https://dnd5e.wikidot.com/spell:{Slugify(spell.Name)}");
+                                    cantripBuilder.AppendLine();
+                                }
+                                else
+                                {
+                                    cantripBuilder.AppendLine($"• {cantripName}");
+                                }
+                            }
+
+                            var cantripRect = new iText.Kernel.Geom.Rectangle(left, y - 115, 485, 120);
+                            var cantripField = new iText.Forms.Fields.TextFormFieldBuilder(form.GetPdfDocument(), "CantripsDetails")
+                                .SetWidgetRectangle(cantripRect)
+                                .CreateText();
+
+                            cantripField.SetMultiline(true);
+                            cantripField.SetValue(cantripBuilder.ToString().Trim());
+                            cantripField.SetFontSize(8f);
+                            form.AddField(cantripField, currentPage);
+
+                            y -= 130;
                         }
 
+                        // --- 1ST LEVEL SPELLS (one field per spell) ---
                         if (CurrentCharacter.Level1Spells.Any())
                         {
-                            string spells1 = string.Join(", ", CurrentCharacter.Level1Spells);
-                            CreateTextField(form, page, "Level1Spells", spells1, left, y, 480, fieldHeight);
-                            y -= 20;
+                            CheckForNewPage(pdf, ref currentPage, ref y, 180);
+                            DrawSectionHeader(currentPage, "1ST LEVEL SPELLS", left, ref y);
+
+                            foreach (var spellName in CurrentCharacter.Level1Spells)
+                            {
+                                var spell = GameData.All1stLevelSpells.FirstOrDefault(s =>
+                                    s.Name.Equals(spellName, StringComparison.OrdinalIgnoreCase));
+
+                                CheckForNewPage(pdf, ref currentPage, ref y, 140);
+
+                                string header = spell != null 
+                                    ? $"{spell.Name} (Level {(spell as LeveledSpell)?.Level ?? 1})"
+                                    : spellName;
+
+                                DrawLabel(currentPage, header, left, y + 2);
+                                y -= 16;
+
+                                if (spell != null)
+                                {
+                                    var spellBuilder = new System.Text.StringBuilder();
+                                    spellBuilder.AppendLine($"Casting Time: {spell.CastingTime} | Range: {spell.Range} | Duration: {spell.Duration}" + 
+                                        (spell.IsConcentration ? " (Concentration)" : ""));
+                                    
+                                    if (!string.IsNullOrWhiteSpace(spell.DamageDice))
+                                        spellBuilder.AppendLine($"Dice: {spell.DamageDice} {spell.DamageType}");
+                                    
+                                    if (!string.IsNullOrWhiteSpace(spell.RollType))
+                                        spellBuilder.AppendLine($"Roll: {spell.RollType}");
+
+                                    spellBuilder.AppendLine();
+                                    spellBuilder.AppendLine(spell.Description);
+                                    spellBuilder.AppendLine($"https://dnd5e.wikidot.com/spell:{Slugify(spell.Name)}");
+
+                                    var spellRect = new Rectangle(left, y - 95, 485, 100);
+                                    var spellField = new TextFormFieldBuilder(form.GetPdfDocument(), $"Spell_{Slugify(spellName)}")
+                                        .SetWidgetRectangle(spellRect)
+                                        .CreateText();
+                                    spellField.SetMultiline(true);
+                                    spellField.SetValue(spellBuilder.ToString().Trim());
+                                    spellField.SetFontSize(8f);
+                                    form.AddField(spellField, currentPage);
+
+                                    y -= 110;
+                                }
+                                else
+                                {
+                                    y -= 20;
+                                }
+                            }
                         }
                     }
 
@@ -4382,6 +4707,37 @@ namespace Nemo
             catch { /* fallback - header text omitted */ }
 
             y -= 16;
+        }
+
+        /// <summary>
+        /// Draws a static label text using iText Layout (for fillable PDF).
+        /// </summary>
+        private void DrawLabel(iText.Kernel.Pdf.PdfPage pdfPage, string text, float x, float y)
+        {
+            try
+            {
+                var canvas = new iText.Layout.Canvas(pdfPage, pdfPage.GetPageSize());
+                var para = new Paragraph(text)
+                    .SetFontSize(9)
+                    .SetFontColor(iText.Kernel.Colors.ColorConstants.BLACK);
+
+                canvas.ShowTextAligned(para, x, y, iText.Layout.Properties.TextAlignment.LEFT);
+                canvas.Close();
+            }
+            catch { /* silent fallback */ }
+        }
+
+        /// <summary>
+        /// Checks if we have enough vertical space left on the current page for fillable PDF.
+        /// If not, creates a new page and resets the y coordinate.
+        /// </summary>
+        private void CheckForNewPage(iText.Kernel.Pdf.PdfDocument pdf, ref iText.Kernel.Pdf.PdfPage currentPage, ref float y, float neededSpace = 130)
+        {
+            if (y < neededSpace)
+            {
+                currentPage = pdf.AddNewPage(iText.Kernel.Geom.PageSize.LETTER);
+                y = 750; // reset near top of new page
+            }
         }
 
         // Helper to get total character level (you can improve this)
