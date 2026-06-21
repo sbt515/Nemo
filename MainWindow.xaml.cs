@@ -4222,7 +4222,10 @@ namespace Nemo
                     CreateTextField(form, currentPage, "HitPoints", CurrentCharacter.HitPoints.ToString(), left + 22, y, 38, fieldHeight);
 
                     DrawLabel(currentPage, "AC:", left + 70, y + 3);
-                    CreateTextField(form, currentPage, "ArmorClass", CurrentCharacter.ArmorClass.ToString(), left + 92, y, 38, fieldHeight);
+                    string acDisplay = !string.IsNullOrWhiteSpace(CurrentCharacter.EquippedACDisplay)
+                        ? CurrentCharacter.EquippedACDisplay
+                        : CurrentCharacter.ArmorClass.ToString();
+                    CreateTextField(form, currentPage, "ArmorClass", acDisplay, left + 92, y, 200, fieldHeight);
 
                     DrawLabel(currentPage, "Initiative:", left + 140, y + 3);
                     CreateTextField(form, currentPage, "Initiative", CurrentCharacter.Initiative >= 0 ? $"+{CurrentCharacter.Initiative}" : CurrentCharacter.Initiative.ToString(), left + 195, y, 42, fieldHeight);
@@ -4232,7 +4235,33 @@ namespace Nemo
 
                     DrawLabel(currentPage, "Prof Bonus:", left + 348, y + 3);
                     CreateTextField(form, currentPage, "ProficiencyBonus", "+" + CurrentCharacter.ProficiencyBonus, left + 415, y, 40, fieldHeight);
-                    y -= 20;
+                    y -= 18;
+
+                    // === NEW: Weapon Attack bonuses and conditional Spell stats ===
+                    int strMod = CurrentCharacter.AbilityScores?.Strength?.Modifier ?? 0;
+                    int dexMod = CurrentCharacter.AbilityScores?.Dexterity?.Modifier ?? 0;
+                    int prof = CurrentCharacter.ProficiencyBonus;
+
+                    string meleeStr = (strMod + prof) >= 0 ? $"+{strMod + prof}" : (strMod + prof).ToString();
+                    string rangedStr = (dexMod + prof) >= 0 ? $"+{dexMod + prof}" : (dexMod + prof).ToString();
+
+                    DrawLabel(currentPage, "Weapon Attack (Str):", left, y + 2);
+                    CreateTextField(form, currentPage, "WeaponAttackStr", meleeStr, left + 125, y, 35, smallFieldHeight);
+
+                    DrawLabel(currentPage, "Ranged Attack (Dex):", left + 175, y + 2);
+                    CreateTextField(form, currentPage, "WeaponAttackDex", rangedStr, left + 305, y, 35, smallFieldHeight);
+                    y -= 17;
+
+                    // Only show Spell DC / Attack if the character has spellcasting
+                    if (!string.IsNullOrWhiteSpace(CurrentCharacter.SpellcastingAbility))
+                    {
+                        DrawLabel(currentPage, "Spell DC:", left, y + 2);
+                        CreateTextField(form, currentPage, "SpellDC", CurrentCharacter.SpellSaveDC.ToString(), left + 60, y, 30, smallFieldHeight);
+
+                        DrawLabel(currentPage, "Spell Attack:", left + 100, y + 2);
+                        CreateTextField(form, currentPage, "SpellAttack", "+" + CurrentCharacter.SpellAttackBonus, left + 175, y, 35, smallFieldHeight);
+                        y -= 17;
+                    }
 
                     // ========== ABILITY SCORES ==========
                     DrawSectionHeader(currentPage, "ABILITY SCORES", left, ref y);
@@ -4334,13 +4363,15 @@ namespace Nemo
 
                     y = Math.Min(y, skillY) - 6;
 
-                    // ========== FEATURES / FEAT ==========
-                    DrawSectionHeader(currentPage, "FEATURES", left, ref y);
+                    // ========== FEATURES / FEAT (only show if a feat is selected) ==========
+                    if (!string.IsNullOrWhiteSpace(CurrentCharacter.SelectedFeat))
+                    {
+                        DrawSectionHeader(currentPage, "FEATURES", left, ref y);
 
-                    DrawLabel(currentPage, "Feat:", left, y + 3);
-                    string featName = CurrentCharacter.SelectedFeat ?? "(none selected)";
-                    CreateTextField(form, currentPage, "SelectedFeat", featName, left + 32, y, 300, fieldHeight);
-                    y -= 20;
+                        DrawLabel(currentPage, "Feat:", left, y + 3);
+                        CreateTextField(form, currentPage, "SelectedFeat", CurrentCharacter.SelectedFeat, left + 32, y, 300, fieldHeight);
+                        y -= 20;
+                    }
 
                     // ========== EQUIPMENT ==========
                     CheckForNewPage(pdf, ref currentPage, ref y, 130);
@@ -4383,34 +4414,76 @@ namespace Nemo
 
                     y -= 70;
 
-                    // ========== CLASS FEATURES ==========
-                    CheckForNewPage(pdf, ref currentPage, ref y, 140);
+                    // ========== CLASS FEATURES (with descriptions + wikidot link) ==========
+                    CheckForNewPage(pdf, ref currentPage, ref y, 160);
                     DrawSectionHeader(currentPage, "CLASS FEATURES", left, ref y);
 
                     var classFeaturesText = new System.Text.StringBuilder();
 
-                    // Class features
                     string classKey = CurrentCharacter.Class;
+                    string displayClassName = classKey;
+                    if (displayClassName.Contains("("))
+                        displayClassName = displayClassName.Substring(0, displayClassName.IndexOf("(")).Trim();
+
+                    // Class wikidot link
+                    string classSlug = Slugify(displayClassName);
+                    string classUrl = $"https://dnd5e.wikidot.com/{classSlug}";
+                    classFeaturesText.AppendLine($"{displayClassName}");
+                    classFeaturesText.AppendLine($"Source: {classUrl}");
+                    classFeaturesText.AppendLine();
+
+                    // Class features with descriptions
                     if (GameData.ClassLevel1Features.TryGetValue(classKey, out var classFeats) && classFeats.Count > 0)
                     {
-                        classFeaturesText.AppendLine($"{classKey}:");
-                        foreach (var f in classFeats.Take(4)) // Limit to keep it readable
+                        foreach (var f in classFeats)
                         {
                             classFeaturesText.AppendLine($"• {f.Name}");
+                            
+                            string shortDesc = f.Description.Length > 280 
+                                ? f.Description.Substring(0, 277) + "..." 
+                                : f.Description;
+                            classFeaturesText.AppendLine($"   {shortDesc}");
+
+                            if (!string.IsNullOrWhiteSpace(f.Uses))
+                                classFeaturesText.AppendLine($"   Uses: {f.Uses}");
+
+                            classFeaturesText.AppendLine();
                         }
                     }
 
-                    // Subclass features
+                    // Subclass features (with descriptions)
                     string subclassKey = CurrentCharacter.Subclass ?? "";
                     if (!string.IsNullOrWhiteSpace(subclassKey) &&
                         !subclassKey.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) &&
                         GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var subFeats) &&
                         subFeats.Count > 0)
                     {
-                        classFeaturesText.AppendLine($"\n{subclassKey}:");
-                        foreach (var f in subFeats.Take(3))
+                        classFeaturesText.AppendLine($"--- {subclassKey} ---");
+
+                        string subSlug = Slugify(subclassKey);
+                        string subUrl = classKey.ToLowerInvariant() switch
+                        {
+                            "cleric" => $"https://dnd5e.wikidot.com/cleric:{subSlug}",
+                            "sorcerer" => $"https://dnd5e.wikidot.com/sorcerer:{subSlug}",
+                            "warlock" => $"https://dnd5e.wikidot.com/warlock:{subSlug}",
+                            _ => $"https://dnd5e.wikidot.com/{subSlug}"
+                        };
+                        classFeaturesText.AppendLine($"Source: {subUrl}");
+                        classFeaturesText.AppendLine();
+
+                        foreach (var f in subFeats)
                         {
                             classFeaturesText.AppendLine($"• {f.Name}");
+
+                            string shortDesc = f.Description.Length > 280
+                                ? f.Description.Substring(0, 277) + "..."
+                                : f.Description;
+                            classFeaturesText.AppendLine($"   {shortDesc}");
+
+                            if (!string.IsNullOrWhiteSpace(f.Uses))
+                                classFeaturesText.AppendLine($"   Uses: {f.Uses}");
+
+                            classFeaturesText.AppendLine();
                         }
                     }
 
@@ -4418,7 +4491,7 @@ namespace Nemo
                         ? classFeaturesText.ToString()
                         : "No class features recorded.";
 
-                    var featuresRect = new iText.Kernel.Geom.Rectangle(left, y - 55, 485, 60);
+                    var featuresRect = new iText.Kernel.Geom.Rectangle(left, y - 130, 485, 135);
                     var featuresField = new iText.Forms.Fields.TextFormFieldBuilder(form.GetPdfDocument(), "ClassFeatures")
                         .SetWidgetRectangle(featuresRect)
                         .CreateText();
@@ -4428,7 +4501,7 @@ namespace Nemo
                     featuresField.SetFontSize(8f);
                     form.AddField(featuresField, currentPage);
 
-                    y -= 70;
+                    y -= 145;
 
                     // ========== PROFICIENCIES ==========
                     CheckForNewPage(pdf, ref currentPage, ref y, 150);
