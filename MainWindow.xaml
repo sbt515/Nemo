@@ -952,12 +952,15 @@
                               AlternatingRowBackground="#2A2A2A"
                               Foreground="White"
                               BorderBrush="#555555"
-                              IsReadOnly="False"
+                              IsReadOnly="True"
                               SelectionMode="Single"
                               SelectionUnit="FullRow"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
                               CanUserResizeColumns="True"
                               GridLinesVisibility="None"
-                              HeadersVisibility="Column">
+                              HeadersVisibility="Column"
+                              PreviewMouseLeftButtonDown="dgSkills_PreviewMouseLeftButtonDown">
                         <DataGrid.ColumnHeaderStyle>
                             <Style TargetType="DataGridColumnHeader">
                                 <Setter Property="Background"
@@ -973,22 +976,27 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Skill"
                                                 Binding="{Binding SkillName}"
-                                                Width="180"/>
+                                                Width="180"
+                                                IsReadOnly="True"/>
                             <DataGridTextColumn Header="Ability"
                                                 Binding="{Binding Ability}"
-                                                Width="60"/>
+                                                Width="60"
+                                                IsReadOnly="True"/>
                             <DataGridTextColumn Header="Bonus"
                                                 Binding="{Binding Bonus}"
-                                                Width="70"/>
-                            <!-- Proficient Checkbox with proper IsSelectable control -->
+                                                Width="70"
+                                                IsReadOnly="True"/>
+                            <!-- Proficient: single-click toggle; IsSelectable gates class-choice skills -->
                             <DataGridTemplateColumn Header="Proficient?"
                                                     Width="100">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <CheckBox IsChecked="{Binding IsProficient, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  IsEnabled="{Binding IsSelectable}"
+                                                  IsEnabled="{Binding IsSelectable, Mode=OneWay}"
                                                   HorizontalAlignment="Center"
-                                                  VerticalAlignment="Center"/>
+                                                  VerticalAlignment="Center"
+                                                  Focusable="False"
+                                                  PreviewMouseLeftButtonDown="SkillProficiencyCheckBox_PreviewMouseLeftButtonDown"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>

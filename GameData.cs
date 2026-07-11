@@ -12,7 +12,7 @@ using System.Windows.Controls.Primitives;
 
 namespace Nemo
 {
-    public static class GameData
+    public static partial class GameData
     {
 
         // ==================== COMPLETE 5e DATA (from dnd5e.wikidot.com + PHB) ====================
@@ -496,22 +496,25 @@ namespace Nemo
 
         public static readonly Dictionary<string, ClassData> ClassData = new()
         {
+            // Subclass lists: official published options (PHB, XGE, TCE, SCAG, etc.). See also AllSubclasses.
             ["Artificer"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Intelligence", CantripsKnown = 2, SpellsPrepared = "Int mod + 1", Subclasses = new() { "Alchemist", "Armorer", "Artillerist", "Battle Smith" }, SkillChoices = new() { "Arcana", "Deception", "History", "Investigation", "Medicine", "Nature", "Perception", "Sleight of Hand" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Constitution", "Intelligence" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons" } },
-            ["Barbarian"] = new() { HitDie = "1d12", HP1stLevel = "12 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Ancestral Guardian", "Battlerager", "Beast", "Berserker", "Storm Herald", "Totem Warrior", "Wild Magic", "Zealot" }, SkillChoices = new() { "Animal Handling", "Athletics", "Intimidation", "Nature", "Perception", "Survival" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Strength", "Constitution" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
+            ["Barbarian"] = new() { HitDie = "1d12", HP1stLevel = "12 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Path of the Ancestral Guardian", "Path of the Battlerager", "Path of the Beast", "Path of the Berserker", "Path of the Giant", "Path of the Storm Herald", "Path of the Totem Warrior", "Path of Wild Magic", "Path of the Zealot" }, SkillChoices = new() { "Animal Handling", "Athletics", "Intimidation", "Nature", "Perception", "Survival" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Strength", "Constitution" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
             ["Bard"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Charisma", CantripsKnown = 2, SpellsKnown = 4, Subclasses = new() { "College of Creation", "College of Eloquence", "College of Glamour", "College of Lore", "College of Spirits", "College of Swords", "College of Valor", "College of Whispers" }, SkillChoices = new() { "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception", "History", "Insight", "Intimidation", "Investigation", "Medicine", "Nature", "Perception", "Performance", "Persuasion", "Religion", "Sleight of Hand", "Stealth", "Survival" }, SkillChoiceCount = 3, SavingThrowProficiencies = new() { "Dexterity", "Charisma" }, ArmorProficiencies = new() { "Light armor" }, WeaponProficiencies = new() { "Simple weapons", "Hand crossbows", "Longswords", "Rapiers", "Shortswords" } },
             ["Cleric"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Wisdom", CantripsKnown = 3, SpellsPrepared = "Wis mod + 1", Subclasses = new() { "Arcana", "Death", "Forge", "Grave", "Knowledge", "Life", "Light", "Nature", "Order", "Peace", "Tempest", "Trickery", "Twilight", "War" }, SkillChoices = new() { "History", "Insight", "Medicine", "Persuasion", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Wisdom", "Charisma" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons" } },
-            ["Druid"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Wisdom", CantripsKnown = 2, SpellsPrepared = "Wis mod + 1", Subclasses = new() { "Circle of Dreams", "Circle of Spores", "Circle of Stars", "Circle of the Land", "Circle of the Moon", "Circle of Wildfire" }, SkillChoices = new() { "Arcana", "Animal Handling", "Insight", "Medicine", "Nature", "Perception", "Religion", "Survival" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Intelligence", "Wisdom" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields (non-metal)" }, WeaponProficiencies = new() { "Clubs", "Daggers", "Darts", "Javelins", "Maces", "Quarterstaffs", "Scimitars", "Sickles", "Slings", "Spears" } },
-            ["Fighter"] = new() { HitDie = "1d10", HP1stLevel = "10 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Arcane Archer", "Banneret", "Battle Master", "Cavalier", "Champion", "Echo Knight", "Eldritch Knight", "Psi Warrior", "Rune Knight" }, SkillChoices = new() { "Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Perception", "Survival" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Strength", "Constitution" }, ArmorProficiencies = new() { "All armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
-            ["Monk"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Way of Mercy", "Way of Open Hand", "Way of Shadow", "Way of the Ascendant Dragon", "Way of the Astral Self", "Way of the Drunken Master", "Way of the Four Elements", "Way of the Kensei", "Way of the Long Death", "Way of the Sun Soul", "Way of the Way" }, SkillChoices = new() { "Acrobatics", "Athletics", "History", "Insight", "Religion", "Stealth" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Strength", "Dexterity" }, ArmorProficiencies = new() { "None" }, WeaponProficiencies = new() { "Simple weapons", "Shortswords" } },
-            ["Paladin"] = new() { HitDie = "1d10", HP1stLevel = "10 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Charisma", CantripsKnown = 0, SpellsPrepared = "Cha mod + 1", Subclasses = new() { "Oath of Conquest", "Oath of Devotion", "Oath of Glory", "Oath of the Open Sea", "Oath of Redemption", "Oath of the Watchers", "Oath of Vengeance", "Oathbreaker" }, SkillChoices = new() { "Athletics", "Insight", "Intimidation", "Medicine", "Persuasion", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Wisdom", "Charisma" }, ArmorProficiencies = new() { "All armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
-            ["Ranger"] = new() { HitDie = "1d10", HP1stLevel = "10 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Wisdom", CantripsKnown = 0, SpellsKnown = 0, Subclasses = new() { "Beast Master", "Fey Wanderer", "Gloom Stalker", "Horizon Walker", "Hunter", "Monster Slayer", "Swarmkeeper" }, SkillChoices = new() { "Animal Handling", "Athletics", "Insight", "Investigation", "Nature", "Perception", "Stealth", "Survival" }, SkillChoiceCount = 3, SavingThrowProficiencies = new() { "Strength", "Dexterity" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
+            ["Druid"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Wisdom", CantripsKnown = 2, SpellsPrepared = "Wis mod + 1", Subclasses = new() { "Circle of Dreams", "Circle of Spores", "Circle of Stars", "Circle of the Land", "Circle of the Moon", "Circle of the Shepherd", "Circle of Wildfire" }, SkillChoices = new() { "Arcana", "Animal Handling", "Insight", "Medicine", "Nature", "Perception", "Religion", "Survival" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Intelligence", "Wisdom" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields (non-metal)" }, WeaponProficiencies = new() { "Clubs", "Daggers", "Darts", "Javelins", "Maces", "Quarterstaffs", "Scimitars", "Sickles", "Slings", "Spears" } },
+            ["Fighter"] = new() { HitDie = "1d10", HP1stLevel = "10 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Arcane Archer", "Banneret", "Battle Master", "Cavalier", "Champion", "Echo Knight", "Eldritch Knight", "Psi Warrior", "Rune Knight", "Samurai" }, SkillChoices = new() { "Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Perception", "Survival" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Strength", "Constitution" }, ArmorProficiencies = new() { "All armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
+            ["Monk"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Way of Mercy", "Way of Shadow", "Way of the Ascendant Dragon", "Way of the Astral Self", "Way of the Drunken Master", "Way of the Four Elements", "Way of the Kensei", "Way of the Long Death", "Way of the Open Hand", "Way of the Sun Soul" }, SkillChoices = new() { "Acrobatics", "Athletics", "History", "Insight", "Religion", "Stealth" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Strength", "Dexterity" }, ArmorProficiencies = new() { "None" }, WeaponProficiencies = new() { "Simple weapons", "Shortswords" } },
+            ["Paladin"] = new() { HitDie = "1d10", HP1stLevel = "10 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Charisma", CantripsKnown = 0, SpellsPrepared = "Cha mod + 1", Subclasses = new() { "Oath of Conquest", "Oath of Devotion", "Oath of Glory", "Oath of Redemption", "Oath of Vengeance", "Oath of the Ancients", "Oath of the Crown", "Oath of the Open Sea", "Oath of the Watchers", "Oathbreaker" }, SkillChoices = new() { "Athletics", "Insight", "Intimidation", "Medicine", "Persuasion", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Wisdom", "Charisma" }, ArmorProficiencies = new() { "All armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
+            ["Ranger"] = new() { HitDie = "1d10", HP1stLevel = "10 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Wisdom", CantripsKnown = 0, SpellsKnown = 0, Subclasses = new() { "Beast Master", "Drakewarden", "Fey Wanderer", "Gloom Stalker", "Horizon Walker", "Hunter", "Monster Slayer", "Swarmkeeper" }, SkillChoices = new() { "Animal Handling", "Athletics", "Insight", "Investigation", "Nature", "Perception", "Stealth", "Survival" }, SkillChoiceCount = 3, SavingThrowProficiencies = new() { "Strength", "Dexterity" }, ArmorProficiencies = new() { "Light armor", "Medium armor", "Shields" }, WeaponProficiencies = new() { "Simple weapons", "Martial weapons" } },
             ["Rogue"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = false, Subclasses = new() { "Arcane Trickster", "Assassin", "Inquisitive", "Mastermind", "Phantom", "Scout", "Soulknife", "Swashbuckler", "Thief" }, SkillChoices = new() { "Acrobatics", "Athletics", "Deception", "Insight", "Intimidation", "Investigation", "Perception", "Performance", "Persuasion", "Sleight of Hand", "Stealth" }, SkillChoiceCount = 4, SavingThrowProficiencies = new() { "Dexterity", "Intelligence" }, ArmorProficiencies = new() { "Light armor" }, WeaponProficiencies = new() { "Simple weapons", "Hand crossbows", "Longswords", "Rapiers", "Shortswords" } },
             ["Sorcerer"] = new() { HitDie = "1d6", HP1stLevel = "6 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Charisma", CantripsKnown = 4, SpellsKnown = 2, Subclasses = new() { "Aberrant Mind", "Clockwork Soul", "Divine Soul", "Draconic Bloodline", "Lunar", "Shadow", "Storm", "Wild Magic" }, SkillChoices = new() { "Arcana", "Deception", "Insight", "Intimidation", "Persuasion", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Constitution", "Charisma" }, ArmorProficiencies = new() { "None" }, WeaponProficiencies = new() { "Daggers", "Darts", "Slings", "Quarterstaffs", "Light crossbows" } },
             ["Warlock"] = new() { HitDie = "1d8", HP1stLevel = "8 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Charisma", CantripsKnown = 2, SpellsKnown = 2, Subclasses = new() { "The Archfey", "The Celestial", "The Fathomless", "The Fiend", "The Genie", "The Great Old One", "The Hexblade", "The Undead", "The Undying" }, SkillChoices = new() { "Arcana", "Deception", "History", "Intimidation", "Investigation", "Nature", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Wisdom", "Charisma" }, ArmorProficiencies = new() { "Light armor" }, WeaponProficiencies = new() { "Simple weapons" } },
             ["Wizard"] = new() { HitDie = "1d6", HP1stLevel = "6 + Con mod", Proficiencies = "...", Spellcasting = true, SpellAbility = "Intelligence", CantripsKnown = 3, SpellsPrepared = "Int mod + 1", Subclasses = new() { "Abjuration", "Bladesinging", "Chronurgy", "Conjuration", "Divination", "Enchantment", "Evocation", "Graviturgy", "Illusion", "Necromancy", "Order of Scribes", "Transmutation", "War Magic" }, SkillChoices = new() { "Arcana", "History", "Insight", "Investigation", "Medicine", "Religion" }, SkillChoiceCount = 2, SavingThrowProficiencies = new() { "Intelligence", "Wisdom" }, ArmorProficiencies = new() { "None" }, WeaponProficiencies = new() { "Daggers", "Darts", "Slings", "Quarterstaffs", "Light crossbows" } }
         };
 
-        // ==================== CLASS LEVEL 1 FEATURES (for PDF Class Features section) ====================
+        // ==================== CLASS LEVEL 1 FEATURES (legacy L1-only summaries for PDF/UI) ====================
+        // Full 1–20 base-class progression lives in ClassProgression (ClassProgressionData.cs).
+        // Prefer GetClassFeaturesAtLevel / GetClassFeaturesUpToLevel for new code.
         public static readonly Dictionary<string, List<ClassFeature>> ClassLevel1Features = new()
         {
             ["Artificer"] = new()
@@ -1400,6 +1403,10 @@ namespace Nemo
     "Variant Human", "Custom Lineage"
 };
 
+        // Skill lists grant auto-proficiencies on the Skills tab.
+        // For backgrounds with player skill choices, only the FIXED skill(s) are listed here;
+        // the optional second skill is documented in BackgroundDetails for the player to select.
+        // Source: https://dnd5e.wikidot.com/#toc3 (PHB, SCAG, other official books)
         public static readonly Dictionary<string, List<string>> BackgroundSkillMap = new()
         {
             ["Acolyte"] = new() { "Insight", "Religion" },
@@ -1408,90 +1415,328 @@ namespace Nemo
             ["Courtier"] = new() { "Insight", "Persuasion" },
             ["Criminal"] = new() { "Deception", "Stealth" },
             ["Entertainer"] = new() { "Acrobatics", "Performance" },
-            ["Faction Agent"] = new() { "Deception", "Persuasion" },
+            // Faction Agent: Insight + one Int/Wis/Cha skill of your choice (only Insight auto-granted)
+            ["Faction Agent"] = new() { "Insight" },
             ["Far Traveler"] = new() { "Insight", "Perception" },
             ["Feylost"] = new() { "Deception", "Survival" },
             ["Folk Hero"] = new() { "Animal Handling", "Survival" },
             ["Gladiator"] = new() { "Acrobatics", "Performance" },
             ["Hermit"] = new() { "Medicine", "Religion" },
-            ["Inheritor"] = new() { "Arcana", "History" },
+            // Inheritor: Survival + one of Arcana, History, or Religion (only Survival auto-granted)
+            ["Inheritor"] = new() { "Survival" },
             ["Knight"] = new() { "History", "Persuasion" },
             ["Marine"] = new() { "Athletics", "Survival" },
             ["Noble"] = new() { "History", "Persuasion" },
             ["Outlander"] = new() { "Athletics", "Survival" },
             ["Pirate"] = new() { "Athletics", "Perception" },
-            ["Rune Carver"] = new() { "Arcana", "History" },
+            ["Rune Carver"] = new() { "History", "Perception" },
             ["Sage"] = new() { "Arcana", "History" },
             ["Sailor"] = new() { "Athletics", "Perception" },
             ["Shipwright"] = new() { "History", "Perception" },
-            ["Smuggler"] = new() { "Deception", "Stealth" },
+            ["Smuggler"] = new() { "Athletics", "Deception" },
             ["Soldier"] = new() { "Athletics", "Intimidation" },
             ["Spy"] = new() { "Deception", "Stealth" },
-            ["Urban Bounty Hunter"] = new() { "Insight", "Investigation" },
+            // Urban Bounty Hunter: choose two from Deception, Insight, Persuasion, Stealth (player choice)
+            ["Urban Bounty Hunter"] = new() { },
             ["Urchin"] = new() { "Sleight of Hand", "Stealth" }
         };
 
+        /// <summary>
+        /// Full official background summary shown on the Background tab.
+        /// Aligned to dnd5e.wikidot.com (PHB / SCAG / GGtR / Theros / Witchlight / Glory of the Giants / Ghosts of Saltmarsh).
+        /// </summary>
         public static readonly Dictionary<string, string> BackgroundDetails = new()
         {
-            ["Acolyte"] = "SKILL PROFICIENCIES: Insight, Religion\nLANGUAGES: Two of your choice\nEQUIPMENT: Holy symbol, prayer book, 5 sticks of incense, vestments, common clothes, pouch with 15 gp\nFEATURE: Shelter of the Faithful (free healing and care at temples of your faith)",
-            ["Athlete"] = "SKILL PROFICIENCIES: Acrobatics, Athletics\nTOOL PROFICIENCIES: One type of gaming set\nEQUIPMENT: Sports equipment, trophy, common clothes, pouch with 10 gp\nFEATURE: Echoes of Victory (advantage on Charisma checks with fans)",
-            ["City Watch"] = "SKILL PROFICIENCIES: Athletics, Insight\nLANGUAGES: One of your choice\nEQUIPMENT: Uniform, manacles, 10 gp\nFEATURE: Watcher's Eye (advantage on Perception checks in cities)",
-            ["Courtier"] = "SKILL PROFICIENCIES: Insight, Persuasion\nLANGUAGES: Two of your choice\nEQUIPMENT: Fine clothes, signet ring, 15 gp\nFEATURE: Court Functionary (know how to navigate noble courts)",
-            ["Criminal"] = "SKILL PROFICIENCIES: Deception, Stealth\nTOOL PROFICIENCIES: Thieves' tools\nEQUIPMENT: Crowbar, dark common clothes with hood, pouch with 15 gp\nFEATURE: Criminal Contact (reliable contact in criminal network)",
-            ["Entertainer"] = "SKILL PROFICIENCIES: Acrobatics, Performance\nTOOL PROFICIENCIES: One type of musical instrument\nEQUIPMENT: Musical instrument, costume, pouch with 15 gp\nFEATURE: By Popular Demand (free lodging and food when performing)",
-            ["Faction Agent"] = "SKILL PROFICIENCIES: Deception, Persuasion\nLANGUAGES: One of your choice\nEQUIPMENT: Badge of faction, common clothes, pouch with 15 gp\nFEATURE: Safe Haven (free lodging and meals from faction)",
-            ["Far Traveler"] = "SKILL PROFICIENCIES: Insight, Perception\nLANGUAGES: One of your choice\nEQUIPMENT: Traveler's clothes, trinket from homeland, pouch with 10 gp\nFEATURE: All Eyes on You (people are curious about you)",
-            ["Feylost"] = "SKILL PROFICIENCIES: Deception, Survival\nLANGUAGES: Sylvan\nEQUIPMENT: Feywild trinket, common clothes, pouch with 8 gp\nFEATURE: Feywild Connection (can sense when fey magic is nearby)",
-            ["Folk Hero"] = "SKILL PROFICIENCIES: Animal Handling, Survival\nTOOL PROFICIENCIES: One type of artisan's tools, vehicles (land)\nEQUIPMENT: Set of artisan's tools, shovel, iron pot, common clothes, pouch with 10 gp\nFEATURE: Rustic Hospitality (free lodging and meals from common folk)",
-            ["Gladiator"] = "SKILL PROFICIENCIES: Acrobatics, Performance\nTOOL PROFICIENCIES: One type of musical instrument\nEQUIPMENT: Costume, instrument, pouch with 15 gp\nFEATURE: By Popular Demand (free lodging when performing)",
-            ["Hermit"] = "SKILL PROFICIENCIES: Medicine, Religion\nLANGUAGES: One of your choice\nEQUIPMENT: Herbalism kit, winter clothes, common clothes, pouch with 5 gp\nFEATURE: Discovery (unique knowledge or item from seclusion)",
-            ["Inheritor"] = "SKILL PROFICIENCIES: Arcana, History\nLANGUAGES: One of your choice\nEQUIPMENT: Inheritance (trinket or item), fine clothes, pouch with 15 gp\nFEATURE: Inheritance (you have a valuable inheritance)",
-            ["Knight"] = "SKILL PROFICIENCIES: History, Persuasion\nLANGUAGES: One of your choice\nEQUIPMENT: Fine clothes, signet ring, scroll of pedigree, purse with 25 gp\nFEATURE: Position of Privilege (high society welcome)",
-            ["Marine"] = "SKILL PROFICIENCIES: Athletics, Survival\nTOOL PROFICIENCIES: Vehicles (water)\nEQUIPMENT: Uniform, 50 ft rope, common clothes, pouch with 10 gp\nFEATURE: Steady (advantage on checks to avoid being knocked prone)",
-            ["Noble"] = "SKILL PROFICIENCIES: History, Persuasion\nLANGUAGES: One of your choice\nEQUIPMENT: Fine clothes, signet ring, scroll of pedigree, purse with 25 gp\nFEATURE: Position of Privilege (high society welcome, letters of introduction)",
-            ["Outlander"] = "SKILL PROFICIENCIES: Athletics, Survival\nLANGUAGES: One of your choice\nEQUIPMENT: Staff, hunting trap, trophy from animal, traveler's clothes, pouch with 10 gp\nFEATURE: Wanderer (excellent memory for maps and terrain)",
-            ["Pirate"] = "SKILL PROFICIENCIES: Athletics, Perception\nTOOL PROFICIENCIES: Navigator's tools, vehicles (water)\nEQUIPMENT: Belaying pin, 50 ft silk rope, lucky charm, common clothes, pouch with 10 gp\nFEATURE: Bad Reputation (feared by common folk)",
-            ["Rune Carver"] = "SKILL PROFICIENCIES: Arcana, History\nTOOL PROFICIENCIES: Calligrapher's supplies\nEQUIPMENT: Calligrapher's supplies, rune-etched item, common clothes, pouch with 10 gp\nFEATURE: Rune Magic (can carve simple runes)",
-            ["Sage"] = "SKILL PROFICIENCIES: Arcana, History\nLANGUAGES: Two of your choice\nEQUIPMENT: Bottle of black ink, quill, small knife, letter from dead colleague, common clothes, pouch with 10 gp\nFEATURE: Researcher (can recall lore or find information)",
-            ["Sailor"] = "SKILL PROFICIENCIES: Athletics, Perception\nTOOL PROFICIENCIES: Navigator's tools, vehicles (water)\nEQUIPMENT: Belaying pin, 50 ft silk rope, lucky charm, common clothes, pouch with 10 gp\nFEATURE: Ship's Passage (free passage on ships)",
-            ["Shipwright"] = "SKILL PROFICIENCIES: History, Perception\nTOOL PROFICIENCIES: Carpenter's tools, vehicles (water)\nEQUIPMENT: Carpenter's tools, 50 ft rope, common clothes, pouch with 10 gp\nFEATURE: I'll Patch It (can repair ships quickly)",
-            ["Smuggler"] = "SKILL PROFICIENCIES: Deception, Stealth\nTOOL PROFICIENCIES: Thieves' tools\nEQUIPMENT: Crowbar, dark common clothes, pouch with 15 gp\nFEATURE: Hidden Compartment (know secret routes and hiding spots)",
-            ["Soldier"] = "SKILL PROFICIENCIES: Athletics, Intimidation\nTOOL PROFICIENCIES: Vehicles (land)\nEQUIPMENT: Insignia of rank, trophy from fallen enemy, set of common clothes, pouch with 10 gp\nFEATURE: Military Rank (can requisition simple equipment and horses)",
-            ["Spy"] = "SKILL PROFICIENCIES: Deception, Stealth\nTOOL PROFICIENCIES: Thieves' tools, disguise kit\nEQUIPMENT: Crowbar, dark common clothes, pouch with 15 gp\nFEATURE: Spy Contact (reliable contact in espionage network)",
-            ["Urban Bounty Hunter"] = "SKILL PROFICIENCIES: Insight, Investigation\nTOOL PROFICIENCIES: Thieves' tools\nEQUIPMENT: Manacles, 50 ft rope, common clothes, pouch with 15 gp\nFEATURE: Ear to the Ground (know rumors in cities)",
-            ["Urchin"] = "SKILL PROFICIENCIES: Sleight of Hand, Stealth\nTOOL PROFICIENCIES: Thieves' tools, disguise kit\nEQUIPMENT: Small knife, map of hometown, pet mouse, common clothes, pouch with 10 gp\nFEATURE: City Secrets (know hidden routes through any city)"
+            ["Acolyte"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Insight, Religion\n" +
+                "TOOL PROFICIENCIES: None\n" +
+                "LANGUAGES: Two of your choice\n" +
+                "EQUIPMENT: A holy symbol (a gift when you entered the priesthood), a prayer book or prayer wheel, 5 sticks of incense, vestments, a set of common clothes, and a pouch containing 15 gp\n\n" +
+                "FEATURE — Shelter of the Faithful:\n" +
+                "As an acolyte, you command the respect of those who share your faith, and you can perform the religious ceremonies of your deity. You and your adventuring companions can expect to receive free healing and care at a temple, shrine, or other established presence of your faith, though you must provide any material components needed for spells. Those who share your religion will support you (but only you) at a modest lifestyle.\n\n" +
+                "You might also have ties to a specific temple dedicated to your chosen deity or pantheon, and you have a residence there. While near your temple, you can call upon the priests for assistance, provided the assistance you ask for is not hazardous and you remain in good standing with your temple.",
+
+            ["Athlete"] =
+                "SOURCE: Mythic Odysseys of Theros\n\n" +
+                "SKILL PROFICIENCIES: Acrobatics, Athletics\n" +
+                "TOOL PROFICIENCIES: Vehicles (land)\n" +
+                "LANGUAGES: One of your choice\n" +
+                "EQUIPMENT: A bronze discus or leather ball, a lucky charm or past trophy, a set of traveler's clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Echoes of Victory:\n" +
+                "You have attracted admiration among spectators, fellow athletes, and trainers in the region that hosted your past athletic victories. When visiting any settlement within 100 miles of where you grew up, there is a 50 percent chance you can find someone there who admires you and is willing to provide information and temporary shelter.\n\n" +
+                "Between adventures, you might compete in athletic events sufficient enough to maintain a comfortable lifestyle, as per the \"Practicing a Profession\" downtime activity in the Player's Handbook.",
+
+            ["City Watch"] =
+                "SOURCE: Sword Coast Adventurer's Guide\n\n" +
+                "SKILL PROFICIENCIES: Athletics, Insight\n" +
+                "TOOL PROFICIENCIES: None\n" +
+                "LANGUAGES: Two of your choice\n" +
+                "EQUIPMENT: A uniform in the style of your unit and indicative of your rank, a horn with which to summon help, a set of manacles, and a pouch containing 10 gp\n\n" +
+                "VARIANT — Investigator:\n" +
+                "If your prior experience is as an investigator, you have proficiency in Investigation rather than Athletics.\n\n" +
+                "FEATURE — Watcher's Eye:\n" +
+                "Your experience in enforcing the law, and dealing with lawbreakers, gives you a feel for local laws and criminals. You can easily find the local outpost of the watch or a similar organization, and just as easily pick out the dens of criminal activity in a community, although you're more likely to be welcome in the former locations rather than the latter.",
+
+            ["Courtier"] =
+                "SOURCE: Sword Coast Adventurer's Guide\n\n" +
+                "SKILL PROFICIENCIES: Insight, Persuasion\n" +
+                "TOOL PROFICIENCIES: None\n" +
+                "LANGUAGES: Two of your choice\n" +
+                "EQUIPMENT: A set of fine clothes and a pouch containing 5 gp\n\n" +
+                "FEATURE — Court Functionary:\n" +
+                "Your knowledge of how bureaucracies function lets you gain access to the records and inner workings of any noble court or government you encounter. You know who the movers and shakers are, whom to go to for the favors you seek, and what the current intrigues of interest in the group are.",
+
+            ["Criminal"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Deception, Stealth\n" +
+                "TOOL PROFICIENCIES: One type of gaming set, thieves' tools\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A crowbar, a set of dark common clothes including a hood, and a pouch containing 15 gp\n\n" +
+                "FEATURE — Criminal Contact:\n" +
+                "You have a reliable and trustworthy contact who acts as your liaison to a network of other criminals. You know how to get messages to and from your contact, even over great distances; specifically, you know the local messengers, corrupt caravan masters, and seedy sailors who can deliver messages for you.",
+
+            ["Entertainer"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Acrobatics, Performance\n" +
+                "TOOL PROFICIENCIES: Disguise kit, one type of musical instrument\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A musical instrument (one of your choice), the favor of an admirer (love letter, lock of hair, or trinket), a costume, and a pouch containing 15 gp\n\n" +
+                "FEATURE — By Popular Demand:\n" +
+                "You can always find a place to perform, usually in an inn or tavern but possibly with a circus, at a theater, or even in a noble's court. At such a place, you receive free lodging and food of a modest or comfortable standard (depending on the quality of the establishment), as long as you perform each night. In addition, your performance makes you something of a local figure. When strangers recognize you in a town where you have performed, they typically take a liking to you.",
+
+            ["Faction Agent"] =
+                "SOURCE: Sword Coast Adventurer's Guide\n\n" +
+                "SKILL PROFICIENCIES: Insight, and one Intelligence, Wisdom, or Charisma skill of your choice (as appropriate to your faction)\n" +
+                "  → Nemo auto-grants Insight; choose and mark your second skill on the Skills tab.\n" +
+                "TOOL PROFICIENCIES: None\n" +
+                "LANGUAGES: Two of your choice\n" +
+                "EQUIPMENT: The badge or emblem of your faction, a copy of a seminal faction text (or a code-book for a covert faction), a set of common clothes, and a pouch containing 15 gp\n\n" +
+                "FEATURE — Safe Haven:\n" +
+                "As a faction agent, you have access to a secret network of supporters and operatives who can provide assistance on your adventures. You know a set of secret signs and passwords you can use to identify such operatives, who can provide you with access to a hidden safe house, free room and board, or assistance in finding information. These agents never risk their lives for you or risk revealing their true identities.",
+
+            ["Far Traveler"] =
+                "SOURCE: Sword Coast Adventurer's Guide\n\n" +
+                "SKILL PROFICIENCIES: Insight, Perception\n" +
+                "TOOL PROFICIENCIES: Any one musical instrument or gaming set of your choice (likely something native to your homeland)\n" +
+                "LANGUAGES: Any one of your choice\n" +
+                "EQUIPMENT: One set of traveler's clothes, any one musical instrument or gaming set you are proficient with, poorly wrought maps from your homeland that depict where you are in Faerûn, a small piece of jewelry worth 10 gp in the style of your homeland's craftsmanship, and a pouch containing 5 gp\n\n" +
+                "FEATURE — All Eyes on You:\n" +
+                "Your accent, mannerisms, figures of speech, and perhaps even your appearance all mark you as foreign. Curious glances are directed your way wherever you go, which can be a nuisance, but you also gain the friendly interest of scholars and others intrigued by far-off lands, to say nothing of everyday folk who are eager to hear stories of your homeland.\n\n" +
+                "You can parley this attention into access to people and places you might not otherwise have, for you and your traveling companions. Noble lords, scholars, and merchant princes, to name a few, might be interested in hearing about your distant homeland and people.",
+
+            ["Feylost"] =
+                "SOURCE: The Wild Beyond the Witchlight\n\n" +
+                "SKILL PROFICIENCIES: Deception, Survival\n" +
+                "TOOL PROFICIENCIES: One type of musical instrument\n" +
+                "LANGUAGES: One of your choice of Elvish, Gnomish, Goblin, or Sylvan\n" +
+                "EQUIPMENT: A musical instrument (one of your choice), a set of traveler's clothes, three trinkets (each determined by rolling on the Feywild Trinkets table), and a pouch containing 8 gp\n\n" +
+                "FEATURE — Fey Mark:\n" +
+                "You were transformed in some small way by your stay in the Feywild and gained a fey mark (work with your DM; examples include iridescent eyes, a sweet scent like nectar, cat-like whiskers, sparkling skin in moonlight, a tail, etc.).\n\n" +
+                "FEATURE — Feywild Visitor:\n" +
+                "Whenever you're sound asleep or in a deep trance during a long rest, a spirit of the Feywild might pay you a visit, if the DM wishes it. No harm ever comes to you as a result of such visits, which can last for minutes or hours, and you remember each visit when you wake up. Conversations can contain messages, insights, nonsense, or red herrings, at the DM's discretion.\n\n" +
+                "FEATURE — Feywild Connection:\n" +
+                "Your mannerisms and knowledge of fey customs are recognized by natives of the Feywild, who see you as one of their own. Because of this, friendly Fey creatures are inclined to come to your aid if you are lost or need help in the Feywild.",
+
+            ["Folk Hero"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Animal Handling, Survival\n" +
+                "TOOL PROFICIENCIES: One type of artisan's tools, vehicles (land)\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A set of artisan's tools (one of your choice), a shovel, an iron pot, a set of common clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Rustic Hospitality:\n" +
+                "Since you come from the ranks of the common folk, you fit in among them with ease. You can find a place to hide, rest, or recuperate among other commoners, unless you have shown yourself to be a danger to them. They will shield you from the law or anyone else searching for you, though they will not risk their lives for you.",
+
+            ["Gladiator"] =
+                "SOURCE: Player's Handbook (Entertainer variant)\n\n" +
+                "SKILL PROFICIENCIES: Acrobatics, Performance\n" +
+                "TOOL PROFICIENCIES: Disguise kit, one type of musical instrument\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: An inexpensive but unusual weapon (such as a trident or net) instead of a musical instrument if you wish, the favor of an admirer, a costume, and a pouch containing 15 gp\n\n" +
+                "FEATURE — By Popular Demand (combat venues):\n" +
+                "A gladiator is as much an entertainer as any minstrel. Using your By Popular Demand feature, you can find a place to perform in any place that features combat for entertainment — perhaps a gladiatorial arena or secret pit fighting club. You receive free lodging and food of a modest or comfortable standard as long as you perform each night, and your performances make you a local figure strangers often take a liking to.",
+
+            ["Hermit"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Medicine, Religion\n" +
+                "TOOL PROFICIENCIES: Herbalism kit\n" +
+                "LANGUAGES: One of your choice\n" +
+                "EQUIPMENT: A scroll case stuffed full of notes from your studies or prayers, a winter blanket, a set of common clothes, an herbalism kit, and 5 gp\n\n" +
+                "FEATURE — Discovery:\n" +
+                "The quiet seclusion of your extended hermitage gave you access to a unique and powerful discovery. The exact nature of this revelation depends on the nature of your seclusion. It might be a great truth about the cosmos, the deities, the powerful beings of the outer planes, or the forces of nature. It could be a site that no one else has ever seen, a long-forgotten fact, a relic of the past, or information damaging to those who consigned you to exile.\n\n" +
+                "Work with your DM to determine the details of your discovery and its impact on the campaign.",
+
+            ["Inheritor"] =
+                "SOURCE: Sword Coast Adventurer's Guide\n\n" +
+                "SKILL PROFICIENCIES: Survival, plus one from among Arcana, History, and Religion\n" +
+                "  → Nemo auto-grants Survival; choose and mark Arcana, History, or Religion on the Skills tab.\n" +
+                "TOOL PROFICIENCIES: Your choice of a gaming set or a musical instrument\n" +
+                "LANGUAGES: Any one of your choice\n" +
+                "EQUIPMENT: Your inheritance, a set of traveler's clothes, the tool you choose for this background's tool proficiency, and a pouch containing 15 gp\n\n" +
+                "FEATURE — Inheritance:\n" +
+                "You are the heir to something of great value — not mere coin, but an object entrusted to you alone (a document, trinket, clothing, jewelry, arcane book, story/song/poem/secret, tattoo, etc.). Work with your DM to determine why it matters, its full story, and its properties. The DM may use it as a story hook; foes may covet it. You can decide whether to tell companions about it right away or keep it secret until you learn more.",
+
+            ["Knight"] =
+                "SOURCE: Player's Handbook (Noble variant)\n\n" +
+                "SKILL PROFICIENCIES: History, Persuasion\n" +
+                "TOOL PROFICIENCIES: One type of gaming set\n" +
+                "LANGUAGES: One of your choice\n" +
+                "EQUIPMENT: A set of fine clothes, a signet ring, a scroll of pedigree, and a purse containing 25 gp (you might also include a banner or token from a noble to whom you have given your heart)\n\n" +
+                "FEATURE — Retainers (instead of Position of Privilege):\n" +
+                "You have the service of three retainers loyal to your family. These retainers can be attendants or messengers, and one might be a majordomo. As a knight, one retainer is typically a noble who serves as your squire; the others might include a groom and a servant who polishes your armor.\n\n" +
+                "Your retainers are commoners who can perform mundane tasks for you, but they do not fight for you, will not follow you into obviously dangerous areas (such as dungeons), and will leave if they are frequently endangered or abused.",
+
+            ["Marine"] =
+                "SOURCE: Ghosts of Saltmarsh\n\n" +
+                "SKILL PROFICIENCIES: Athletics, Survival\n" +
+                "TOOL PROFICIENCIES: Vehicles (land & water)\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A dagger that belonged to a fallen comrade, a folded rag emblazoned with the symbol of your ship or company, a set of traveler's clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Steady:\n" +
+                "You can move twice the normal amount of time (up to 16 hours) each day before being subject to the effect of a forced march (see \"Travel Pace\" in the Player's Handbook). Additionally, you can automatically find a safe route to land a boat on shore, provided such a route exists.",
+
+            ["Noble"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: History, Persuasion\n" +
+                "TOOL PROFICIENCIES: One type of gaming set\n" +
+                "LANGUAGES: One of your choice\n" +
+                "EQUIPMENT: A set of fine clothes, a signet ring, a scroll of pedigree, and a purse containing 25 gp\n\n" +
+                "FEATURE — Position of Privilege:\n" +
+                "Thanks to your noble birth, people are inclined to think the best of you. You are welcome in high society, and people assume you have the right to be wherever you are. The common folk make every effort to accommodate you and avoid your displeasure, and other people of high birth treat you as a member of the same social sphere. You can secure an audience with a local noble if you need to.\n\n" +
+                "VARIANT FEATURE — Retainers: If you prefer, you may take the Knight/Retainers feature instead of Position of Privilege.",
+
+            ["Outlander"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Athletics, Survival\n" +
+                "TOOL PROFICIENCIES: One type of musical instrument\n" +
+                "LANGUAGES: One of your choice\n" +
+                "EQUIPMENT: A staff, a hunting trap, a trophy from an animal you killed, a set of traveler's clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Wanderer:\n" +
+                "You have an excellent memory for maps and geography, and you can always recall the general layout of terrain, settlements, and other features around you. In addition, you can find food and fresh water for yourself and up to five other people each day, provided that the land offers berries, small game, water, and so forth.",
+
+            ["Pirate"] =
+                "SOURCE: Player's Handbook (Sailor variant)\n\n" +
+                "SKILL PROFICIENCIES: Athletics, Perception\n" +
+                "TOOL PROFICIENCIES: Navigator's tools, vehicles (water)\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A belaying pin (club), 50 feet of silk rope, a lucky charm (such as a rabbit foot or a small stone with a hole in the center), a set of common clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Bad Reputation (instead of Ship's Passage):\n" +
+                "No matter where you go, people are afraid of you due to your reputation. When you are in a civilized settlement, you can get away with minor criminal offenses, such as refusing to pay for food at a tavern or breaking down doors at a local shop, since most people will not report your activity to the authorities.",
+
+            ["Rune Carver"] =
+                "SOURCE: Bigby Presents: Glory of the Giants\n\n" +
+                "SKILL PROFICIENCIES: History, Perception\n" +
+                "TOOL PROFICIENCIES: One set of artisan's tools\n" +
+                "LANGUAGES: Giant\n" +
+                "EQUIPMENT: A set of artisan's tools (one of your choice), a small knife, a whetstone, a set of common clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Rune Shaper:\n" +
+                "You gain the Rune Shaper feat.",
+
+            ["Sage"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Arcana, History\n" +
+                "TOOL PROFICIENCIES: None\n" +
+                "LANGUAGES: Two of your choice\n" +
+                "EQUIPMENT: A bottle of black ink, a quill, a small knife, a letter from a dead colleague posing a question you have not yet been able to answer, a set of common clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Researcher:\n" +
+                "When you attempt to learn or recall a piece of lore, if you do not know that information, you often know where and from whom you can obtain it. Usually, this information comes from a library, scriptorium, university, or a sage or other learned person or creature. Your DM might rule that the knowledge you seek is secreted away in an almost inaccessible place, or that it simply cannot be found. Unearthing the deepest secrets of the multiverse can require an adventure or even a whole campaign.",
+
+            ["Sailor"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Athletics, Perception\n" +
+                "TOOL PROFICIENCIES: Navigator's tools, vehicles (water)\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A belaying pin (club), 50 feet of silk rope, a lucky charm (such as a rabbit foot or a small stone with a hole in the center), a set of common clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Ship's Passage:\n" +
+                "When you need to, you can secure free passage on a sailing ship for yourself and your adventuring companions. You might sail on the ship you served on, or another ship you have good relations with (perhaps one captained by a former crewmate). Because you're calling in a favor, you can't be certain of a schedule or route that will meet your every need. Your DM will determine how long it takes to get where you need to go. In return for your free passage, you and your companions are expected to assist the crew during the voyage.",
+
+            ["Shipwright"] =
+                "SOURCE: Ghosts of Saltmarsh\n\n" +
+                "SKILL PROFICIENCIES: History, Perception\n" +
+                "TOOL PROFICIENCIES: Carpenter's tools, vehicles (water)\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A set of well-loved carpenter's tools, a blank book, 1 ounce of ink, an ink pen, a set of traveler's clothes, and a leather pouch with 10 gp\n\n" +
+                "FEATURE — I'll Patch It!:\n" +
+                "Provided you have carpenter's tools and wood, you can perform repairs on a water vehicle. When you use this ability, you restore a number of hit points to the hull of a water vehicle equal to 5 × your proficiency bonus. A vehicle cannot be patched by you in this way again until after it has been pulled ashore and fully repaired.",
+
+            ["Smuggler"] =
+                "SOURCE: Ghosts of Saltmarsh\n\n" +
+                "SKILL PROFICIENCIES: Athletics, Deception\n" +
+                "TOOL PROFICIENCIES: Vehicles (water)\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A fancy leather vest or a pair of leather boots, a set of common clothes, and a leather pouch with 15 gp\n\n" +
+                "FEATURE — Down Low:\n" +
+                "You are acquainted with a network of smugglers who are willing to help you out of tight situations. While in a particular town, city, or other similarly sized community (DM's discretion), you and your companions can stay for free in safe houses. Safe houses provide a poor lifestyle. While staying at a safe house, you can choose to keep your presence (and that of your companions) a secret.",
+
+            ["Soldier"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Athletics, Intimidation\n" +
+                "TOOL PROFICIENCIES: One type of gaming set, vehicles (land)\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: An insignia of rank, a trophy taken from a fallen enemy (a dagger, broken blade, or piece of a banner), a set of bone dice or a deck of cards, a set of common clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Military Rank:\n" +
+                "You have a military rank from your career as a soldier. Soldiers loyal to your former military organization still recognize your authority and influence, and they defer to you if they are of a lower rank. You can invoke your rank to exert influence over other soldiers and requisition simple equipment or horses for temporary use. You can also usually gain access to friendly military encampments and fortresses where your rank is recognized.",
+
+            ["Spy"] =
+                "SOURCE: Player's Handbook (Criminal variant)\n\n" +
+                "SKILL PROFICIENCIES: Deception, Stealth\n" +
+                "TOOL PROFICIENCIES: One type of gaming set, thieves' tools\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A crowbar, a set of dark common clothes including a hood, and a pouch containing 15 gp\n\n" +
+                "FEATURE — Criminal Contact:\n" +
+                "Although your capabilities are not much different from those of a burglar or smuggler, you learned them as an espionage agent. You have a reliable and trustworthy contact who acts as your liaison to a network of other criminals (or intelligence operatives). You know how to get messages to and from your contact, even over great distances; specifically, you know the local messengers, corrupt caravan masters, and seedy sailors who can deliver messages for you.",
+
+            ["Urban Bounty Hunter"] =
+                "SOURCE: Sword Coast Adventurer's Guide\n\n" +
+                "SKILL PROFICIENCIES: Choose two from among Deception, Insight, Persuasion, and Stealth\n" +
+                "  → Nemo does not auto-grant these; mark your two chosen skills on the Skills tab.\n" +
+                "TOOL PROFICIENCIES: Choose two from among one type of gaming set, one musical instrument, and thieves' tools\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A set of clothes appropriate to your duties and a pouch containing 20 gp\n\n" +
+                "FEATURE — Ear to the Ground:\n" +
+                "You are in frequent contact with people in the segment of society that your chosen quarries move through. These people might be associated with the criminal underworld, the rough-and-tumble folk of the streets, or members of high society. This connection comes in the form of a contact in any city you visit, a person who provides information about the people and places of the local area.",
+
+            ["Urchin"] =
+                "SOURCE: Player's Handbook\n\n" +
+                "SKILL PROFICIENCIES: Sleight of Hand, Stealth\n" +
+                "TOOL PROFICIENCIES: Disguise kit, thieves' tools\n" +
+                "LANGUAGES: None\n" +
+                "EQUIPMENT: A small knife, a map of the city you grew up in, a pet mouse, a token to remember your parents by, a set of common clothes, and a pouch containing 10 gp\n\n" +
+                "FEATURE — City Secrets:\n" +
+                "You know the secret patterns and flow to cities and can find passages through the urban sprawl that others would miss. When you are not in combat, you (and companions you lead) can travel between any two locations in the city twice as fast as your speed would normally allow."
         };
 
         // ==================== BACKGROUND EQUIPMENT (Single Source of Truth) ====================
+        // Matches official equipment packages from PHB / SCAG / etc.
         public static readonly Dictionary<string, string> BackgroundEquipment = new()
         {
-            ["Acolyte"] = "Holy symbol, prayer book, 5 sticks of incense, vestments, common clothes, pouch with 15 gp",
-            ["Athlete"] = "Sports equipment, trophy, common clothes, pouch with 10 gp",
-            ["City Watch"] = "Uniform, manacles, 10 gp",
-            ["Courtier"] = "Fine clothes, signet ring, 15 gp",
+            ["Acolyte"] = "Holy symbol, prayer book or prayer wheel, 5 sticks of incense, vestments, common clothes, pouch with 15 gp",
+            ["Athlete"] = "Bronze discus or leather ball, lucky charm or past trophy, traveler's clothes, pouch with 10 gp",
+            ["City Watch"] = "Uniform (unit style/rank), horn, manacles, pouch with 10 gp",
+            ["Courtier"] = "Fine clothes, pouch with 5 gp",
             ["Criminal"] = "Crowbar, dark common clothes with hood, pouch with 15 gp",
-            ["Entertainer"] = "Musical instrument, costume, pouch with 15 gp",
-            ["Faction Agent"] = "Badge of faction, common clothes, pouch with 15 gp",
-            ["Far Traveler"] = "Traveler's clothes, trinket from homeland, pouch with 10 gp",
-            ["Feylost"] = "Feywild trinket, common clothes, pouch with 8 gp",
-            ["Folk Hero"] = "Set of artisan's tools, shovel, iron pot, common clothes, pouch with 10 gp",
-            ["Gladiator"] = "Costume, instrument, pouch with 15 gp",
-            ["Hermit"] = "Herbalism kit, winter clothes, common clothes, pouch with 5 gp",
-            ["Inheritor"] = "Inheritance (trinket or item), fine clothes, pouch with 15 gp",
+            ["Entertainer"] = "Musical instrument, favor of an admirer, costume, pouch with 15 gp",
+            ["Faction Agent"] = "Faction badge or emblem, faction text or code-book, common clothes, pouch with 15 gp",
+            ["Far Traveler"] = "Traveler's clothes, musical instrument or gaming set, poorly wrought homeland maps, jewelry worth 10 gp, pouch with 5 gp",
+            ["Feylost"] = "Musical instrument, traveler's clothes, three Feywild trinkets, pouch with 8 gp",
+            ["Folk Hero"] = "Artisan's tools (one of your choice), shovel, iron pot, common clothes, pouch with 10 gp",
+            ["Gladiator"] = "Unusual inexpensive weapon (e.g. trident or net) or musical instrument, favor of an admirer, costume, pouch with 15 gp",
+            ["Hermit"] = "Scroll case of notes, winter blanket, common clothes, herbalism kit, 5 gp",
+            ["Inheritor"] = "Your inheritance, traveler's clothes, gaming set or musical instrument, pouch with 15 gp",
             ["Knight"] = "Fine clothes, signet ring, scroll of pedigree, purse with 25 gp",
-            ["Marine"] = "Uniform, 50 ft rope, common clothes, pouch with 10 gp",
+            ["Marine"] = "Dagger (fallen comrade's), folded rag with ship/company symbol, traveler's clothes, pouch with 10 gp",
             ["Noble"] = "Fine clothes, signet ring, scroll of pedigree, purse with 25 gp",
-            ["Outlander"] = "Staff, hunting trap, trophy from animal, traveler's clothes, pouch with 10 gp",
-            ["Pirate"] = "Belaying pin, 50 ft silk rope, lucky charm, common clothes, pouch with 10 gp",
-            ["Rune Carver"] = "Calligrapher's supplies, rune-etched item, common clothes, pouch with 10 gp",
-            ["Sage"] = "Bottle of black ink, quill, small knife, letter from dead colleague, common clothes, pouch with 10 gp",
-            ["Sailor"] = "Belaying pin, 50 ft silk rope, lucky charm, common clothes, pouch with 10 gp",
-            ["Shipwright"] = "Carpenter's tools, 50 ft rope, common clothes, pouch with 10 gp",
-            ["Smuggler"] = "Crowbar, dark common clothes, pouch with 15 gp",
-            ["Soldier"] = "Insignia of rank, trophy from fallen enemy, set of common clothes, pouch with 10 gp",
-            ["Spy"] = "Crowbar, dark common clothes, pouch with 15 gp",
-            ["Urban Bounty Hunter"] = "Manacles, 50 ft rope, common clothes, pouch with 15 gp",
-            ["Urchin"] = "Small knife, map of hometown, pet mouse, common clothes, pouch with 10 gp"
+            ["Outlander"] = "Staff, hunting trap, animal trophy, traveler's clothes, pouch with 10 gp",
+            ["Pirate"] = "Belaying pin (club), 50 feet of silk rope, lucky charm, common clothes, pouch with 10 gp",
+            ["Rune Carver"] = "Artisan's tools (one of your choice), small knife, whetstone, common clothes, pouch with 10 gp",
+            ["Sage"] = "Bottle of black ink, quill, small knife, letter from a dead colleague, common clothes, pouch with 10 gp",
+            ["Sailor"] = "Belaying pin (club), 50 feet of silk rope, lucky charm, common clothes, pouch with 10 gp",
+            ["Shipwright"] = "Carpenter's tools, blank book, 1 ounce of ink, ink pen, traveler's clothes, leather pouch with 10 gp",
+            ["Smuggler"] = "Fancy leather vest or leather boots, common clothes, leather pouch with 15 gp",
+            ["Soldier"] = "Insignia of rank, trophy from a fallen enemy, bone dice or deck of cards, common clothes, pouch with 10 gp",
+            ["Spy"] = "Crowbar, dark common clothes with hood, pouch with 15 gp",
+            ["Urban Bounty Hunter"] = "Clothes appropriate to your duties, pouch with 20 gp",
+            ["Urchin"] = "Small knife, map of your home city, pet mouse, token to remember your parents by, common clothes, pouch with 10 gp"
         };
 
         public static string GetBackgroundEquipment(string background)
@@ -2116,13 +2361,20 @@ public class SorcererSubclassData
 }
 
 /// <summary>
-/// Represents a class feature available at level 1 (for PDF export Class Features section).
+/// A class feature gained at a specific level (base class or subclass progression).
 /// </summary>
 public class ClassFeature
 {
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
-    public string Uses { get; set; } = "";   // e.g. "2 / long rest", "1 / short rest", "Passive", "At will"
+    /// <summary>e.g. "2 / long rest", "1 / short rest", "Passive", "At will"</summary>
+    public string Uses { get; set; } = "";
+    /// <summary>Class level at which this feature is gained (1–20).</summary>
+    public int Level { get; set; } = 1;
+    /// <summary>True for optional/Tasha's features (Harness Divine Power, Martial Versatility, etc.).</summary>
+    public bool IsOptional { get; set; } = false;
+    /// <summary>When true, concrete benefits come from the chosen subclass (domain, oath, etc.).</summary>
+    public bool IsSubclassFeature { get; set; } = false;
 }
 
 public class Feat : INotifyPropertyChanged

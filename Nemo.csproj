@@ -22,6 +22,9 @@
     <Compile Include="GameData.cs" />
     <Compile Include="CharacterSheetImporter.cs" />
     <Compile Include="CharacterSheetExporter.cs" />
+    <Compile Include="SpellSlotCalculator.cs" />
+    <Compile Include="ClassProgressionData.cs" />
+    <Compile Include="SubclassCatalog.cs" />
     <Page Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
   </ItemGroup>

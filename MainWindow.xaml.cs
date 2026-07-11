@@ -749,8 +749,11 @@ namespace Nemo
                 PopulateSpells();
             }
 
-            // Use the new detailed class features (much richer than any older terse lists)
-            if (GameData.ClassLevel1Features.TryGetValue(className, out var classFeats))
+            // Base-class features through current supported level (level 1 for now; progression data goes to 20)
+            var classFeats = GameData.GetClassFeaturesUpToLevel(className, 1, includeOptional: true);
+            if (classFeats.Count == 0 && GameData.ClassLevel1Features.TryGetValue(className, out var legacyFeats))
+                classFeats = legacyFeats;
+            if (classFeats.Count > 0)
                 AppendDetailedFeatures(desc, classFeats, "CLASS FEATURES (Level 1)", excludeNames: null);
 
             desc.AppendLine(subclassLevelText);
@@ -761,37 +764,10 @@ namespace Nemo
 
             txtClassDetails.Text = baseClassDescription;
 
-            // Subclass dropdown
-            if (className == "Cleric")
-            {
-                cmbSubclass.IsEnabled = true;
-                cmbSubclass.ItemsSource = GameData.ClericSubclasses.Keys.OrderBy(k => k).ToList();
-                cmbSubclass.SelectedIndex = 0;
-            }
-            else if (className == "Warlock")
-            {
-                cmbSubclass.IsEnabled = true;
-                cmbSubclass.ItemsSource = GameData.WarlockSubclasses.Keys.OrderBy(k => k).ToList();
-                cmbSubclass.SelectedIndex = 0;
-            }
-            else if (className == "Sorcerer")
-            {
-                cmbSubclass.IsEnabled = true;
-                cmbSubclass.ItemsSource = GameData.SorcererSubclasses.Keys.OrderBy(k => k).ToList();
-                cmbSubclass.SelectedIndex = 0;
-            }
-            else if (className == "Druid" || className == "Wizard")
-            {
-                cmbSubclass.IsEnabled = false;
-                cmbSubclass.ItemsSource = new List<string> { "Requires Level 2" };
-                cmbSubclass.SelectedIndex = 0;
-            }
-            else
-            {
-                cmbSubclass.IsEnabled = false;
-                cmbSubclass.ItemsSource = new List<string> { "Requires Level 3" };
-                cmbSubclass.SelectedIndex = 0;
-            }
+            // Subclass dropdown — full official list for every class.
+            // Nemo is level-1 focused: only subclasses available at level 1 are selectable.
+            // Higher-level subclasses are still listed so players can plan / save for later.
+            PopulateSubclassDropdown(className);
 
             UpdateSpellTabVisibility();
             GenerateEquipmentChoices(className);
@@ -804,58 +780,122 @@ namespace Nemo
             UpdateSubclassSpellsLabel();
             UpdateCantripChoices(className);
 
-            // Show the first subclass immediately
-            if (className == "Cleric" || className == "Warlock" || className == "Sorcerer")
-                cmbSubclass_SelectionChanged(null, null);
+            // Refresh details for the selected subclass
+            cmbSubclass_SelectionChanged(null, null);
+        }
+
+        /// <summary>
+        /// Fills the subclass combo from <see cref="GameData.GetSubclassNames"/>.
+        /// Selectable when the subclass is available at level 1 (current app support);
+        /// otherwise items remain visible but the control notes the required level.
+        /// </summary>
+        private void PopulateSubclassDropdown(string className)
+        {
+            if (cmbSubclass == null) return;
+
+            int requiredLevel = GameData.GetSubclassLevel(className);
+            var names = GameData.GetSubclassNames(className);
+
+            if (names.Count == 0)
+            {
+                cmbSubclass.IsEnabled = false;
+                cmbSubclass.ItemsSource = new List<string> { "(No subclasses listed)" };
+                cmbSubclass.SelectedIndex = 0;
+                return;
+            }
+
+            // Always show the full catalog. Enable selection for planning/import even when
+            // the mechanical level isn't supported yet (details panel explains required level).
+            cmbSubclass.IsEnabled = true;
+            cmbSubclass.ItemsSource = names;
+            cmbSubclass.SelectedIndex = 0;
+
+            // Optional: surface required level in the class details header line already printed above
+            if (requiredLevel > 1 && !string.IsNullOrEmpty(baseClassDescription))
+            {
+                // baseClassDescription already includes subclass list from ClassData
+            }
         }
 
         private void cmbSubclass_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (cmbClass.SelectedItem is not string className) return;
+            if (cmbSubclass.SelectedItem is not string selectedSub)
+            {
+                txtClassDetails.Text = baseClassDescription;
+                return;
+            }
+
+            // Ignore placeholder rows
+            if (selectedSub.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) ||
+                selectedSub.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
+            {
+                txtClassDetails.Text = baseClassDescription;
+                return;
+            }
 
             var extra = new System.Text.StringBuilder();
+            int subLevel = GameData.GetSubclassLevel(className);
+            var catalog = GameData.GetSubclassInfo(className, selectedSub);
 
-            if (className == "Cleric" && cmbSubclass.SelectedItem is string subName && GameData.ClericSubclasses.ContainsKey(subName))
+            if (catalog != null)
             {
-                var sub = GameData.ClericSubclasses[subName];
-                extra.AppendLine($"\n\n=== {sub.Name.ToUpper()} FEATURES (Level 1) ===");
-                if (sub.AdditionalCantrips.Count > 0) extra.AppendLine($"ADDITIONAL CANTRIPS: {string.Join(", ", sub.AdditionalCantrips)}");
-                if (sub.DomainSpells.Count > 0) extra.AppendLine($"DOMAIN SPELLS: {string.Join(", ", sub.DomainSpells)}");
-                if (sub.ArmorProficiencies.Count > 0) extra.AppendLine($"ARMOR: {string.Join(", ", sub.ArmorProficiencies)}");
-                if (sub.WeaponProficiencies.Count > 0) extra.AppendLine($"WEAPONS: {string.Join(", ", sub.WeaponProficiencies)}");
+                extra.AppendLine($"\n\n=== {catalog.Name.ToUpperInvariant()} ===");
+                extra.AppendLine($"Available at: {className} level {catalog.LevelAvailable}");
+                if (!string.IsNullOrWhiteSpace(catalog.Source))
+                    extra.AppendLine($"Source: {catalog.Source}");
+                if (!string.IsNullOrWhiteSpace(catalog.Summary))
+                    extra.AppendLine(catalog.Summary);
+                if (subLevel > 1)
+                    extra.AppendLine($"\n(Note: Nemo's builder is level-1 focused. This subclass is normally chosen at level {subLevel}.)");
+            }
+            else
+            {
+                extra.AppendLine($"\n\n=== {selectedSub.ToUpperInvariant()} ===");
+            }
 
-                // Use the new detailed subclass features (name + full description) instead of the old terse UniqueAbilities list.
-                // We also exclude "Domain Spells" here because we already printed the DOMAIN SPELLS line above.
-                if (GameData.SubclassLevel1Features.TryGetValue(subName, out var subFeats))
+            // Rich level-1 feature blocks (Cleric / Warlock / Sorcerer detailed data)
+            if (className == "Cleric" && GameData.ClericSubclasses.TryGetValue(selectedSub, out var clericSub))
+            {
+                extra.AppendLine($"\n=== {clericSub.Name.ToUpper()} FEATURES (Level 1) ===");
+                if (clericSub.AdditionalCantrips.Count > 0)
+                    extra.AppendLine($"ADDITIONAL CANTRIPS: {string.Join(", ", clericSub.AdditionalCantrips)}");
+                if (clericSub.DomainSpells.Count > 0)
+                    extra.AppendLine($"DOMAIN SPELLS: {string.Join(", ", clericSub.DomainSpells)}");
+                if (clericSub.ArmorProficiencies.Count > 0)
+                    extra.AppendLine($"ARMOR: {string.Join(", ", clericSub.ArmorProficiencies)}");
+                if (clericSub.WeaponProficiencies.Count > 0)
+                    extra.AppendLine($"WEAPONS: {string.Join(", ", clericSub.WeaponProficiencies)}");
+
+                if (GameData.SubclassLevel1Features.TryGetValue(selectedSub, out var subFeats))
                 {
                     extra.AppendLine();
                     AppendDetailedFeatures(extra, subFeats, excludeNames: new[] { "Domain Spells" });
                 }
             }
-            else if (className == "Warlock" && cmbSubclass.SelectedItem is string patronName && GameData.WarlockSubclasses.ContainsKey(patronName))
+            else if (className == "Warlock" && GameData.WarlockSubclasses.TryGetValue(selectedSub, out var warlockSub))
             {
-                var sub = GameData.WarlockSubclasses[patronName];
-                extra.AppendLine($"\n\n=== {sub.Name.ToUpper()} FEATURES (Level 1) ===");
-                if (sub.DomainSpells.Count > 0) extra.AppendLine($"PATRON SPELLS: {string.Join(", ", sub.DomainSpells)}");
-                if (sub.ArmorProficiencies.Count > 0) extra.AppendLine($"ARMOR: {string.Join(", ", sub.ArmorProficiencies)}");
-                if (sub.WeaponProficiencies.Count > 0) extra.AppendLine($"WEAPONS: {string.Join(", ", sub.WeaponProficiencies)}");
+                extra.AppendLine($"\n=== {warlockSub.Name.ToUpper()} FEATURES (Level 1) ===");
+                if (warlockSub.DomainSpells.Count > 0)
+                    extra.AppendLine($"PATRON SPELLS: {string.Join(", ", warlockSub.DomainSpells)}");
+                if (warlockSub.ArmorProficiencies.Count > 0)
+                    extra.AppendLine($"ARMOR: {string.Join(", ", warlockSub.ArmorProficiencies)}");
+                if (warlockSub.WeaponProficiencies.Count > 0)
+                    extra.AppendLine($"WEAPONS: {string.Join(", ", warlockSub.WeaponProficiencies)}");
 
-                // Use the new detailed subclass features instead of the old terse UniqueAbilities list.
-                // We exclude "Expanded Spell List" because we already printed the PATRON SPELLS line above.
-                if (GameData.SubclassLevel1Features.TryGetValue(patronName, out var subFeats))
+                if (GameData.SubclassLevel1Features.TryGetValue(selectedSub, out var subFeats))
                 {
                     extra.AppendLine();
                     AppendDetailedFeatures(extra, subFeats, excludeNames: new[] { "Expanded Spell List" });
                 }
             }
-            else if (className == "Sorcerer" && cmbSubclass.SelectedItem is string sorcName && GameData.SorcererSubclasses.ContainsKey(sorcName))
+            else if (className == "Sorcerer" && GameData.SorcererSubclasses.TryGetValue(selectedSub, out var sorcSub))
             {
-                var sub = GameData.SorcererSubclasses[sorcName];
-                extra.AppendLine($"\n\n=== {sub.Name.ToUpper()} FEATURES (Level 1) ===");
-                if (sub.AdditionalSpells.Count > 0) extra.AppendLine($"ORIGIN SPELLS: {string.Join(", ", sub.AdditionalSpells)}");
+                extra.AppendLine($"\n=== {sorcSub.Name.ToUpper()} FEATURES (Level 1) ===");
+                if (sorcSub.AdditionalSpells.Count > 0)
+                    extra.AppendLine($"ORIGIN SPELLS: {string.Join(", ", sorcSub.AdditionalSpells)}");
 
-                // Use the new detailed subclass features instead of the old terse UniqueAbilities list.
-                if (GameData.SubclassLevel1Features.TryGetValue(sorcName, out var subFeats))
+                if (GameData.SubclassLevel1Features.TryGetValue(selectedSub, out var subFeats))
                 {
                     extra.AppendLine();
                     AppendDetailedFeatures(extra, subFeats);
@@ -1057,6 +1097,23 @@ namespace Nemo
             UpdateEquipmentProficiencySummary();
         }
 
+        /// <summary>
+        /// True when proficiency comes from race, background, import, or another non-class source.
+        /// These stay checked and are not user-toggleable (take priority over class choice slots).
+        /// </summary>
+        private bool IsGrantedSkillProficiency(SkillProficiency skill)
+        {
+            if (skill == null) return false;
+            if (skill.IsBackgroundProficiency) return true;
+            if (currentRaceAutomaticSkills != null &&
+                currentRaceAutomaticSkills.Contains(skill.SkillName, StringComparer.OrdinalIgnoreCase))
+                return true;
+            if (!string.IsNullOrEmpty(raceGrantedSkill) &&
+                skill.SkillName.Equals(raceGrantedSkill, StringComparison.OrdinalIgnoreCase))
+                return true;
+            return false;
+        }
+
         public void UpdateSkillChoices(string className)
         {
             if (string.IsNullOrEmpty(className) ||
@@ -1066,30 +1123,39 @@ namespace Nemo
                 return;
 
             var classData = GameData.ClassData[className];
-            var allowedSkills = classData.SkillChoices;
+            var allowedSkills = classData.SkillChoices ?? new List<string>();
             int maxAllowed = classData.SkillChoiceCount;
 
+            // Pass 1: count class skill choices currently selected (exclude granted sources)
             int currentlySelected = 0;
-
             foreach (var skill in allSkills)
             {
                 bool isClassSkill = allowedSkills.Contains(skill.SkillName);
-                bool isRaceOrBackground = skill.IsBackgroundProficiency ||
-                                          currentRaceAutomaticSkills.Contains(skill.SkillName, StringComparer.OrdinalIgnoreCase) ||
-                                          skill.SkillName == raceGrantedSkill;
+                if (isClassSkill && skill.IsProficient && !IsGrantedSkillProficiency(skill))
+                    currentlySelected++;
+            }
 
-                // Only class skills that are not already granted by race/background can be selected
-                if (isClassSkill && !isRaceOrBackground)
+            // Pass 2: enable only class skills the player may still toggle
+            foreach (var skill in allSkills)
+            {
+                bool isClassSkill = allowedSkills.Contains(skill.SkillName);
+                bool isGranted = IsGrantedSkillProficiency(skill);
+
+                if (isGranted)
                 {
-                    skill.IsSelectable = true;
+                    // Race / background / import: locked on (or locked off if not proficient)
+                    skill.IsSelectable = false;
+                }
+                else if (isClassSkill)
+                {
+                    // Can check if under the class max, or uncheck if already a class selection
+                    skill.IsSelectable = currentlySelected < maxAllowed || skill.IsProficient;
                 }
                 else
                 {
+                    // Not on the class skill list — not a player choice
                     skill.IsSelectable = false;
                 }
-
-                if (isClassSkill && skill.IsProficient && !isRaceOrBackground)
-                    currentlySelected++;
             }
 
             lblClassSkillCounter.Text = $"{currentlySelected} / {maxAllowed} class skills selected";
@@ -1098,8 +1164,136 @@ namespace Nemo
                 lblClassSkillCounter.Foreground = Brushes.Red;
             else
                 lblClassSkillCounter.Foreground = Brushes.White;
+        }
 
-            dgSkills.Items.Refresh();   // Needed so IsEnabled updates visually
+        /// <summary>
+        /// Single-click proficiency toggle for selectable skills.
+        /// First click on a DataGrid row normally only selects the row; this handles the checkbox immediately.
+        /// </summary>
+        private void SkillProficiencyCheckBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not CheckBox cb)
+                return;
+
+            // Disabled = not a valid class choice (or is a granted proficiency)
+            if (!cb.IsEnabled)
+                return;
+
+            if (cb.DataContext is not SkillProficiency skill)
+                return;
+
+            // Safety: never toggle race/background/import grants
+            if (IsGrantedSkillProficiency(skill))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            bool willCheck = cb.IsChecked != true;
+
+            if (willCheck)
+            {
+                // Enforce class skill choice maximum
+                if (cmbClass.SelectedItem is string className &&
+                    GameData.ClassData.TryGetValue(className, out var classData))
+                {
+                    var allowed = classData.SkillChoices ?? new List<string>();
+                    if (!allowed.Contains(skill.SkillName))
+                    {
+                        e.Handled = true;
+                        return;
+                    }
+
+                    int maxAllowed = classData.SkillChoiceCount;
+                    int currentlySelected = allSkills.Count(s =>
+                        allowed.Contains(s.SkillName) &&
+                        s.IsProficient &&
+                        !IsGrantedSkillProficiency(s));
+
+                    if (currentlySelected >= maxAllowed)
+                    {
+                        e.Handled = true;
+                        return;
+                    }
+                }
+                else
+                {
+                    // No class selected — don't allow freeform proficiency picks
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            // Toggle immediately (prevents the default "select row first, click again to check" behavior)
+            skill.IsProficient = willCheck;
+            e.Handled = true;
+
+            if (cmbClass.SelectedItem is string cn)
+                UpdateSkillChoices(cn);
+
+            UpdateSkillBonuses();
+        }
+
+        /// <summary>
+        /// Clicking anywhere on the Proficient cell (not just the tiny checkbox hitbox) toggles proficiency.
+        /// </summary>
+        private void dgSkills_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not DataGrid grid)
+                return;
+
+            var dep = e.OriginalSource as DependencyObject;
+            // If the checkbox already handled it, stop
+            while (dep != null && dep is not CheckBox && dep is not DataGridCell)
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (dep is CheckBox)
+                return; // checkbox handler owns this click
+
+            while (dep != null && dep is not DataGridCell)
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (dep is not DataGridCell cell)
+                return;
+
+            // Only the proficient column
+            if (cell.Column is not DataGridTemplateColumn)
+                return;
+
+            if (cell.DataContext is not SkillProficiency skill)
+                return;
+
+            if (!skill.IsSelectable || IsGrantedSkillProficiency(skill))
+                return;
+
+            bool willCheck = !skill.IsProficient;
+
+            if (willCheck)
+            {
+                if (cmbClass.SelectedItem is not string className ||
+                    !GameData.ClassData.TryGetValue(className, out var classData))
+                    return;
+
+                var allowed = classData.SkillChoices ?? new List<string>();
+                if (!allowed.Contains(skill.SkillName))
+                    return;
+
+                int currentlySelected = allSkills.Count(s =>
+                    allowed.Contains(s.SkillName) &&
+                    s.IsProficient &&
+                    !IsGrantedSkillProficiency(s));
+
+                if (currentlySelected >= classData.SkillChoiceCount)
+                    return;
+            }
+
+            skill.IsProficient = willCheck;
+            e.Handled = true;
+
+            if (cmbClass.SelectedItem is string cn)
+                UpdateSkillChoices(cn);
+
+            UpdateSkillBonuses();
         }
 
         private void dgSkills_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -3694,7 +3888,10 @@ namespace Nemo
 
                 // ========== CLASS FEATURES (NEW - between Weapons and Saving Throws) ==========
                 string classKey = CurrentCharacter.Class;
-                if (GameData.ClassLevel1Features.TryGetValue(classKey, out var classFeatures) && classFeatures.Count > 0)
+                var classFeatures = GameData.GetClassFeaturesUpToLevel(classKey, 1, includeOptional: true);
+                if (classFeatures.Count == 0 && GameData.ClassLevel1Features.TryGetValue(classKey, out var legacyClassFeatures))
+                    classFeatures = legacyClassFeatures;
+                if (classFeatures.Count > 0)
                 {
                     DrawSectionHeader(gfx, "CLASS FEATURES", left, ref y, pageWidth);
 
@@ -4536,8 +4733,11 @@ namespace Nemo
                     classFeaturesText.AppendLine($"Source: {classUrl}");
                     classFeaturesText.AppendLine();
 
-                    // Class features with descriptions
-                    if (GameData.ClassLevel1Features.TryGetValue(classKey, out var classFeats) && classFeats.Count > 0)
+                    // Class features with descriptions (progression-aware; currently level 1)
+                    var classFeats = GameData.GetClassFeaturesUpToLevel(classKey, 1, includeOptional: true);
+                    if (classFeats.Count == 0 && GameData.ClassLevel1Features.TryGetValue(classKey, out var legacyClassFeats))
+                        classFeats = legacyClassFeats;
+                    if (classFeats.Count > 0)
                     {
                         foreach (var f in classFeats)
                         {
@@ -5517,7 +5717,24 @@ namespace Nemo
         public string SkillName { get; set; }
         public string Ability { get; set; }
         public bool IsBackgroundProficiency { get; set; } = false;
-        public bool IsSelectable { get; set; } = true;
+
+        private bool _isSelectable = true;
+        /// <summary>
+        /// When false, the proficiency checkbox is disabled (not a class choice, or granted by race/background/import).
+        /// </summary>
+        public bool IsSelectable
+        {
+            get => _isSelectable;
+            set
+            {
+                if (_isSelectable != value)
+                {
+                    _isSelectable = value;
+                    OnPropertyChanged(nameof(IsSelectable));
+                }
+            }
+        }
+
         private bool _isProficient;
         public bool IsProficient
         {
