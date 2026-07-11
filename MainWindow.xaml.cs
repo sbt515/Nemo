@@ -927,43 +927,155 @@ namespace Nemo
             UpdateStatDisplays();
         }
 
+        /// <summary>Official 5e point-buy cost to set a score (8–15). Returns -1 if invalid.</summary>
+        private static int GetPointBuyCost(int score) => score switch
+        {
+            8 => 0,
+            9 => 1,
+            10 => 2,
+            11 => 3,
+            12 => 4,
+            13 => 5,
+            14 => 7,
+            15 => 9,
+            _ => -1
+        };
+
+        /// <summary>Points needed to raise a score from <paramref name="from"/> to <paramref name="to"/> (to &gt; from).</summary>
+        private static int GetPointBuyDeltaCost(int from, int to)
+        {
+            int a = GetPointBuyCost(from);
+            int b = GetPointBuyCost(to);
+            if (a < 0 || b < 0) return int.MaxValue;
+            return b - a;
+        }
+
+        private int GetPointBuyPointsUsed()
+        {
+            int used = 0;
+            foreach (var name in new[] { "Str", "Dex", "Con", "Int", "Wis", "Cha" })
+            {
+                var txt = this.FindName($"txt{name}Base") as TextBox;
+                if (txt == null) continue;
+                if (!int.TryParse(txt.Text, out int val))
+                    val = 8;
+                int cost = GetPointBuyCost(val);
+                used += cost >= 0 ? cost : 99;
+            }
+            return used;
+        }
+
+        private int GetPointBuyPointsRemaining() => 27 - GetPointBuyPointsUsed();
+
         private void ValidatePointBuy()
         {
             if (lblPointBuy == null) return;
 
-            int totalPoints = 27;
-            int used = 0;
             bool hasInvalid = false;
-
-            var costs = new Dictionary<int, int>
-    {
-        {8, 0}, {9, 1}, {10, 2}, {11, 3}, {12, 4}, {13, 5}, {14, 7}, {15, 9}
-    };
-
-            string[] statNames = { "Str", "Dex", "Con", "Int", "Wis", "Cha" };
-
-            foreach (var name in statNames)
+            foreach (var name in new[] { "Str", "Dex", "Con", "Int", "Wis", "Cha" })
             {
                 var txt = this.FindName($"txt{name}Base") as TextBox;
                 if (txt == null) continue;
-
-                if (!int.TryParse(txt.Text, out int val))
-                {
-                    val = 8;
-                    txt.Text = "8";
-                }
-
-                if (costs.ContainsKey(val))
-                    used += costs[val];
-                else
-                    used += 99; // safety
+                if (!int.TryParse(txt.Text, out int val) || GetPointBuyCost(val) < 0)
+                    hasInvalid = true;
             }
 
-            int remaining = totalPoints - used;
+            int remaining = GetPointBuyPointsRemaining();
 
             lblPointBuy.Text = $"Points Remaining: {remaining}";
             lblPointBuy.Foreground = (remaining < 0 || hasInvalid) ? Brushes.Red :
                                      (remaining == 0 ? AccentGreen : Brushes.Yellow);
+
+            UpdatePointBuyStepperButtons();
+        }
+
+        /// <summary>
+        /// Enable/disable +/− steppers from point-buy rules (8–15, remaining budget).
+        /// </summary>
+        private void UpdatePointBuyStepperButtons()
+        {
+            bool isPointBuy = rbPointBuy?.IsChecked == true;
+            int remaining = isPointBuy ? GetPointBuyPointsRemaining() : 0;
+
+            foreach (var name in new[] { "Str", "Dex", "Con", "Int", "Wis", "Cha" })
+            {
+                var dec = this.FindName($"btn{name}BaseDec") as Button;
+                var inc = this.FindName($"btn{name}BaseInc") as Button;
+                var panel = this.FindName($"pnl{name}BaseStepper") as StackPanel;
+                var txt = this.FindName($"txt{name}Base") as TextBox;
+
+                if (panel != null)
+                {
+                    // Steppers are for Point Buy; hide for other methods so the layout stays clean
+                    // (TextBox remains; buttons toggle visibility inside the panel)
+                }
+
+                if (dec != null) dec.Visibility = isPointBuy ? Visibility.Visible : Visibility.Collapsed;
+                if (inc != null) inc.Visibility = isPointBuy ? Visibility.Visible : Visibility.Collapsed;
+
+                if (!isPointBuy || txt == null)
+                {
+                    if (dec != null) dec.IsEnabled = false;
+                    if (inc != null) inc.IsEnabled = false;
+                    continue;
+                }
+
+                if (!int.TryParse(txt.Text, out int val))
+                    val = 8;
+
+                // − : only if above minimum 8
+                if (dec != null)
+                    dec.IsEnabled = val > 8;
+
+                // + : only if under 15 and we can afford the next step
+                if (inc != null)
+                {
+                    if (val >= 15)
+                        inc.IsEnabled = false;
+                    else
+                    {
+                        int stepCost = GetPointBuyDeltaCost(val, val + 1);
+                        inc.IsEnabled = stepCost <= remaining;
+                    }
+                }
+            }
+        }
+
+        private void PointBuyStat_Inc(object sender, RoutedEventArgs e)
+        {
+            AdjustPointBuyStat(sender, delta: +1);
+        }
+
+        private void PointBuyStat_Dec(object sender, RoutedEventArgs e)
+        {
+            AdjustPointBuyStat(sender, delta: -1);
+        }
+
+        private void AdjustPointBuyStat(object sender, int delta)
+        {
+            if (rbPointBuy?.IsChecked != true) return;
+            if (sender is not Button btn || btn.Tag is not string statKey) return;
+
+            var txt = this.FindName($"txt{statKey}Base") as TextBox;
+            if (txt == null) return;
+
+            if (!int.TryParse(txt.Text, out int val))
+                val = 8;
+
+            int next = val + delta;
+            if (next < 8 || next > 15)
+                return;
+
+            if (delta > 0)
+            {
+                int remaining = GetPointBuyPointsRemaining();
+                int stepCost = GetPointBuyDeltaCost(val, next);
+                if (stepCost > remaining)
+                    return;
+            }
+
+            txt.Text = next.ToString();
+            // Stat_TextChanged → ValidatePointBuy → UpdatePointBuyStepperButtons
         }
 
         private void ValidateStandardArray()
@@ -1020,8 +1132,16 @@ namespace Nemo
                 return;
             }
 
-            if (val < 8) txt.Text = "8";
-            if (val > 15) txt.Text = "15";
+            if (rbPointBuy?.IsChecked == true || rbStandardArray?.IsChecked == true)
+            {
+                if (val < 8) txt.Text = "8";
+                else if (val > 15) txt.Text = "15";
+            }
+            else if (rbCustom?.IsChecked == true)
+            {
+                if (val < 1) txt.Text = "1";
+                else if (val > 20) txt.Text = "20";
+            }
         }
 
         private void StatMethod_Changed(object sender, RoutedEventArgs e)
@@ -1053,8 +1173,12 @@ namespace Nemo
 
             if (isPointBuy)
                 ValidatePointBuy();
-            else if (lblPointBuy != null)
-                lblPointBuy.Text = "";
+            else
+            {
+                if (lblPointBuy != null && !isStandardArray)
+                    lblPointBuy.Text = "";
+                UpdatePointBuyStepperButtons();
+            }
 
             if (isStandardArray)
                 ValidateStandardArray();
@@ -1819,7 +1943,10 @@ namespace Nemo
                 if (lblRoll != null) lblRoll.Text = "";
             }
 
-            ValidatePointBuy();
+            if (rbPointBuy?.IsChecked == true)
+                ValidatePointBuy();
+            else
+                UpdatePointBuyStepperButtons();
             UpdateStatDisplays();
         }
 
