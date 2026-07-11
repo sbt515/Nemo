@@ -103,6 +103,16 @@
             <TabItem Header="1. Basic Info">
                 <StackPanel Margin="25"
                             MaxWidth="600">
+                    <Button Content="📂 Load Character"
+                            Click="LoadCharacter_Click"
+                            Width="190"
+                            Height="42"
+                            Background="#5C8A6E"
+                            Foreground="White"
+                            FontWeight="SemiBold"
+                            HorizontalAlignment="Left"
+                            Margin="0,0,0,18"/>
+
                     <TextBlock Text="CHARACTER NAME"
                                FontSize="15"
                                FontWeight="Bold"
@@ -1626,14 +1636,6 @@
                                 Foreground="White"
                                 FontWeight="SemiBold"
                                 Margin="8"/>
-                        <Button Content="📂 Load Character"
-                                Click="LoadCharacter_Click"
-                                Width="190"
-                                Height="42"
-                                Background="#5C8A6E"
-                                Foreground="White"
-                                FontWeight="SemiBold"
-                                Margin="8"/>
                         <Button Content="📄 Export to PDF"
                                 Click="ExportPDF_Click"
                                 Width="190"
@@ -1642,14 +1644,15 @@
                                 Foreground="White"
                                 FontWeight="SemiBold"
                                 Margin="8"/>
-                        <Button Content="Export Fillable PDF"
-                                Click="ExportFillablePDF_Click"
+                        <Button Content="📋 Export 5e Sheet"
+                                Click="ExportOfficialSheet_Click"
                                 Width="190"
                                 Height="42"
                                 Margin="8"
                                 Background="#4CAF50"
                                 Foreground="White"
-                                FontWeight="SemiBold"/>
+                                FontWeight="SemiBold"
+                                ToolTip="Fill the official 5e character sheet PDF with this character"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem>

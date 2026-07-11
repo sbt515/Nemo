@@ -12,6 +12,7 @@
   <ItemGroup>
     <PackageReference Include="itext7" Version="8.0.5" />
     <PackageReference Include="itext7.bouncy-castle-adapter" Version="8.0.5" />
+    <PackageReference Include="PdfPig" Version="0.1.9" />
     <PackageReference Include="PdfSharp" Version="6.1.1" />
   </ItemGroup>
 
@@ -19,8 +20,16 @@
     <Compile Include="App.xaml.cs" />
     <Compile Include="MainWindow.xaml.cs" />
     <Compile Include="GameData.cs" />
+    <Compile Include="CharacterSheetImporter.cs" />
+    <Compile Include="CharacterSheetExporter.cs" />
     <Page Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Templates\5E_CharacterSheet_Fillable.pdf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

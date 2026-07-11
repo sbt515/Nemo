@@ -17,48 +17,253 @@ namespace Nemo
 
         // ==================== COMPLETE 5e DATA (from dnd5e.wikidot.com + PHB) ====================
 
+        // Race/subrace trait text and ASIs aligned to official 5e sources (PHB, SCAG, Volo's, EE, Tortle Package, Tasha's).
+        // Reference: https://dnd5e.wikidot.com/#toc2
         public static readonly Dictionary<string, RaceData> RaceData = new()
         {
-            ["Dragonborn"] = new() { AbilityBonuses = new() { ["Strength"] = 2, ["Charisma"] = 1 }, Traits = new() { "Draconic Ancestry (choose one: Black/Acid, Blue/Lightning, Brass/Fire, Bronze/Lightning, Copper/Acid, Gold/Fire, Green/Poison, Red/Fire, Silver/Cold, White/Cold)", "Breath Weapon (action: 15-ft cone or 30-ft line, 1d6 damage of ancestry type + Con mod, Dex save for half, recharge short or long rest)", "Damage Resistance (to ancestry type)", "Common + Draconic" }, Languages = new() { "Common", "Draconic" } },
-            ["Dwarf"] = new() { AbilityBonuses = new() { ["Constitution"] = 2 }, Traits = new() { "Darkvision 60 ft", "Dwarven Resilience (advantage on saves vs poison, resistance to poison damage)", "Dwarven Combat Training (prof with battleaxe, handaxe, light hammer, warhammer)", "Stonecunning (double proficiency on History checks about stonework)", "Common + Dwarvish" }, Languages = new() { "Common", "Dwarvish" }, Speed = 25 },
-            ["Elf"] = new() { AbilityBonuses = new() { ["Dexterity"] = 2 }, Traits = new() { "Darkvision 60 ft", "Fey Ancestry (advantage vs charm, immune to magical sleep)", "Trance (4 hours meditation = long rest)", "Common + Elvish" }, Languages = new() { "Common", "Elvish" }, HasInnateSpellcasting = false },
-            ["Gnome"] = new() { AbilityBonuses = new() { ["Intelligence"] = 2 }, Traits = new() { "Darkvision 60 ft", "Gnome Cunning (advantage on Int/Wis/Cha saves vs magic)", "Common + Gnomish" }, Languages = new() { "Common", "Gnomish" }, Speed = 25 },
-            ["Half-Elf"] = new() { AbilityBonuses = new() { ["Charisma"] = 2 }, Traits = new() { "Darkvision 60 ft", "Fey Ancestry", "Skill Versatility (proficiency in two skills of your choice)", "Ability Score Increase: +2 Charisma + choose two different abilities for +1 each", "Common + Elvish + one other language" }, Languages = new() { "Common", "Elvish", "One other" } },
-            ["Half-Orc"] = new() { AbilityBonuses = new() { ["Strength"] = 2, ["Constitution"] = 1 }, Traits = new() { "Darkvision 60 ft", "Menacing (proficiency in Intimidation)", "Relentless Endurance (when reduced to 0 HP but not killed, drop to 1 HP instead, once per long rest)", "Savage Attacks (when you score a critical hit with a melee weapon, roll one extra weapon damage die)", "Common + Orc" }, Languages = new() { "Common", "Orc" }, SkillProficiencies = new() { "Intimidation" } },
-            ["Halfling"] = new() { AbilityBonuses = new() { ["Dexterity"] = 2 }, Traits = new() { "Lucky (reroll any 1 on d20)", "Brave (advantage vs frightened)", "Halfling Nimbleness (can move through space of larger creatures)", "Common + Halfling" }, Languages = new() { "Common", "Halfling" }, Speed = 25 },
-            ["Human"] = new() { AbilityBonuses = new() { ["Strength"] = 1, ["Dexterity"] = 1, ["Constitution"] = 1, ["Intelligence"] = 1, ["Wisdom"] = 1, ["Charisma"] = 1 }, Traits = new() { "Skill Versatility (proficiency in one skill of choice)", "Common + one other language" }, Languages = new() { "Common", "One other" } },
-            ["Variant Human"] = new() { AbilityBonuses = new() { }, Traits = new() { "Skill Versatility (proficiency in one skill of your choice)", "Feat (choose one feat)", "Ability Score Increase: +1 to two different abilities of your choice" }, Languages = new() { "Common", "One other" } },
-            ["Tiefling"] = new() { AbilityBonuses = new() { ["Charisma"] = 2 }, Traits = new() { "Darkvision 60 ft", "Hellish Resistance (resistance to fire)", "Infernal Legacy (Thaumaturgy cantrip at 1st, Hellish Rebuke 1/day at 3rd, Darkness 1/day at 5th)", "Common + Infernal" }, Languages = new() { "Common", "Infernal" }, HasInnateSpellcasting = true },
-            ["Tabaxi"] = new() { AbilityBonuses = new() { ["Dexterity"] = 2, ["Charisma"] = 1 }, Traits = new() { "Darkvision 60 ft", "Feline Agility (double speed for one turn, recharge after not moving)", "Cat's Claws (climb speed 20 ft, unarmed strike 1d4 slashing)", "Cat's Talent (proficiency in Perception and Stealth)", "Common + Tabaxi" }, Languages = new() { "Common", "Tabaxi" }, SkillProficiencies = new() { "Perception", "Stealth" } },
-            ["Kenku"] = new() { AbilityBonuses = new() { ["Dexterity"] = 2, ["Wisdom"] = 1 }, Traits = new() { "Expert Forgery (advantage on checks to create forgeries)", "Mimicry (perfectly mimic sounds and voices you have heard)", "Common + Auran (but can only speak by mimicking)" }, Languages = new() { "Common", "Auran" } },
-            ["Tortle"] = new() { AbilityBonuses = new() { ["Strength"] = 2, ["Wisdom"] = 1 }, Traits = new() { "Shell Defense (action: AC becomes 17, advantage on Str/Con saves, disadvantage on Dex saves until end of next turn)", "Claws (unarmed strike 1d4 slashing)", "Hold Breath (1 hour)", "Common + Aquan" }, Languages = new() { "Common", "Aquan" } },
-            ["Deep Gnome"] = new() { AbilityBonuses = new() { ["Intelligence"] = 2, ["Dexterity"] = 1 }, Traits = new() { "Superior Darkvision 120 ft", "Gnome Cunning", "Stone Camouflage (advantage on Stealth checks in rocky terrain)", "Common + Gnomish + Undercommon" }, Languages = new() { "Common", "Gnomish", "Undercommon" }, Speed = 25 },
-            ["Duergar"] = new() { AbilityBonuses = new() { ["Constitution"] = 2, ["Strength"] = 1 }, Traits = new() { "Darkvision 120 ft", "Duergar Resilience (advantage vs poison/charm, resistance to poison)", "Duergar Magic (Enlarge/Reduce 1/day at 3rd, Invisibility 1/day at 5th)", "Common + Dwarvish + Undercommon" }, Languages = new() { "Common", "Dwarvish", "Undercommon" }, HasInnateSpellcasting = true, Speed = 25 },
-            ["Aasimar"] = new()
+            ["Dragonborn"] = new()
+            {
+                AbilityBonuses = new() { ["Strength"] = 2, ["Charisma"] = 1 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Draconic Ancestry: Choose one dragon type. This determines your breath weapon damage type/area and damage resistance:\n  • Black — Acid; 5×30 ft line (Dex save)\n  • Blue — Lightning; 5×30 ft line (Dex save)\n  • Brass — Fire; 5×30 ft line (Dex save)\n  • Bronze — Lightning; 5×30 ft line (Dex save)\n  • Copper — Acid; 5×30 ft line (Dex save)\n  • Gold — Fire; 15 ft cone (Dex save)\n  • Green — Poison; 15 ft cone (Con save)\n  • Red — Fire; 15 ft cone (Dex save)\n  • Silver — Cold; 15 ft cone (Con save)\n  • White — Cold; 15 ft cone (Con save)",
+                    "Breath Weapon: As an action, exhale energy in the area of your ancestry. Each creature in the area makes the listed save (DC = 8 + your Constitution modifier + your proficiency bonus). 2d6 damage on a failed save, half on a success. Damage increases to 3d6 at 6th level, 4d6 at 11th, and 5d6 at 16th. Recharges on a short or long rest.",
+                    "Damage Resistance: Resistance to the damage type associated with your Draconic Ancestry."
+                },
+                Languages = new() { "Common", "Draconic" }
+            },
+            ["Dwarf"] = new()
+            {
+                AbilityBonuses = new() { ["Constitution"] = 2 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Speed: 25 feet. Your speed is not reduced by wearing heavy armor.",
+                    "Darkvision: You can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of gray.",
+                    "Dwarven Resilience: You have advantage on saving throws against poison, and you have resistance against poison damage.",
+                    "Dwarven Combat Training: You have proficiency with the battleaxe, handaxe, light hammer, and warhammer.",
+                    "Tool Proficiency: You gain proficiency with the artisan's tools of your choice: smith's tools, brewer's supplies, or mason's tools.",
+                    "Stonecunning: Whenever you make an Intelligence (History) check related to the origin of stonework, you are considered proficient in the History skill and add double your proficiency bonus to the check, instead of your normal proficiency bonus."
+                },
+                Languages = new() { "Common", "Dwarvish" },
+                Speed = 25
+            },
+            ["Elf"] = new()
+            {
+                AbilityBonuses = new() { ["Dexterity"] = 2 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Darkvision: You can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of gray.",
+                    "Keen Senses: You have proficiency in the Perception skill.",
+                    "Fey Ancestry: You have advantage on saving throws against being charmed, and magic can't put you to sleep.",
+                    "Trance: Elves don't need to sleep. Instead, they meditate deeply, remaining semiconscious, for 4 hours a day. After resting in this way, you gain the same benefit that a human does from 8 hours of sleep."
+                },
+                Languages = new() { "Common", "Elvish" },
+                SkillProficiencies = new() { "Perception" },
+                HasInnateSpellcasting = false
+            },
+            ["Gnome"] = new()
+            {
+                AbilityBonuses = new() { ["Intelligence"] = 2 },
+                Traits = new()
+                {
+                    "Size: Small",
+                    "Darkvision: You can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of gray.",
+                    "Gnome Cunning: You have advantage on all Intelligence, Wisdom, and Charisma saving throws against magic."
+                },
+                Languages = new() { "Common", "Gnomish" },
+                Speed = 25
+            },
+            ["Half-Elf"] = new()
             {
                 AbilityBonuses = new() { ["Charisma"] = 2 },
                 Traits = new()
-    {
-        "Darkvision 60 ft",
-        "Celestial Legacy (Light cantrip at will)",
-        "Healing Hands (action: touch a creature and heal 1d4 + your level hit points, once per long rest)",
-        "Common + Celestial"
-    },
+                {
+                    "Ability Score Increase: Your Charisma score increases by 2, and two other ability scores of your choice each increase by 1.",
+                    "Size: Medium",
+                    "Darkvision: Thanks to your elven heritage, you can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of gray.",
+                    "Fey Ancestry: You have advantage on saving throws against being charmed, and magic can't put you to sleep.",
+                    "Skill Versatility: You gain proficiency in two skills of your choice."
+                },
+                Languages = new() { "Common", "Elvish", "One extra language of your choice" }
+            },
+            ["Half-Orc"] = new()
+            {
+                AbilityBonuses = new() { ["Strength"] = 2, ["Constitution"] = 1 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Darkvision: Thanks to your orc blood, you can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of gray.",
+                    "Menacing: You gain proficiency in the Intimidation skill.",
+                    "Relentless Endurance: When you are reduced to 0 hit points but not killed outright, you can drop to 1 hit point instead. You can't use this feature again until you finish a long rest.",
+                    "Savage Attacks: When you score a critical hit with a melee weapon attack, you can roll one of the weapon's damage dice one additional time and add it to the extra damage of the critical hit."
+                },
+                Languages = new() { "Common", "Orc" },
+                SkillProficiencies = new() { "Intimidation" }
+            },
+            ["Halfling"] = new()
+            {
+                AbilityBonuses = new() { ["Dexterity"] = 2 },
+                Traits = new()
+                {
+                    "Size: Small",
+                    "Lucky: When you roll a 1 on an attack roll, ability check, or saving throw, you can reroll the die and must use the new roll.",
+                    "Brave: You have advantage on saving throws against being frightened.",
+                    "Halfling Nimbleness: You can move through the space of any creature that is of a size larger than yours."
+                },
+                Languages = new() { "Common", "Halfling" },
+                Speed = 25
+            },
+            ["Human"] = new()
+            {
+                AbilityBonuses = new()
+                {
+                    ["Strength"] = 1, ["Dexterity"] = 1, ["Constitution"] = 1,
+                    ["Intelligence"] = 1, ["Wisdom"] = 1, ["Charisma"] = 1
+                },
+                Traits = new()
+                {
+                    "Ability Score Increase: Your ability scores each increase by 1.",
+                    "Size: Medium",
+                    "Languages: You can speak, read, and write Common and one extra language of your choice."
+                },
+                Languages = new() { "Common", "One extra language of your choice" }
+            },
+            ["Variant Human"] = new()
+            {
+                AbilityBonuses = new(),
+                Traits = new()
+                {
+                    "Ability Score Increase: Two different ability scores of your choice increase by 1. (This replaces the standard human Ability Score Increase.)",
+                    "Skills: You gain proficiency in one skill of your choice.",
+                    "Feat: You gain one feat of your choice.",
+                    "Size: Medium",
+                    "Languages: You can speak, read, and write Common and one extra language of your choice."
+                },
+                Languages = new() { "Common", "One extra language of your choice" }
+            },
+            ["Tiefling"] = new()
+            {
+                // PHB: +2 Cha and +1 Int (Asmodeus). Variants may replace ASI or Infernal Legacy.
+                AbilityBonuses = new() { ["Charisma"] = 2, ["Intelligence"] = 1 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Darkvision: Thanks to your infernal heritage, you can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of gray.",
+                    "Hellish Resistance: You have resistance to fire damage.",
+                    "Infernal Legacy: You know the Thaumaturgy cantrip. Once you reach 3rd level, you can cast Hellish Rebuke once as a 2nd-level spell. Once you reach 5th level, you can also cast Darkness once. You must finish a long rest to cast these spells again with this trait. Charisma is your spellcasting ability for these spells. (SCAG variants may replace this trait — see subrace.)"
+                },
+                Languages = new() { "Common", "Infernal" },
+                HasInnateSpellcasting = true
+            },
+            ["Tabaxi"] = new()
+            {
+                AbilityBonuses = new() { ["Dexterity"] = 2, ["Charisma"] = 1 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Darkvision: You can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of gray.",
+                    "Feline Agility: When you move on your turn in combat, you can double your speed until the end of the turn. Once you use this trait, you can't use it again until you move 0 feet on one of your turns.",
+                    "Cat's Claws: Because of your claws, you have a climbing speed of 20 feet. In addition, your claws are natural weapons, which you can use to make unarmed strikes. If you hit with them, you deal slashing damage equal to 1d4 + your Strength modifier, instead of the bludgeoning damage normal for an unarmed strike.",
+                    "Cat's Talent: You have proficiency in the Perception and Stealth skills."
+                },
+                Languages = new() { "Common", "One extra language of your choice" },
+                SkillProficiencies = new() { "Perception", "Stealth" }
+            },
+            ["Kenku"] = new()
+            {
+                AbilityBonuses = new() { ["Dexterity"] = 2, ["Wisdom"] = 1 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Expert Forgery: You can duplicate other creatures' handwriting and craftwork. You have advantage on all checks made to produce forgeries or duplicates of existing objects.",
+                    "Kenku Training: You are proficient in your choice of two of the following skills: Acrobatics, Deception, Stealth, and Sleight of Hand.",
+                    "Mimicry: You can mimic sounds you have heard, including voices. A creature that hears the sounds you make can tell they are imitations with a successful Wisdom (Insight) check opposed by your Charisma (Deception) check.",
+                    "Languages: You can read and write Common and Auran, but you can speak only by using your Mimicry trait."
+                },
+                Languages = new() { "Common (read/write; speak via Mimicry only)", "Auran (read/write; speak via Mimicry only)" }
+            },
+            ["Tortle"] = new()
+            {
+                AbilityBonuses = new() { ["Strength"] = 2, ["Wisdom"] = 1 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Claws: Your claws are natural weapons, which you can use to make unarmed strikes. If you hit with them, you deal slashing damage equal to 1d4 + your Strength modifier, instead of the bludgeoning damage normal for an unarmed strike.",
+                    "Hold Breath: You can hold your breath for up to 1 hour at a time.",
+                    "Natural Armor: Due to your shell and the shape of your body, you are ill-suited to wearing armor. Your shell provides a base AC of 17 (your Dexterity modifier doesn't affect this number). You gain no benefit from wearing armor, but if you are using a shield, you can apply the shield's bonus as normal.",
+                    "Shell Defense: You can withdraw into your shell as an action. Until you emerge, you gain a +4 bonus to AC, and you have advantage on Strength and Constitution saving throws. While in your shell, you are prone, your speed is 0 and can't increase, you have disadvantage on Dexterity saving throws, you can't take reactions, and the only action you can take is a bonus action to emerge from your shell.",
+                    "Survival Instinct: You gain proficiency in the Survival skill."
+                },
+                Languages = new() { "Common", "Aquan" },
+                SkillProficiencies = new() { "Survival" }
+            },
+            ["Deep Gnome"] = new()
+            {
+                // Elemental Evil Player's Companion (svirfneblin)
+                AbilityBonuses = new() { ["Intelligence"] = 2, ["Dexterity"] = 1 },
+                Traits = new()
+                {
+                    "Size: Small",
+                    "Superior Darkvision: Your darkvision has a radius of 120 feet.",
+                    "Gnome Cunning: You have advantage on all Intelligence, Wisdom, and Charisma saving throws against magic.",
+                    "Stone Camouflage: You have advantage on Dexterity (Stealth) checks to hide in rocky terrain."
+                },
+                Languages = new() { "Common", "Gnomish" },
+                Speed = 25
+            },
+            ["Duergar"] = new()
+            {
+                // SCAG full-race presentation
+                AbilityBonuses = new() { ["Constitution"] = 2, ["Strength"] = 1 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Speed: 25 feet. Your speed is not reduced by wearing heavy armor.",
+                    "Superior Darkvision: You can see in dim light within 120 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of gray.",
+                    "Dwarven Resilience: You have advantage on saving throws against poison, and you have resistance against poison damage.",
+                    "Duergar Resilience: You have advantage on saving throws against illusions and against being charmed or paralyzed.",
+                    "Dwarven Combat Training: You have proficiency with the battleaxe, handaxe, light hammer, and warhammer.",
+                    "Tool Proficiency: You gain proficiency with the artisan's tools of your choice: smith's tools, brewer's supplies, or mason's tools.",
+                    "Stonecunning: Whenever you make an Intelligence (History) check related to the origin of stonework, you are considered proficient in the History skill and add double your proficiency bonus to the check, instead of your normal proficiency bonus.",
+                    "Duergar Magic: When you reach 3rd level, you can cast Enlarge/Reduce on yourself once with this trait, using only the spell's enlarge option. When you reach 5th level, you can cast Invisibility on yourself once with this trait. You don't need material components for either spell, and you can't cast them while you're in direct sunlight, although sunlight has no effect on them once cast. You regain the ability to cast these spells with this trait when you finish a long rest. Intelligence is your spellcasting ability for these spells.",
+                    "Sunlight Sensitivity: You have disadvantage on attack rolls and on Wisdom (Perception) checks that rely on sight when you, the target of your attack, or whatever you are trying to perceive is in direct sunlight."
+                },
+                Languages = new() { "Common", "Dwarvish" },
+                HasInnateSpellcasting = true,
+                Speed = 25
+            },
+            ["Aasimar"] = new()
+            {
+                // Volo's Guide base (subraces below)
+                AbilityBonuses = new() { ["Charisma"] = 2 },
+                Traits = new()
+                {
+                    "Size: Medium",
+                    "Darkvision: Blessed with a radiant soul, you can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of gray.",
+                    "Celestial Resistance: You have resistance to necrotic damage and radiant damage.",
+                    "Healing Hands: As an action, you can touch a creature and cause it to regain a number of hit points equal to your level. Once you use this trait, you can't use it again until you finish a long rest.",
+                    "Light Bearer: You know the Light cantrip. Charisma is your spellcasting ability for it."
+                },
                 Languages = new() { "Common", "Celestial" },
                 HasInnateSpellcasting = true
             },
             ["Custom Lineage"] = new()
             {
-                AbilityBonuses = new(),   // Player chooses +2 to one ability
+                // Tasha's Cauldron of Everything
+                AbilityBonuses = new(),
                 Traits = new()
-    {
-        "Ability Score Increase: +2 to one ability score of your choice",
-        "Darkvision or Skill Proficiency (choose one)",
-        "   • Darkvision (60 ft)",
-        "   • Proficiency in one skill of your choice",
-        "Feat: You gain one feat of your choice",
-        "Languages: Common + one other language of your choice"
-    },
+                {
+                    "Creature Type: You are a Humanoid. You determine your appearance and whether you resemble any of your kin.",
+                    "Size: You are Small or Medium (your choice).",
+                    "Speed: Your base walking speed is 30 feet.",
+                    "Ability Score Increase: One ability score of your choice increases by 2.",
+                    "Feat: You gain one feat of your choice for which you qualify.",
+                    "Variable Trait: Choose one — Darkvision (you can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light; you can't discern color in darkness, only shades of gray) OR proficiency in one skill of your choice.",
+                    "Languages: You can speak, read, and write Common and one other language that you and your DM agree is appropriate for the character."
+                },
                 Languages = new() { "Common", "One other language of your choice" }
             }
         };
@@ -66,59 +271,227 @@ namespace Nemo
         public static readonly Dictionary<string, List<SubraceData>> RaceSubraces = new()
         {
             ["Aasimar"] = new()
-{
-    new() { Name = "Protector Aasimar", AbilityBonus = new() { ["Wisdom"] = 1 },
-            Traits = new() { "Radiant Soul (once per turn, add 1d4 radiant damage to one attack or spell damage roll)" } },
-
-    new() { Name = "Scourge Aasimar", AbilityBonus = new() { ["Constitution"] = 1 },
-            Traits = new() { "Radiant Consumption (action: deal 1d4 radiant damage to all creatures within 10 ft, including yourself, until end of your next turn)" } },
-
-    new() { Name = "Fallen Aasimar", AbilityBonus = new() { ["Strength"] = 1 },
-            Traits = new() { "Necrotic Shroud (action: gain 30 ft flying speed + add 1d4 necrotic damage to melee attacks until end of your next turn)" } }
-},
+            {
+                new()
+                {
+                    Name = "Protector Aasimar",
+                    AbilityBonus = new() { ["Wisdom"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Wisdom score increases by 1.",
+                        "Radiant Soul (3rd level): As an action, unleash the divine energy within yourself, causing your eyes to glimmer and two luminous, incorporeal wings to sprout from your back. Your transformation lasts for 1 minute or until you end it as a bonus action. During it, you have a flying speed of 30 feet, and once on each of your turns, you can deal extra radiant damage to one target when you deal damage to it with an attack or a spell. The extra radiant damage equals your level. Once you use this trait, you can't use it again until you finish a long rest."
+                    }
+                },
+                new()
+                {
+                    Name = "Scourge Aasimar",
+                    AbilityBonus = new() { ["Constitution"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Constitution score increases by 1.",
+                        "Radiant Consumption (3rd level): As an action, unleash the divine energy within yourself, causing a searing light to radiate from you, pour out of your eyes and mouth, and threaten to char you. Your transformation lasts for 1 minute or until you end it as a bonus action. During it, you shed bright light in a 10-foot radius and dim light for an additional 10 feet, and at the end of each of your turns, you and each creature within 10 feet of you take radiant damage equal to half your level (rounded up). In addition, once on each of your turns, you can deal extra radiant damage to one target when you deal damage to it with an attack or a spell. The extra radiant damage equals your level. Once you use this trait, you can't use it again until you finish a long rest."
+                    }
+                },
+                new()
+                {
+                    Name = "Fallen Aasimar",
+                    AbilityBonus = new() { ["Strength"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Strength score increases by 1.",
+                        "Necrotic Shroud (3rd level): As an action, unleash the divine energy within yourself, causing your eyes to turn into pools of darkness and two skeletal, ghostly, flightless wings to sprout from your back. The instant you transform, other creatures within 10 feet of you that can see you must each succeed on a Charisma saving throw (DC = 8 + your proficiency bonus + your Charisma modifier) or become frightened of you until the end of your next turn. Your transformation lasts for 1 minute or until you end it as a bonus action. During it, once on each of your turns, you can deal extra necrotic damage to one target when you deal damage to it with an attack or a spell. The extra necrotic damage equals your level. Once you use this trait, you can't use it again until you finish a long rest."
+                    }
+                }
+            },
 
             ["Dwarf"] = new()
-    {
-        new() { Name = "Hill Dwarf",   AbilityBonus = new() { ["Wisdom"] = 1 },
-                Traits = new() { "Dwarven Toughness (+1 HP per level)" } },
-        new() { Name = "Mountain Dwarf", AbilityBonus = new() { ["Strength"] = 2 },
-                Traits = new() { "Dwarven Armor Training (prof with light & medium armor)" } }
-    },
+            {
+                new()
+                {
+                    Name = "Hill Dwarf",
+                    AbilityBonus = new() { ["Wisdom"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Wisdom score increases by 1.",
+                        "Dwarven Toughness: Your hit point maximum increases by 1, and it increases by 1 every time you gain a level."
+                    }
+                },
+                new()
+                {
+                    Name = "Mountain Dwarf",
+                    AbilityBonus = new() { ["Strength"] = 2 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Strength score increases by 2.",
+                        "Dwarven Armor Training: You have proficiency with light and medium armor."
+                    }
+                }
+            },
+
             ["Elf"] = new()
-    {
-        new() { Name = "High Elf",   AbilityBonus = new() { ["Intelligence"] = 1 },
-                Traits = new() { "Elf Weapon Training (prof with longsword, shortsword, shortbow, longbow)", "Cantrip (choose one Wizard cantrip)" }, HasInnateSpellcasting = true },
-        new() { Name = "Wood Elf",   AbilityBonus = new() { ["Wisdom"] = 1 },
-                Traits = new() { "Elf Weapon Training", "Mask of the Wild (natural stealth in foliage)"}, Speed = 35 },
-        new() { Name = "Drow (Dark Elf)", AbilityBonus = new() { ["Charisma"] = 1 },
-                Traits = new() { "Superior Darkvision 120 ft", "Drow Magic (Dancing Lights, Faerie Fire, Darkness)", "Drow Weapon Training", "Sunlight Sensitivity" }, HasInnateSpellcasting = true }
-    },
+            {
+                new()
+                {
+                    Name = "High Elf",
+                    AbilityBonus = new() { ["Intelligence"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Intelligence score increases by 1.",
+                        "Elf Weapon Training: You have proficiency with the longsword, shortsword, shortbow, and longbow.",
+                        "Cantrip: You know one cantrip of your choice from the wizard spell list. Intelligence is your spellcasting ability for it.",
+                        "Extra Language: You can speak, read, and write one extra language of your choice."
+                    },
+                    HasInnateSpellcasting = true
+                },
+                new()
+                {
+                    Name = "Wood Elf",
+                    AbilityBonus = new() { ["Wisdom"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Wisdom score increases by 1.",
+                        "Elf Weapon Training: You have proficiency with the longsword, shortsword, shortbow, and longbow.",
+                        "Fleet of Foot: Your base walking speed increases to 35 feet.",
+                        "Mask of the Wild: You can attempt to hide even when you are only lightly obscured by foliage, heavy rain, falling snow, mist, and other natural phenomena."
+                    },
+                    Speed = 35
+                },
+                new()
+                {
+                    Name = "Drow (Dark Elf)",
+                    AbilityBonus = new() { ["Charisma"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Charisma score increases by 1.",
+                        "Superior Darkvision: Your darkvision has a range of 120 feet, instead of 60.",
+                        "Sunlight Sensitivity: You have disadvantage on attack rolls and on Wisdom (Perception) checks that rely on sight when you, the target of your attack, or whatever you are trying to perceive is in direct sunlight.",
+                        "Drow Magic: You know the Dancing Lights cantrip. When you reach 3rd level, you can cast Faerie Fire once with this trait and regain the ability to do so when you finish a long rest. When you reach 5th level, you can cast Darkness once and regain the ability to do so when you finish a long rest. Charisma is your spellcasting ability for these spells.",
+                        "Drow Weapon Training: You have proficiency with rapiers, shortswords, and hand crossbows."
+                    },
+                    HasInnateSpellcasting = true
+                }
+            },
+
             ["Gnome"] = new()
-    {
-        new() { Name = "Forest Gnome", AbilityBonus = new() { ["Dexterity"] = 1 },
-                Traits = new() { "Illusion Aptitude (minor illusion cantrip)", "Speak with Small Beasts" }, HasInnateSpellcasting = true },
-        new() { Name = "Rock Gnome",   AbilityBonus = new() { ["Constitution"] = 1 },
-                Traits = new() { "Artificer's Lore (add 2x proficiency to History/Investigation about magic/tech)", "Tinker (prof with tinker's tools)" } }
-    },
+            {
+                new()
+                {
+                    Name = "Forest Gnome",
+                    AbilityBonus = new() { ["Dexterity"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Dexterity score increases by 1.",
+                        "Natural Illusionist: You know the Minor Illusion cantrip. Intelligence is your spellcasting ability for it.",
+                        "Speak with Small Beasts: Through sounds and gestures, you can communicate simple ideas with Small or smaller beasts."
+                    },
+                    HasInnateSpellcasting = true
+                },
+                new()
+                {
+                    Name = "Rock Gnome",
+                    AbilityBonus = new() { ["Constitution"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Constitution score increases by 1.",
+                        "Artificer's Lore: Whenever you make an Intelligence (History) check related to magic items, alchemical objects, or technological devices, you can add twice your proficiency bonus, instead of any proficiency bonus you normally apply.",
+                        "Tinker: You have proficiency with artisan's tools (tinker's tools). Using those tools, you can spend 1 hour and 10 gp worth of materials to construct a Tiny clockwork device (AC 5, 1 hp). The device ceases to function after 24 hours (unless you spend 1 hour repairing it to keep the device functioning), or when you use your action to dismantle it; at that time, you can reclaim the materials used to create it. You can have up to three such devices active at a time. When you create a device, choose one of the following options: Clockwork Toy, Fire Starter, or Music Box."
+                    }
+                }
+            },
+
             ["Halfling"] = new()
-{
-    new() { Name = "Lightfoot Halfling", AbilityBonus = new() { ["Charisma"] = 1 },
-            Traits = new() { "Naturally Stealthy (can hide when only lightly obscured by a creature larger than you)" } },
-    new() { Name = "Stout Halfling",   AbilityBonus = new() { ["Constitution"] = 1 },
-            Traits = new() { "Stout Resilience (advantage on saves vs poison, resistance to poison damage)" } },
-            new() { Name = "Ghostwise Halfling", AbilityBonus = new() { ["Wisdom"] = 1 },
-            Traits = new() { "Silent Speech (you can telepathically communicate with any creature within 30 feet that shares a language with you)" } }
-},
+            {
+                new()
+                {
+                    Name = "Lightfoot Halfling",
+                    AbilityBonus = new() { ["Charisma"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Charisma score increases by 1.",
+                        "Naturally Stealthy: You can attempt to hide even when you are obscured only by a creature that is at least one size larger than you."
+                    }
+                },
+                new()
+                {
+                    Name = "Stout Halfling",
+                    AbilityBonus = new() { ["Constitution"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Constitution score increases by 1.",
+                        "Stout Resilience: You have advantage on saving throws against poison, and you have resistance against poison damage."
+                    }
+                },
+                new()
+                {
+                    Name = "Ghostwise Halfling",
+                    AbilityBonus = new() { ["Wisdom"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Wisdom score increases by 1.",
+                        "Silent Speech: You can speak telepathically to any creature within 30 feet of you. The creature understands you only if the two of you share a language. You can speak telepathically in this way to one creature at a time."
+                    }
+                }
+            },
 
             ["Tiefling"] = new()
-{
-    new() { Name = "Feral Tiefling", AbilityBonus = new() { ["Dexterity"] = 2 },
-            Traits = new() { "Feral (replaces Charisma bonus with Dexterity)", "Hellish Resistance", "Infernal Legacy" } },
-    new() { Name = "Devil's Tongue", AbilityBonus = new() { ["Charisma"] = 1 },
-            Traits = new() { "Devil's Tongue (Vicious Mockery + other spells)", "Hellish Resistance" } },
-    new() { Name = "Hellfire",       AbilityBonus = new() { ["Charisma"] = 1 },
-            Traits = new() { "Hellfire (Burning Hands 1/day instead of Hellish Rebuke)", "Hellish Resistance" } }
-}
+            {
+                // SCAG variants. Base race already has PHB +2 Cha / +1 Int and Infernal Legacy.
+                new()
+                {
+                    Name = "Asmodeus (Default)",
+                    AbilityBonus = new(),
+                    Traits = new()
+                    {
+                        "Bloodline of Asmodeus (PHB default): Uses the base tiefling Ability Score Increase (+2 Charisma, +1 Intelligence) and Infernal Legacy (Thaumaturgy; Hellish Rebuke at 3rd; Darkness at 5th)."
+                    },
+                    HasInnateSpellcasting = true
+                },
+                new()
+                {
+                    Name = "Feral",
+                    AbilityBonus = new() { ["Dexterity"] = 2, ["Intelligence"] = 1 },
+                    ReplacesAbilityBonuses = true,
+                    Traits = new()
+                    {
+                        "Feral (SCAG): Your Intelligence score increases by 1, and your Dexterity score increases by 2. This trait replaces the Ability Score Increase trait of the tiefling.",
+                        "You retain Hellish Resistance and Infernal Legacy unless you also take another mutually exclusive legacy variant."
+                    },
+                    HasInnateSpellcasting = true
+                },
+                new()
+                {
+                    Name = "Devil's Tongue",
+                    AbilityBonus = new(),
+                    Traits = new()
+                    {
+                        "Devil's Tongue (SCAG): Replaces Infernal Legacy. You know the Vicious Mockery cantrip. Once you reach 3rd level, you can cast Charm Person once as a 2nd-level spell. Once you reach 5th level, you can also cast Enthrall once. You must finish a long rest to cast these spells again with this trait. Charisma is your spellcasting ability for these spells.",
+                        "Ability Score Increase remains +2 Charisma and +1 Intelligence. Hellish Resistance is unchanged. Devil's Tongue, Hellfire, and Winged are mutually exclusive."
+                    },
+                    HasInnateSpellcasting = true
+                },
+                new()
+                {
+                    Name = "Hellfire",
+                    AbilityBonus = new(),
+                    Traits = new()
+                    {
+                        "Hellfire (SCAG): Once you reach 3rd level, you can cast Burning Hands once as a 2nd-level spell. This trait replaces the Hellish Rebuke spell of the Infernal Legacy trait (you still get Thaumaturgy and, at 5th level, Darkness).",
+                        "Ability Score Increase remains +2 Charisma and +1 Intelligence. Hellish Resistance is unchanged. Devil's Tongue, Hellfire, and Winged are mutually exclusive."
+                    },
+                    HasInnateSpellcasting = true
+                },
+                new()
+                {
+                    Name = "Winged",
+                    AbilityBonus = new(),
+                    Traits = new()
+                    {
+                        "Winged (SCAG): You have bat-like wings sprouting from your shoulders. You have a flying speed of 30 feet while you aren't wearing heavy armor. This trait replaces the Infernal Legacy trait.",
+                        "Ability Score Increase remains +2 Charisma and +1 Intelligence. Hellish Resistance is unchanged. Devil's Tongue, Hellfire, and Winged are mutually exclusive."
+                    },
+                    HasInnateSpellcasting = false
+                }
+            }
         };
 
         public static readonly Dictionary<string, ClassData> ClassData = new()
@@ -1637,8 +2010,10 @@ public class SubraceData
 {
     public string Name { get; set; } = "";
     public Dictionary<string, int> AbilityBonus { get; set; } = new();
+    /// <summary>When true, subrace ability bonuses replace the base race ASI instead of stacking (e.g. Feral Tiefling).</summary>
+    public bool ReplacesAbilityBonuses { get; set; } = false;
     public List<string> Traits { get; set; } = new();
-    public bool HasInnateSpellcasting { get; set; } = false;   // ← NEW
+    public bool HasInnateSpellcasting { get; set; } = false;
     public int? Speed { get; set; } = null;
 }
 

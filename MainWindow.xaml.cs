@@ -92,12 +92,14 @@ namespace Nemo
             if (cmbRace.SelectedItem is not string race || !GameData.RaceData.ContainsKey(race)) return;
 
             var data = GameData.RaceData[race];
-            string bonuses = string.Join(", ", data.AbilityBonuses.Select(kv => $"+{kv.Value} {kv.Key}"));
+            string bonuses = data.AbilityBonuses.Count > 0
+                ? string.Join(", ", data.AbilityBonuses.Select(kv => $"+{kv.Value} {kv.Key}"))
+                : "(player choice — see traits)";
 
-            // Filter out any trait that is just listing languages
+            // Filter out any trait that is just listing languages (those are shown in LANGUAGES)
             var filteredTraits = data.Traits
-                .Where(t => !t.Contains("Common +", StringComparison.OrdinalIgnoreCase) &&
-                            !t.Contains("Languages:", StringComparison.OrdinalIgnoreCase))
+                .Where(t => !t.TrimStart().StartsWith("Languages:", StringComparison.OrdinalIgnoreCase) &&
+                            !t.Contains("Common +", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             txtRaceDetails.Text =
@@ -127,22 +129,12 @@ namespace Nemo
                 cmbSubrace.IsEnabled = false;
             }
 
-            if (race == "Custom Lineage" || race == "Human" || race == "Variant Human")
+            // Standard Human has no skill/feat choices (PHB) — only Variant Human, Custom Lineage, and Half-Elf have pickers
+            if (race == "Custom Lineage" || race == "Variant Human" || race == "Half-Elf")
             {
-                pnlRaceSkillChoice.Visibility = Visibility.Visible;
-
-                // Set the correct header label based on race
-                if (race == "Human")
+                if (race == "Variant Human")
                 {
-                    lblRaceSkillHeader.Text = "HUMAN SKILL VERSATILITY";
-                    pnlFlexibleBonuses.Visibility = Visibility.Collapsed;
-                    rbRaceDarkvision.Visibility = Visibility.Collapsed;     // Hide Darkvision
-                    rbRaceSkill.Visibility = Visibility.Visible;
-                    rbRaceSkill.IsChecked = true;                           // Auto-select skill
-                    cmbRaceSkillChoice.Visibility = Visibility.Visible;
-                }
-                else if (race == "Variant Human")
-                {
+                    pnlRaceSkillChoice.Visibility = Visibility.Visible;
                     lblRaceSkillHeader.Text = "VARIANT HUMAN CHOICES";
                     pnlFlexibleBonuses.Visibility = Visibility.Visible;
                     rbRaceDarkvision.Visibility = Visibility.Collapsed;
@@ -163,17 +155,20 @@ namespace Nemo
                     cmbFlexibleBonus2.SelectionChanged -= FlexibleBonus_Changed;
                     cmbFlexibleBonus2.SelectionChanged += FlexibleBonus_Changed;
 
-                    // === FIX: Apply the default bonuses immediately ===
+                    // Apply the default bonuses immediately
                     FlexibleBonus_Changed(null, null);
                 }
                 else if (race == "Half-Elf")
                 {
+                    // Half-Elf: +2 Cha (base) and +1 to two other abilities; Skill Versatility is free-form (noted in traits)
+                    pnlRaceSkillChoice.Visibility = Visibility.Collapsed;
                     pnlFlexibleBonuses.Visibility = Visibility.Visible;
                     SetupFlexibleBonusPickers(race);
-                    FlexibleBonus_Changed(null, null);   // Apply defaults immediately
+                    FlexibleBonus_Changed(null, null);
                 }
                 else // Custom Lineage
                 {
+                    pnlRaceSkillChoice.Visibility = Visibility.Visible;
                     lblRaceSkillHeader.Text = "CUSTOM LINEAGE CHOICES";
                     pnlFlexibleBonuses.Visibility = Visibility.Visible;
                     rbRaceDarkvision.Visibility = Visibility.Visible;
@@ -182,19 +177,21 @@ namespace Nemo
                     cmbRaceSkillChoice.Visibility = Visibility.Collapsed;
                 }
 
-                // Populate skill dropdown
-                cmbRaceSkillChoice.ItemsSource = allSkills.Select(s => s.SkillName).ToList();
-                if (string.IsNullOrEmpty(raceGrantedSkill))
-                    cmbRaceSkillChoice.SelectedIndex = 0;
+                // Populate skill dropdown when skill choice is shown
+                if (pnlRaceSkillChoice.Visibility == Visibility.Visible)
+                {
+                    cmbRaceSkillChoice.ItemsSource = allSkills.Select(s => s.SkillName).ToList();
+                    if (string.IsNullOrEmpty(raceGrantedSkill))
+                        cmbRaceSkillChoice.SelectedIndex = 0;
 
-                cmbRaceSkillChoice.SelectionChanged -= RaceGrantedSkill_Changed; // Prevent duplicates
-                cmbRaceSkillChoice.SelectionChanged += RaceGrantedSkill_Changed;
+                    cmbRaceSkillChoice.SelectionChanged -= RaceGrantedSkill_Changed; // Prevent duplicates
+                    cmbRaceSkillChoice.SelectionChanged += RaceGrantedSkill_Changed;
+                }
             }
             else
             {
                 pnlRaceSkillChoice.Visibility = Visibility.Collapsed;
-                if (race != "Half-Elf")
-                    pnlFlexibleBonuses.Visibility = Visibility.Collapsed;
+                pnlFlexibleBonuses.Visibility = Visibility.Collapsed;
             }
 
             // Show or hide Feats tab
@@ -209,7 +206,7 @@ namespace Nemo
             }
 
             // Cleanup when switching away from races that grant a skill choice
-            if ((race != "Custom Lineage" && race != "Human" && race != "Variant Human")
+            if ((race != "Custom Lineage" && race != "Variant Human")
                 && !string.IsNullOrEmpty(raceGrantedSkill))
             {
                 var oldSkill = allSkills.FirstOrDefault(s => s.SkillName == raceGrantedSkill);
@@ -237,7 +234,7 @@ namespace Nemo
             var abilities = new List<string> { "Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma" };
 
             if (race == "Half-Elf")
-                abilities.Remove("Charisma"); // Half-Elf cannot choose Charisma again
+                abilities.Remove("Charisma"); // Half-Elf cannot choose Charisma again for the +1s
 
             cmbFlexibleBonus1.ItemsSource = abilities;
             cmbFlexibleBonus2.ItemsSource = abilities;
@@ -245,6 +242,8 @@ namespace Nemo
             cmbFlexibleBonus1.SelectedIndex = 0;
             cmbFlexibleBonus2.SelectedIndex = 1;
 
+            cmbFlexibleBonus1.SelectionChanged -= FlexibleBonus_Changed;
+            cmbFlexibleBonus2.SelectionChanged -= FlexibleBonus_Changed;
             cmbFlexibleBonus1.SelectionChanged += FlexibleBonus_Changed;
             cmbFlexibleBonus2.SelectionChanged += FlexibleBonus_Changed;
         }
@@ -449,11 +448,13 @@ namespace Nemo
             var subrace = GameData.RaceSubraces[race].FirstOrDefault(s => s.Name == subraceName);
             if (subrace == null) return;
 
-            // IMPORTANT: Reset to ONLY the base race bonuses first
+            // IMPORTANT: Start from base race bonuses (unless the subrace fully replaces ASI, e.g. Feral Tiefling)
             var baseRace = GameData.RaceData[race];
-            racialBonuses = new Dictionary<string, int>(baseRace.AbilityBonuses);
+            racialBonuses = subrace.ReplacesAbilityBonuses
+                ? new Dictionary<string, int>()
+                : new Dictionary<string, int>(baseRace.AbilityBonuses);
 
-            // Now apply ONLY the selected subrace bonus
+            // Apply selected subrace bonus (stacking, or alone when ReplacesAbilityBonuses is set)
             foreach (var kv in subrace.AbilityBonus)
             {
                 if (racialBonuses.ContainsKey(kv.Key))
@@ -470,12 +471,24 @@ namespace Nemo
             }
 
             // Update the details panel
-            string bonuses = string.Join(", ", racialBonuses.Select(kv => $"+{kv.Value} {kv.Key}"));
+            string bonuses = racialBonuses.Count > 0
+                ? string.Join(", ", racialBonuses.Where(kv => kv.Value != 0).Select(kv => $"+{kv.Value} {kv.Key}"))
+                : "(player choice — see traits)";
 
             var filteredBaseTraits = baseRace.Traits
-                .Where(t => !t.Contains("Common +", StringComparison.OrdinalIgnoreCase) &&
-                            !t.Contains("Languages:", StringComparison.OrdinalIgnoreCase))
+                .Where(t => !t.TrimStart().StartsWith("Languages:", StringComparison.OrdinalIgnoreCase) &&
+                            !t.Contains("Common +", StringComparison.OrdinalIgnoreCase))
                 .ToList();
+
+            // When a SCAG tiefling variant replaces Infernal Legacy, omit the base Infernal Legacy line
+            bool replacesInfernalLegacy = race == "Tiefling" &&
+                (subraceName is "Devil's Tongue" or "Hellfire" or "Winged");
+            if (replacesInfernalLegacy)
+            {
+                filteredBaseTraits = filteredBaseTraits
+                    .Where(t => !t.StartsWith("Infernal Legacy", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
 
             txtRaceDetails.Text =
                 $"ABILITY SCORE INCREASE\n{bonuses}\n\n" +
@@ -4154,8 +4167,99 @@ namespace Nemo
             }
         }
 
+        /// <summary>
+        /// Fills the official 5e multi-page fillable character sheet PDF with the current character
+        /// (reverse of Load Character from PDF).
+        /// </summary>
+        private void ExportOfficialSheet_Click(object sender, RoutedEventArgs e)
+        {
+            AutoSaveCharacterToJson();
+
+            if (CurrentCharacter == null)
+            {
+                MessageBox.Show("Please save the character first (click Save Character).");
+                return;
+            }
+
+            if (CharacterSheetExporter.FindTemplatePath() == null)
+            {
+                MessageBox.Show(
+                    "Could not find the official sheet template (5E_CharacterSheet_Fillable.pdf).\n" +
+                    "Expected location: Templates\\ folder next to the application.",
+                    "Template Missing",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            string safeName = string.Join("_", (CurrentCharacter.Name ?? "Character")
+                .Split(System.IO.Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+            if (string.IsNullOrWhiteSpace(safeName)) safeName = "Character";
+
+            var saveDlg = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = $"{safeName}_5e_CharacterSheet.pdf",
+                Filter = "PDF Files (*.pdf)|*.pdf",
+                Title = "Export Official 5e Character Sheet",
+                DefaultExt = ".pdf"
+            };
+
+            if (saveDlg.ShowDialog() != true) return;
+
+            try
+            {
+                var extras = new CharacterSheetExporter.ExportExtras
+                {
+                    Skills = BuildFullSkillListForPDF(),
+                    SavingThrows = GetSavingThrows(),
+                    Weapons = GetFormattedEquippedWeapons()
+                        .Select(line =>
+                        {
+                            // "Name | Attack +X | Damage YdZ+N | ..."
+                            var parts = line.Split('|').Select(p => p.Trim()).ToArray();
+                            return new CharacterSheetExporter.WeaponAttackLine
+                            {
+                                Name = parts.Length > 0 ? parts[0] : "",
+                                AttackBonus = parts.Length > 1
+                                    ? parts[1].Replace("Attack", "", StringComparison.OrdinalIgnoreCase).Trim()
+                                    : "",
+                                Damage = parts.Length > 2
+                                    ? parts[2].Replace("Damage", "", StringComparison.OrdinalIgnoreCase).Trim()
+                                    : ""
+                            };
+                        }).ToList(),
+                    HitDice = GameData.ClassData.TryGetValue(CurrentCharacter.Class ?? "", out var cd)
+                        ? (cd.HitDie.StartsWith("1") ? cd.HitDie : "1" + cd.HitDie.TrimStart())
+                        : "1d8",
+                    Level1SpellSlots = (CurrentCharacter.Class ?? "") switch
+                    {
+                        "Paladin" or "Ranger" or "Fighter" or "Rogue" or "Monk" or "Barbarian" => 0,
+                        "Warlock" => 1,
+                        _ when cd?.Spellcasting == true => 2,
+                        _ => 0
+                    }
+                };
+
+                CharacterSheetExporter.ExportToFile(CurrentCharacter, saveDlg.FileName, extras);
+
+                MessageBox.Show(
+                    $"Official 5e character sheet exported!\n\n{saveDlg.FileName}\n\n" +
+                    "The PDF remains fillable so you can edit fields in any PDF reader.",
+                    "Export Complete");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error exporting official sheet:\n{ex.Message}", "Export Error");
+            }
+        }
+
+        // Legacy custom fillable builder kept for reference / future use (no longer wired to UI).
         private void ExportFillablePDF_Click(object sender, RoutedEventArgs e)
         {
+            ExportOfficialSheet_Click(sender, e);
+            return;
+
+#pragma warning disable CS0162
             // === Ensure we have the latest character data (same as regular PDF export) ===
             AutoSaveCharacterToJson();
 
@@ -5125,16 +5229,32 @@ namespace Nemo
         {
             try
             {
-                string loadPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "character.json");
-
-                if (!File.Exists(loadPath))
+                var dlg = new Microsoft.Win32.OpenFileDialog
                 {
-                    MessageBox.Show("No saved character found (character.json).", "Load Failed");
-                    return;
-                }
+                    Title = "Load Character",
+                    Filter = "Character Files (*.json;*.pdf)|*.json;*.pdf|Character JSON (*.json)|*.json|Character Sheet PDF (*.pdf)|*.pdf|All Files (*.*)|*.*",
+                    DefaultExt = ".json",
+                    CheckFileExists = true
+                };
 
-                string json = File.ReadAllText(loadPath);
-                CurrentCharacter = JsonSerializer.Deserialize<Character>(json);
+                if (dlg.ShowDialog() != true)
+                    return;
+
+                string path = dlg.FileName;
+                string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+                string? importNote = null;
+
+                if (ext == ".pdf")
+                {
+                    var (character, note) = CharacterSheetImporter.ImportFromPdf(path);
+                    CurrentCharacter = character;
+                    importNote = note;
+                }
+                else
+                {
+                    string json = File.ReadAllText(path);
+                    CurrentCharacter = JsonSerializer.Deserialize<Character>(json);
+                }
 
                 if (CurrentCharacter == null)
                 {
@@ -5142,39 +5262,215 @@ namespace Nemo
                     return;
                 }
 
-                // === Restore UI from CurrentCharacter ===
-                txtCharacterName.Text = CurrentCharacter.Name;
-                txtPlayerName.Text = CurrentCharacter.PlayerName;
+                ApplyCharacterToUI(fromPdf: ext == ".pdf");
 
-                if (!string.IsNullOrEmpty(CurrentCharacter.Race))
-                    cmbRace.SelectedItem = CurrentCharacter.Race;
+                string message = "Character loaded successfully!";
+                if (!string.IsNullOrWhiteSpace(importNote))
+                    message += "\n\n" + importNote;
 
-                if (!string.IsNullOrEmpty(CurrentCharacter.Background))
-                    cmbBackground.SelectedItem = CurrentCharacter.Background;
-
-                if (!string.IsNullOrEmpty(CurrentCharacter.Class))
-                    cmbClass.SelectedItem = CurrentCharacter.Class;
-
-                // Restore ability scores, skills, etc.
-                RestoreAbilityScores();
-                RestoreSkills();
-                RestoreSelectedFeat();
-                RestoreCantrips();
-                RestoreLevel1Spells();
-                RestoreEquipment();
-
-                UpdateStatDisplays();
-                UpdateSkillTabLabels();
-
-                if (cmbClass.SelectedItem is string className)
-                    UpdateSkillChoices(className);
-
-                MessageBox.Show("Character loaded successfully!", "Load Complete");
+                MessageBox.Show(message, "Load Complete");
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading character:\n{ex.Message}", "Load Error");
             }
+        }
+
+        /// <summary>
+        /// Pushes <see cref="CurrentCharacter"/> into the UI controls.
+        /// When <paramref name="fromPdf"/> is true, ability score bases are reverse-engineered
+        /// so that base + racial ≈ the PDF's final scores.
+        /// </summary>
+        private void ApplyCharacterToUI(bool fromPdf = false)
+        {
+            // Custom method allows free editing of base scores after import
+            if (rbCustom != null)
+                rbCustom.IsChecked = true;
+
+            txtCharacterName.Text = CurrentCharacter.Name ?? "";
+            txtPlayerName.Text = CurrentCharacter.PlayerName ?? "";
+
+            // Avatar
+            if (!string.IsNullOrEmpty(CurrentCharacter.AvatarBase64))
+            {
+                try
+                {
+                    avatarBase64 = CurrentCharacter.AvatarBase64;
+                    byte[] bytes = Convert.FromBase64String(avatarBase64);
+                    var img = new BitmapImage();
+                    using (var ms = new MemoryStream(bytes))
+                    {
+                        img.BeginInit();
+                        img.CacheOption = BitmapCacheOption.OnLoad;
+                        img.StreamSource = ms;
+                        img.EndInit();
+                        img.Freeze();
+                    }
+                    imgAvatar.Source = img;
+                    if (lblAvatarStatus != null)
+                        lblAvatarStatus.Text = "Avatar loaded ✓";
+                }
+                catch
+                {
+                    // ignore bad avatar data
+                }
+            }
+
+            // Race first (triggers racial bonuses / subrace list)
+            if (!string.IsNullOrEmpty(CurrentCharacter.Race))
+            {
+                // Match race case-insensitively against combo items
+                string? raceMatch = cmbRace.Items.Cast<object>()
+                    .Select(i => i?.ToString())
+                    .FirstOrDefault(r => r != null &&
+                        r.Equals(CurrentCharacter.Race, StringComparison.OrdinalIgnoreCase));
+
+                if (raceMatch != null)
+                    cmbRace.SelectedItem = raceMatch;
+            }
+
+            // Subrace after race populates the list
+            if (!string.IsNullOrEmpty(CurrentCharacter.Subrace) && cmbSubrace != null && cmbSubrace.Items.Count > 0)
+            {
+                string? subMatch = cmbSubrace.Items.Cast<object>()
+                    .Select(i => i?.ToString())
+                    .FirstOrDefault(s => s != null &&
+                        s.Equals(CurrentCharacter.Subrace, StringComparison.OrdinalIgnoreCase));
+
+                if (subMatch != null)
+                    cmbSubrace.SelectedItem = subMatch;
+            }
+
+            if (!string.IsNullOrEmpty(CurrentCharacter.Background))
+            {
+                string? bgMatch = cmbBackground.Items.Cast<object>()
+                    .Select(i => i?.ToString())
+                    .FirstOrDefault(b => b != null &&
+                        b.Equals(CurrentCharacter.Background, StringComparison.OrdinalIgnoreCase));
+
+                if (bgMatch != null)
+                    cmbBackground.SelectedItem = bgMatch;
+            }
+
+            if (!string.IsNullOrEmpty(CurrentCharacter.Class))
+            {
+                string? classMatch = cmbClass.Items.Cast<object>()
+                    .Select(i => i?.ToString())
+                    .FirstOrDefault(c => c != null &&
+                        c.Equals(CurrentCharacter.Class, StringComparison.OrdinalIgnoreCase));
+
+                if (classMatch != null)
+                    cmbClass.SelectedItem = classMatch;
+            }
+
+            // Subclass if present and combo is ready
+            if (!string.IsNullOrEmpty(CurrentCharacter.Subclass) && cmbSubclass != null && cmbSubclass.Items.Count > 0)
+            {
+                string? subcMatch = cmbSubclass.Items.Cast<object>()
+                    .Select(i => i?.ToString())
+                    .FirstOrDefault(s => s != null &&
+                        !s.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) &&
+                        s.Equals(CurrentCharacter.Subclass, StringComparison.OrdinalIgnoreCase));
+
+                if (subcMatch != null)
+                    cmbSubclass.SelectedItem = subcMatch;
+            }
+
+            // Ability scores — for PDF, reverse base so final ≈ PDF final after racial
+            if (fromPdf && CurrentCharacter.AbilityScores != null)
+            {
+                RestoreAbilityScoresFromFinals();
+            }
+            else
+            {
+                RestoreAbilityScores();
+            }
+
+            RestoreSkills();
+            RestoreSelectedFeat();
+            RestoreCantrips();
+            RestoreLevel1Spells();
+            RestoreEquipment();
+
+            // HP / AC / Initiative from imported values (after UpdateStatDisplays may overwrite HP)
+            UpdateStatDisplays();
+            UpdateSkillTabLabels();
+
+            // Re-apply imported HP/AC/initiative so PDF values win over recalculated ones
+            if (CurrentCharacter.HitPoints > 0 && txtHitPoints != null)
+                txtHitPoints.Text = CurrentCharacter.HitPoints.ToString();
+
+            if (CurrentCharacter.ArmorClass > 0 && txtBaseAC != null)
+            {
+                // Don't overwrite if equipped AC display is more informative; base AC from PDF is total
+                // Leave base AC calculation alone when possible; show equipped display if we have one
+            }
+
+            if (txtInitiative != null)
+            {
+                int init = CurrentCharacter.Initiative;
+                txtInitiative.Text = init >= 0 ? $"+{init}" : init.ToString();
+            }
+
+            if (cmbClass.SelectedItem is string className)
+                UpdateSkillChoices(className);
+
+            // High elf cantrip / race granted skill
+            if (!string.IsNullOrEmpty(CurrentCharacter.HighElfCantrip))
+                highElfCantrip = CurrentCharacter.HighElfCantrip;
+            if (!string.IsNullOrEmpty(CurrentCharacter.RaceGrantedSkill))
+                raceGrantedSkill = CurrentCharacter.RaceGrantedSkill;
+        }
+
+        /// <summary>
+        /// Sets base ability scores so that base + current racial (+ feat) ≈ the imported Final scores.
+        /// Used when loading from PDF (which only stores final totals).
+        /// </summary>
+        private void RestoreAbilityScoresFromFinals()
+        {
+            if (CurrentCharacter.AbilityScores == null) return;
+
+            void SetBase(string baseBoxName, string racialBoxName, int finalTarget)
+            {
+                var baseBox = this.FindName(baseBoxName) as TextBox;
+                var racialBox = this.FindName(racialBoxName) as TextBlock;
+                if (baseBox == null) return;
+
+                int racial = 0;
+                if (racialBox != null && int.TryParse(racialBox.Text.Replace("+", ""), out int r))
+                {
+                    if (racialBox.Text.TrimStart().StartsWith("-"))
+                        racial = -Math.Abs(r);
+                    else
+                        racial = r;
+                }
+
+                string abilityKey = baseBoxName switch
+                {
+                    "txtStrBase" => "Strength",
+                    "txtDexBase" => "Dexterity",
+                    "txtConBase" => "Constitution",
+                    "txtIntBase" => "Intelligence",
+                    "txtWisBase" => "Wisdom",
+                    "txtChaBase" => "Charisma",
+                    _ => ""
+                };
+                int feat = featStatBonuses.GetValueOrDefault(abilityKey, 0);
+
+                int baseVal = finalTarget - racial - feat;
+                // Keep within a sensible range for the UI
+                if (baseVal < 1) baseVal = 1;
+                if (baseVal > 30) baseVal = 30;
+                baseBox.Text = baseVal.ToString();
+            }
+
+            var scores = CurrentCharacter.AbilityScores;
+            SetBase("txtStrBase", "txtStrRacial", scores.Strength?.Final > 0 ? scores.Strength.Final : 10);
+            SetBase("txtDexBase", "txtDexRacial", scores.Dexterity?.Final > 0 ? scores.Dexterity.Final : 10);
+            SetBase("txtConBase", "txtConRacial", scores.Constitution?.Final > 0 ? scores.Constitution.Final : 10);
+            SetBase("txtIntBase", "txtIntRacial", scores.Intelligence?.Final > 0 ? scores.Intelligence.Final : 10);
+            SetBase("txtWisBase", "txtWisRacial", scores.Wisdom?.Final > 0 ? scores.Wisdom.Final : 10);
+            SetBase("txtChaBase", "txtChaRacial", scores.Charisma?.Final > 0 ? scores.Charisma.Final : 10);
         }
 
         private void UploadAvatar_Click(object sender, RoutedEventArgs e)
