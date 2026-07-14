@@ -2178,8 +2178,25 @@ public class Character
     public string Background { get; set; } = "";
     public string Class { get; set; } = "";
     public string Subclass { get; set; } = "";
+    /// <summary>
+    /// Total character level (sum of all class levels). For single-class, matches levels in <see cref="Class"/>.
+    /// </summary>
+    public int Level { get; set; } = 1;
+    /// <summary>
+    /// Multiclass support: each entry is one class with levels and optional subclass.
+    /// When empty, treat as single-class using <see cref="Class"/> / <see cref="Subclass"/> / <see cref="Level"/>.
+    /// </summary>
+    public List<Nemo.ClassLevelEntry> ClassLevels { get; set; } = new();
     public string SelectedFeat { get; set; } = "";
     public int Speed { get; set; } = 30;
+
+    /// <summary>How HP is calculated for levels after 1st (fixed average vs rolled).</summary>
+    public Nemo.HpGainMethod HpGainMethod { get; set; } = Nemo.HpGainMethod.FixedAverage;
+    /// <summary>
+    /// Raw hit-die rolls (before Con) for each level after 1st, in order gained.
+    /// Used when <see cref="HpGainMethod"/> is Rolled.
+    /// </summary>
+    public List<int> HitPointRolls { get; set; } = new();
 
     // === Ability Scores (Detailed) ===
     public AbilityScoreBlock AbilityScores { get; set; } = new AbilityScoreBlock();
@@ -2280,6 +2297,19 @@ public class ClassData
     public List<string> SavingThrowProficiencies { get; set; } = new();
     public List<string> ArmorProficiencies { get; set; } = new();
     public List<string> WeaponProficiencies { get; set; } = new();
+
+    /// <summary>Numeric hit die size (6, 8, 10, 12) derived from <see cref="HitDie"/> when possible.</summary>
+    public int HitDieSize
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(HitDie)) return 8;
+            int d = HitDie.IndexOf('d');
+            if (d >= 0 && int.TryParse(HitDie.AsSpan(d + 1), out int size) && size > 0)
+                return size;
+            return 8;
+        }
+    }
 }
 
 

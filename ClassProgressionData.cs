@@ -8,7 +8,7 @@ namespace Nemo
     /// Base-class feature progression (levels 1–20) for all PHB/official classes.
     /// Source: Player's Handbook, Tasha's optional features, Artificer (ERftLW/Tasha's).
     /// Reference: https://dnd5e.wikidot.com/ (e.g. /cleric, /fighter, …)
-    /// Subclass-specific features remain in <see cref="GameData.SubclassLevel1Features"/> (expand later).
+    /// Subclass-specific features: <see cref="GameData.SubclassProgression"/> / GetSubclassFeatures*.
     /// </summary>
     public static partial class GameData
     {

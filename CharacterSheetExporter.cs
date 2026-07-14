@@ -667,15 +667,24 @@ namespace Nemo
                 }
             }
 
-            if (!string.IsNullOrEmpty(c.Subclass) &&
-                GameData.SubclassLevel1Features.TryGetValue(c.Subclass, out var subFeats))
+            if (!string.IsNullOrEmpty(c.Subclass))
             {
-                sb.AppendLine($"— {c.Subclass} —");
-                foreach (var f in subFeats)
+                // Prefer full progression; fall back to legacy level-1-only table
+                var subFeats = GameData.GetSubclassProgression(c.Subclass);
+                if (subFeats.Count == 0 &&
+                    GameData.SubclassLevel1Features.TryGetValue(c.Subclass, out var legacy))
+                    subFeats = legacy;
+
+                if (subFeats.Count > 0)
                 {
-                    sb.AppendLine("• " + f.Name);
-                    if (!string.IsNullOrWhiteSpace(f.Description))
-                        sb.AppendLine("  " + f.Description);
+                    sb.AppendLine($"— {c.Subclass} —");
+                    foreach (var f in subFeats)
+                    {
+                        string label = f.Level > 0 ? $"(Lv {f.Level}) {f.Name}" : f.Name;
+                        sb.AppendLine("• " + label);
+                        if (!string.IsNullOrWhiteSpace(f.Description))
+                            sb.AppendLine("  " + f.Description);
+                    }
                 }
             }
 

@@ -669,7 +669,10 @@ namespace Nemo
 
             foreach (var f in filtered)
             {
-                sb.AppendLine($"• {f.Name}: {f.Description}");
+                if (f.Level > 0)
+                    sb.AppendLine($"• (Lv {f.Level}) {f.Name}: {f.Description}");
+                else
+                    sb.AppendLine($"• {f.Name}: {f.Description}");
             }
 
             sb.AppendLine();
@@ -854,52 +857,38 @@ namespace Nemo
                 extra.AppendLine($"\n\n=== {selectedSub.ToUpperInvariant()} ===");
             }
 
-            // Rich level-1 feature blocks (Cleric / Warlock / Sorcerer detailed data)
+            // Bonus proficiencies / 1st-level spell hints from legacy subclass tables
             if (className == "Cleric" && GameData.ClericSubclasses.TryGetValue(selectedSub, out var clericSub))
             {
-                extra.AppendLine($"\n=== {clericSub.Name.ToUpper()} FEATURES (Level 1) ===");
                 if (clericSub.AdditionalCantrips.Count > 0)
                     extra.AppendLine($"ADDITIONAL CANTRIPS: {string.Join(", ", clericSub.AdditionalCantrips)}");
-                if (clericSub.DomainSpells.Count > 0)
-                    extra.AppendLine($"DOMAIN SPELLS: {string.Join(", ", clericSub.DomainSpells)}");
                 if (clericSub.ArmorProficiencies.Count > 0)
                     extra.AppendLine($"ARMOR: {string.Join(", ", clericSub.ArmorProficiencies)}");
                 if (clericSub.WeaponProficiencies.Count > 0)
                     extra.AppendLine($"WEAPONS: {string.Join(", ", clericSub.WeaponProficiencies)}");
-
-                if (GameData.SubclassLevel1Features.TryGetValue(selectedSub, out var subFeats))
-                {
-                    extra.AppendLine();
-                    AppendDetailedFeatures(extra, subFeats, excludeNames: new[] { "Domain Spells" });
-                }
             }
             else if (className == "Warlock" && GameData.WarlockSubclasses.TryGetValue(selectedSub, out var warlockSub))
             {
-                extra.AppendLine($"\n=== {warlockSub.Name.ToUpper()} FEATURES (Level 1) ===");
-                if (warlockSub.DomainSpells.Count > 0)
-                    extra.AppendLine($"PATRON SPELLS: {string.Join(", ", warlockSub.DomainSpells)}");
                 if (warlockSub.ArmorProficiencies.Count > 0)
                     extra.AppendLine($"ARMOR: {string.Join(", ", warlockSub.ArmorProficiencies)}");
                 if (warlockSub.WeaponProficiencies.Count > 0)
                     extra.AppendLine($"WEAPONS: {string.Join(", ", warlockSub.WeaponProficiencies)}");
-
-                if (GameData.SubclassLevel1Features.TryGetValue(selectedSub, out var subFeats))
-                {
-                    extra.AppendLine();
-                    AppendDetailedFeatures(extra, subFeats, excludeNames: new[] { "Expanded Spell List" });
-                }
             }
             else if (className == "Sorcerer" && GameData.SorcererSubclasses.TryGetValue(selectedSub, out var sorcSub))
             {
-                extra.AppendLine($"\n=== {sorcSub.Name.ToUpper()} FEATURES (Level 1) ===");
                 if (sorcSub.AdditionalSpells.Count > 0)
-                    extra.AppendLine($"ORIGIN SPELLS: {string.Join(", ", sorcSub.AdditionalSpells)}");
+                    extra.AppendLine($"ORIGIN SPELLS (summary): {string.Join(", ", sorcSub.AdditionalSpells)}");
+            }
 
-                if (GameData.SubclassLevel1Features.TryGetValue(selectedSub, out var subFeats))
-                {
-                    extra.AppendLine();
-                    AppendDetailedFeatures(extra, subFeats);
-                }
+            // Full subclass level-up progression (all feature levels)
+            var progression = GameData.GetSubclassProgression(selectedSub);
+            if (progression.Count > 0)
+            {
+                AppendDetailedFeatures(extra, progression, $"\n=== {selectedSub.ToUpperInvariant()} LEVEL-UP FEATURES ===");
+            }
+            else if (GameData.SubclassLevel1Features.TryGetValue(selectedSub, out var legacySubFeats))
+            {
+                AppendDetailedFeatures(extra, legacySubFeats, $"\n=== {selectedSub.ToUpperInvariant()} FEATURES ===");
             }
 
             txtClassDetails.Text = baseClassDescription + extra.ToString();
@@ -2017,27 +2006,44 @@ namespace Nemo
                 return;
 
             int conMod = GetModifierFromText(txtConMod.Text);
+            string className = cmbClass.SelectedItem as string ?? "";
+            string subclass = cmbSubclass?.SelectedItem as string ?? "";
 
-            string className = cmbClass.SelectedItem as string;
+            // Builder is still level-1 focused; LevelUpCalculator supports higher levels when ClassLevels is set.
+            int level = CurrentCharacter?.Level > 0 ? CurrentCharacter.Level : 1;
+            var classLevels = CurrentCharacter?.ClassLevels != null && CurrentCharacter.ClassLevels.Count > 0
+                ? CurrentCharacter.ClassLevels
+                : new List<ClassLevelEntry> { new(className, Math.Max(1, level), subclass) };
 
-            int hitDie = className switch
-            {
-                "Wizard" or "Sorcerer" => 6,
-                "Cleric" or "Druid" or "Rogue" or "Bard" or "Warlock" or "Monk" => 8,
-                "Fighter" or "Paladin" or "Ranger" => 10,
-                "Barbarian" => 12,
-                _ => 8
-            };
-
-            int hp = hitDie + conMod;
-
-            // Hill Dwarf (Dwarven Toughness): +1 HP per level (applied to starting HP)
+            int extraHpPerLevel = 0;
+            // Hill Dwarf (Dwarven Toughness): +1 HP per level
             if (cmbSubrace?.SelectedItem is string subrace && subrace == "Hill Dwarf")
-            {
-                hp += 1;
-            }
+                extraHpPerLevel += 1;
+            // Draconic Resilience: +1 HP per sorcerer level — applied as flat per character level only when pure Draconic Sorcerer
+            if (className == "Sorcerer" &&
+                subclass.Contains("Draconic", StringComparison.OrdinalIgnoreCase))
+                extraHpPerLevel += 1;
 
-            txtHitPoints.Text = hp.ToString();
+            var method = CurrentCharacter?.HpGainMethod ?? HpGainMethod.FixedAverage;
+            var rolls = CurrentCharacter?.HitPointRolls;
+
+            var snap = LevelUpCalculator.Calculate(
+                classLevels,
+                conMod,
+                method,
+                rolls,
+                extraHpPerLevel);
+
+            txtHitPoints.Text = snap.HitPointMaximum.ToString();
+
+            // Keep derived character fields in sync when available
+            if (CurrentCharacter != null)
+            {
+                CurrentCharacter.HitPoints = snap.HitPointMaximum;
+                CurrentCharacter.ProficiencyBonus = snap.ProficiencyBonus;
+                if (CurrentCharacter.Level <= 0)
+                    CurrentCharacter.Level = snap.TotalCharacterLevel;
+            }
         }
 
         private void GenerateEquipmentChoices(string className)
@@ -4104,11 +4110,17 @@ namespace Nemo
 
                     y += 8;
 
-                    // === Subclass Features (for Cleric / Sorcerer / Warlock only) ===
-                    if (!string.IsNullOrWhiteSpace(subclassKey) &&
-                        !subclassKey.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) &&
-                        GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var subFeatures) &&
-                        subFeatures.Count > 0)
+                    // === Subclass Features (full level-up progression when available) ===
+                    var subFeatures = !string.IsNullOrWhiteSpace(subclassKey) &&
+                        !subclassKey.Contains("Requires Level", StringComparison.OrdinalIgnoreCase)
+                        ? GameData.GetSubclassProgression(subclassKey)
+                        : new List<ClassFeature>();
+                    if (subFeatures.Count == 0 &&
+                        !string.IsNullOrWhiteSpace(subclassKey) &&
+                        GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var legacySubFeatures))
+                        subFeatures = legacySubFeatures;
+
+                    if (subFeatures.Count > 0)
                     {
                         // Subheader using the subclass name
                         if (y > page.Height - 70)
@@ -4135,7 +4147,10 @@ namespace Nemo
                                 pageHeight = page.Height;
                             }
 
-                            gfx.DrawString($"• {feature.Name}", boldFont, XBrushes.Black, new XPoint(left + 10, y));
+                            string featName = feature.Level > 0
+                                ? $"(Lv {feature.Level}) {feature.Name}"
+                                : feature.Name;
+                            gfx.DrawString($"• {featName}", boldFont, XBrushes.Black, new XPoint(left + 10, y));
                             y += 13;
 
                             string desc = feature.Description;
@@ -4882,29 +4897,38 @@ namespace Nemo
                         }
                     }
 
-                    // Subclass features (with descriptions)
+                    // Subclass features (full progression with descriptions)
                     string subclassKey = CurrentCharacter.Subclass ?? "";
-                    if (!string.IsNullOrWhiteSpace(subclassKey) &&
-                        !subclassKey.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) &&
-                        GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var subFeats) &&
-                        subFeats.Count > 0)
+                    var subFeats = !string.IsNullOrWhiteSpace(subclassKey) &&
+                        !subclassKey.Contains("Requires Level", StringComparison.OrdinalIgnoreCase)
+                        ? GameData.GetSubclassProgression(subclassKey)
+                        : new List<ClassFeature>();
+                    if (subFeats.Count == 0 &&
+                        !string.IsNullOrWhiteSpace(subclassKey) &&
+                        GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var legacySubFeats))
+                        subFeats = legacySubFeats;
+
+                    if (subFeats.Count > 0)
                     {
                         classFeaturesText.AppendLine($"--- {subclassKey} ---");
 
-                        string subSlug = Slugify(subclassKey);
+                        string subSlug = !string.IsNullOrEmpty(subclassKey) ? Slugify(subclassKey) : "";
                         string subUrl = classKey.ToLowerInvariant() switch
                         {
                             "cleric" => $"https://dnd5e.wikidot.com/cleric:{subSlug}",
                             "sorcerer" => $"https://dnd5e.wikidot.com/sorcerer:{subSlug}",
                             "warlock" => $"https://dnd5e.wikidot.com/warlock:{subSlug}",
-                            _ => $"https://dnd5e.wikidot.com/{subSlug}"
+                            "barbarian" => $"https://dnd5e.wikidot.com/barbarian:{subSlug.Replace("path-of-the-", "").Replace("path-of-", "")}",
+                            "fighter" => $"https://dnd5e.wikidot.com/fighter:{subSlug}",
+                            _ => $"https://dnd5e.wikidot.com/{classKey.ToLowerInvariant()}"
                         };
                         classFeaturesText.AppendLine($"Source: {subUrl}");
                         classFeaturesText.AppendLine();
 
                         foreach (var f in subFeats)
                         {
-                            classFeaturesText.AppendLine($"• {f.Name}");
+                            string featLabel = f.Level > 0 ? $"(Lv {f.Level}) {f.Name}" : f.Name;
+                            classFeaturesText.AppendLine($"• {featLabel}");
 
                             string shortDesc = f.Description.Length > 280
                                 ? f.Description.Substring(0, 277) + "..."

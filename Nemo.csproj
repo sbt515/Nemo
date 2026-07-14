@@ -23,8 +23,14 @@
     <Compile Include="CharacterSheetImporter.cs" />
     <Compile Include="CharacterSheetExporter.cs" />
     <Compile Include="SpellSlotCalculator.cs" />
+    <Compile Include="LevelUpCalculator.cs" />
     <Compile Include="ClassProgressionData.cs" />
     <Compile Include="SubclassCatalog.cs" />
+    <Compile Include="SubclassProgressionData.cs" />
+    <Compile Include="SubclassProgressionBarbarianBardArtificer.cs" />
+    <Compile Include="SubclassProgressionFighterMonkPaladin.cs" />
+    <Compile Include="SubclassProgressionRangerRogueWizard.cs" />
+    <Compile Include="SubclassProgression_ClericDruidSorcererWarlock.cs" />
     <Page Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
   </ItemGroup>
