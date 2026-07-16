@@ -98,6 +98,17 @@ namespace Nemo
         /// <summary>Features gained from base class + subclass up to each class's level (not full text dump by default).</summary>
         public IReadOnlyDictionary<string, IReadOnlyList<ClassFeature>> ClassFeaturesByClass { get; init; }
             = new Dictionary<string, IReadOnlyList<ClassFeature>>();
+
+        /// <summary>
+        /// Per-class subclass spell grants (always prepared / always known / expanded list)
+        /// and prepared-spell capacity. Always-prepared spells do not count against capacity.
+        /// </summary>
+        public IReadOnlyList<SubclassSpellSnapshot> SubclassSpellsByClass { get; init; }
+            = Array.Empty<SubclassSpellSnapshot>();
+
+        /// <summary>Flat list of all always-prepared subclass spells across classes.</summary>
+        public IReadOnlyList<SubclassSpellGrant> AllAlwaysPreparedSpells { get; init; }
+            = Array.Empty<SubclassSpellGrant>();
     }
 
     /// <summary>
@@ -122,6 +133,31 @@ namespace Nemo
         public IReadOnlyList<ClassResourceValue> ResourcesBefore { get; init; } = Array.Empty<ClassResourceValue>();
         public MulticlassSpellSlotResult SpellSlotsAfter { get; init; } = new();
         public MulticlassSpellSlotResult SpellSlotsBefore { get; init; } = new();
+
+        /// <summary>
+        /// Subclass spells newly gained at this class level (domain/oath/etc.).
+        /// Always-prepared entries do not count against prepared capacity.
+        /// </summary>
+        public IReadOnlyList<SubclassSpellGrant> SubclassSpellsGained { get; init; }
+            = Array.Empty<SubclassSpellGrant>();
+
+        /// <summary>All always-prepared subclass spells after this level-up.</summary>
+        public IReadOnlyList<SubclassSpellGrant> AlwaysPreparedSpellsAfter { get; init; }
+            = Array.Empty<SubclassSpellGrant>();
+
+        /// <summary>All always-prepared subclass spells before this level-up.</summary>
+        public IReadOnlyList<SubclassSpellGrant> AlwaysPreparedSpellsBefore { get; init; }
+            = Array.Empty<SubclassSpellGrant>();
+
+        /// <summary>
+        /// How many spells the player may still choose to prepare after this level
+        /// (excludes free always-prepared subclass spells). Null if ability mod not provided
+        /// or class is not a prepared caster.
+        /// </summary>
+        public int? PreparedSpellCapacityAfter { get; init; }
+
+        /// <summary>Prepared capacity before this level-up (same notes as After).</summary>
+        public int? PreparedSpellCapacityBefore { get; init; }
     }
 
     /// <summary>
@@ -151,13 +187,22 @@ namespace Nemo
         /// Applied at every level including 1st.
         /// </param>
         /// <param name="includeFeatures">When true, attach base + subclass features up to each class level.</param>
+        /// <param name="spellcastingAbilityModifierForClass">
+        /// Optional: maps class name → spellcasting ability modifier for prepared-spell capacity.
+        /// When null, capacity is left unset on subclass-spell snapshots.
+        /// </param>
+        /// <param name="landCircleVariant">
+        /// Optional Circle of the Land terrain (Arctic, Forest, …) for land-circle spell grants.
+        /// </param>
         public static CharacterLevelSnapshot Calculate(
             IEnumerable<ClassLevelEntry> classLevels,
             int constitutionModifier,
             HpGainMethod hpMethod = HpGainMethod.FixedAverage,
             IReadOnlyList<int>? rolledHpResults = null,
             int extraHpPerLevel = 0,
-            bool includeFeatures = false)
+            bool includeFeatures = false,
+            Func<string, int>? spellcastingAbilityModifierForClass = null,
+            string? landCircleVariant = null)
         {
             var entries = Normalize(classLevels);
             int totalLevel = Math.Clamp(entries.Sum(e => e.Levels), 0, 20);
@@ -167,6 +212,8 @@ namespace Nemo
             var asi = GetAsiOrFeatChoices(entries);
             var resources = GetAllResources(entries);
             var slots = SpellSlotCalculator.Calculate(entries);
+            var subclassSpells = SubclassSpellCalculator.CalculateAll(
+                entries, spellcastingAbilityModifierForClass, landCircleVariant);
 
             Dictionary<string, IReadOnlyList<ClassFeature>> features = new(StringComparer.OrdinalIgnoreCase);
             if (includeFeatures)
@@ -196,7 +243,11 @@ namespace Nemo
                 ResourcesByClass = resources,
                 AllResources = resources.Values.SelectMany(x => x).ToList(),
                 SpellSlots = slots,
-                ClassFeaturesByClass = features
+                ClassFeaturesByClass = features,
+                SubclassSpellsByClass = subclassSpells,
+                AllAlwaysPreparedSpells = subclassSpells
+                    .SelectMany(s => s.AlwaysPreparedSpells)
+                    .ToList()
             };
         }
 
@@ -209,14 +260,20 @@ namespace Nemo
             HpGainMethod hpMethod = HpGainMethod.FixedAverage,
             IReadOnlyList<int>? rolledHpResults = null,
             int extraHpPerLevel = 0,
-            bool includeFeatures = false) =>
+            bool includeFeatures = false,
+            int? spellcastingAbilityModifier = null,
+            string? landCircleVariant = null) =>
             Calculate(
                 new[] { new ClassLevelEntry(className, classLevel, subclass) },
                 constitutionModifier,
                 hpMethod,
                 rolledHpResults,
                 extraHpPerLevel,
-                includeFeatures);
+                includeFeatures,
+                spellcastingAbilityModifier.HasValue
+                    ? _ => spellcastingAbilityModifier.Value
+                    : null,
+                landCircleVariant);
 
         /// <summary>
         /// Resolve class levels from a <see cref="Character"/> (multiclass list, or single Class/Level).
@@ -244,8 +301,15 @@ namespace Nemo
 
         /// <summary>
         /// What you gain when you take a specific class level (delta from previous class level).
-        /// Used by a future level-up UI: HP options, ASI/feat, new features, resource changes, spell slots.
+        /// Used by a future level-up UI: HP options, ASI/feat, new features, resource changes, spell slots,
+        /// and newly unlocked always-prepared subclass spells (domain/oath/etc.).
         /// </summary>
+        /// <param name="spellcastingAbilityModifier">
+        /// Optional spellcasting ability modifier for prepared-spell capacity on this class.
+        /// </param>
+        /// <param name="landCircleVariant">
+        /// Optional Circle of the Land terrain for land-circle spell grants.
+        /// </param>
         public static LevelUpDelta GetLevelUpDelta(
             string className,
             int newClassLevel,
@@ -254,7 +318,9 @@ namespace Nemo
             IEnumerable<ClassLevelEntry>? otherClassLevels = null,
             HpGainMethod hpMethod = HpGainMethod.FixedAverage,
             int? rolledDieResult = null,
-            int extraHpPerLevel = 0)
+            int extraHpPerLevel = 0,
+            int? spellcastingAbilityModifier = null,
+            string? landCircleVariant = null)
         {
             if (newClassLevel < 1 || newClassLevel > 20)
                 throw new ArgumentOutOfRangeException(nameof(newClassLevel));
@@ -294,6 +360,32 @@ namespace Nemo
             if (!string.IsNullOrWhiteSpace(subclass))
                 featuresAtLevel.AddRange(GameData.GetSubclassFeaturesAtLevel(subclass!, newClassLevel));
 
+            // Subclass always-prepared / always-known spells gained at this level
+            string? variant = (!string.IsNullOrWhiteSpace(subclass) &&
+                               subclass!.Contains("Land", StringComparison.OrdinalIgnoreCase))
+                ? landCircleVariant
+                : null;
+
+            var spellsGained = SubclassSpellCalculator.GetGrantsGainedAtLevel(
+                subclass, newClassLevel, kindFilter: null, variant);
+            var preparedBefore = prevClassLevel > 0
+                ? SubclassSpellCalculator.GetAlwaysPreparedSpells(subclass, prevClassLevel, variant)
+                : Array.Empty<SubclassSpellGrant>();
+            var preparedAfter = SubclassSpellCalculator.GetAlwaysPreparedSpells(
+                subclass, newClassLevel, variant);
+
+            int? prepCapBefore = null;
+            int? prepCapAfter = null;
+            if (spellcastingAbilityModifier.HasValue &&
+                SubclassSpellCalculator.IsPreparedCaster(className))
+            {
+                if (prevClassLevel > 0)
+                    prepCapBefore = SubclassSpellCalculator.GetPreparedSpellCapacity(
+                        className, prevClassLevel, spellcastingAbilityModifier.Value);
+                prepCapAfter = SubclassSpellCalculator.GetPreparedSpellCapacity(
+                    className, newClassLevel, spellcastingAbilityModifier.Value);
+            }
+
             int totalAfter = afterEntries.Sum(e => e.Levels);
             int totalBefore = Math.Max(0, totalAfter - 1);
 
@@ -315,7 +407,12 @@ namespace Nemo
                 ResourcesAfter = resourcesAfter,
                 ResourcesBefore = resourcesBefore,
                 SpellSlotsAfter = slotsAfter,
-                SpellSlotsBefore = slotsBefore
+                SpellSlotsBefore = slotsBefore,
+                SubclassSpellsGained = spellsGained,
+                AlwaysPreparedSpellsAfter = preparedAfter,
+                AlwaysPreparedSpellsBefore = preparedBefore,
+                PreparedSpellCapacityAfter = prepCapAfter,
+                PreparedSpellCapacityBefore = prepCapBefore
             };
         }
 

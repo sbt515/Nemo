@@ -23,6 +23,8 @@
     <Compile Include="CharacterSheetImporter.cs" />
     <Compile Include="CharacterSheetExporter.cs" />
     <Compile Include="SpellSlotCalculator.cs" />
+    <Compile Include="SpellCatalog.cs" />
+    <Compile Include="SubclassSpellCalculator.cs" />
     <Compile Include="LevelUpCalculator.cs" />
     <Compile Include="ClassProgressionData.cs" />
     <Compile Include="SubclassCatalog.cs" />
@@ -37,6 +39,9 @@
 
   <ItemGroup>
     <None Include="Templates\5E_CharacterSheet_Fillable.pdf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Data\spells.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

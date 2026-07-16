@@ -370,24 +370,7 @@ namespace Nemo
 
             if (spell != null)
             {
-                var details = new System.Text.StringBuilder();
-                details.AppendLine($"**{spell.Name}** (Cantrip)");
-                details.AppendLine($"School: {spell.School}");
-                details.AppendLine($"Casting Time: {spell.CastingTime}");
-                details.AppendLine($"Range: {spell.Range}");
-                details.AppendLine($"Components: {spell.Components}");
-                details.AppendLine($"Duration: {spell.Duration}" + (spell.IsConcentration ? " (Concentration)" : ""));
-
-                if (!string.IsNullOrWhiteSpace(spell.DamageDice))
-                    details.AppendLine($"Damage: {spell.DamageDice} {spell.DamageType}");
-
-                if (!string.IsNullOrWhiteSpace(spell.RollType))
-                    details.AppendLine($"Roll: {spell.RollType}");
-
-                details.AppendLine();
-                details.AppendLine(spell.Description);
-
-                txtHighElfCantripPreview.Text = details.ToString();
+                txtHighElfCantripPreview.Text = spell.FormatDetails(includeFullText: true);
                 pnlHighElfCantripPreview.Visibility = Visibility.Visible;
             }
 
@@ -2849,33 +2832,7 @@ namespace Nemo
                 return;
             }
 
-            var sb = new System.Text.StringBuilder();
-
-            // Determine if it's a cantrip or a leveled spell
-            bool isCantrip = spell is not LeveledSpell;
-            int level = (spell as LeveledSpell)?.Level ?? 0;
-
-            if (isCantrip)
-                sb.AppendLine($"**{spell.Name}** (Cantrip)");
-            else
-                sb.AppendLine($"**{spell.Name}** (Level {level})");
-
-            sb.AppendLine($"School: {spell.School}");
-            sb.AppendLine($"Casting Time: {spell.CastingTime}");
-            sb.AppendLine($"Range: {spell.Range}");
-            sb.AppendLine($"Components: {spell.Components}");
-            sb.AppendLine($"Duration: {spell.Duration}" + (spell.IsConcentration ? " (Concentration)" : ""));
-
-            if (!string.IsNullOrWhiteSpace(spell.DamageDice))
-                sb.AppendLine($"Dice: {spell.DamageDice} {spell.DamageType}");
-
-            if (!string.IsNullOrWhiteSpace(spell.RollType))
-                sb.AppendLine($"Roll: {spell.RollType}");
-
-            sb.AppendLine();
-            sb.AppendLine(spell.Description);
-
-            txtFeatSpellDetails.Text = sb.ToString();
+            txtFeatSpellDetails.Text = spell.FormatDetails(includeFullText: true);
             brdFeatSpellPreview.Visibility = Visibility.Visible;
         }
 
@@ -3254,26 +3211,7 @@ namespace Nemo
         {
             if (dgCantrips.SelectedItem is SelectableSpell selectedSpell && selectedSpell.FullSpell != null)
             {
-                var spell = selectedSpell.FullSpell;
-
-                var details = new System.Text.StringBuilder();
-                details.AppendLine($"**{spell.Name}** (Cantrip)");
-                details.AppendLine($"School: {spell.School}");
-                details.AppendLine($"Casting Time: {spell.CastingTime}");
-                details.AppendLine($"Range: {spell.Range}");
-                details.AppendLine($"Components: {spell.Components}");
-                details.AppendLine($"Duration: {spell.Duration}" + (spell.IsConcentration ? " (Concentration)" : ""));
-
-                if (!string.IsNullOrWhiteSpace(spell.DamageDice))
-                    details.AppendLine($"Damage: {spell.DamageDice} {spell.DamageType}");
-
-                if (!string.IsNullOrWhiteSpace(spell.RollType))
-                    details.AppendLine($"Roll: {spell.RollType}");
-
-                details.AppendLine();
-                details.AppendLine(spell.Description);
-
-                txtCantripPreview.Text = details.ToString();
+                txtCantripPreview.Text = selectedSpell.FullSpell.FormatDetails(includeFullText: true);
                 pnlCantripPreview.Visibility = Visibility.Visible;
             }
             else
@@ -3381,24 +3319,7 @@ namespace Nemo
         {
             if (dgSpells1.SelectedItem is SelectableSpell selectedSpell && selectedSpell.FullSpell != null)
             {
-                var spell = selectedSpell.FullSpell;
-                int level = (spell as LeveledSpell)?.Level ?? 0;
-
-                var details = new System.Text.StringBuilder();
-                details.AppendLine($"**{spell.Name}** (Level {level})");
-                details.AppendLine($"School: {spell.School}");
-                details.AppendLine($"Casting Time: {spell.CastingTime}");
-                details.AppendLine($"Range: {spell.Range}");
-                details.AppendLine($"Components: {spell.Components}");
-                details.AppendLine($"Duration: {spell.Duration}" + (spell.IsConcentration ? " (Concentration)" : ""));
-
-                if (!string.IsNullOrWhiteSpace(spell.DamageDice))
-                    details.AppendLine($"Dice: {spell.DamageDice} {spell.DamageType}");
-
-                details.AppendLine();
-                details.AppendLine(spell.Description);
-
-                txtCantripPreview.Text = details.ToString();
+                txtCantripPreview.Text = selectedSpell.FullSpell.FormatDetails(includeFullText: true);
                 pnlCantripPreview.Visibility = Visibility.Visible;
             }
             else

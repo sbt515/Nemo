@@ -2061,94 +2061,62 @@ namespace Nemo
         }
 
 
-        // ==================== MASTER CANTRIP LIST (Complete - 50+ Cantrips) ====================
-        public static readonly List<Spell> AllCantrips = new()
-{
-    // === CLERIC ===
-    new Spell { Name = "Guidance", School = "Divination", CastingTime = "Action", Range = "Touch", Components = "V, S", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "1d4", RollType = "None", Description = "You touch one willing creature. Once before the spell ends, the target can roll a d4 and add the number rolled to one ability check of its choice.", Classes = new() { "Cleric", "Druid" } },
-    new Spell { Name = "Light", School = "Evocation", CastingTime = "Action", Range = "Touch", Components = "V, M (a firefly or phosphorescent moss)", Duration = "1 hour", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You touch one object that is no larger than 10 feet in any dimension. Until the spell ends, the object sheds bright light in a 20-foot radius and dim light for an additional 20 feet.", Classes = new() { "Cleric", "Bard", "Druid", "Sorcerer", "Wizard" } },
-    new Spell { Name = "Mending", School = "Transmutation", CastingTime = "1 minute", Range = "Touch", Components = "V, S, M (two lodestones)", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "This spell repairs a single break or tear in an object you touch.", Classes = new() { "Cleric", "Bard", "Druid", "Sorcerer", "Wizard", "Artificer" } },
-    new Spell { Name = "Resistance", School = "Abjuration", CastingTime = "Action", Range = "Touch", Components = "V, S, M (a miniature cloak)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "You touch one willing creature. Once before the spell ends, the target can roll a d4 and add the number rolled to one saving throw of its choice.", Classes = new() { "Cleric", "Druid" } },
-    new Spell { Name = "Sacred Flame", School = "Evocation", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Radiant", DamageDice = "1d8", RollType = "Dex Save", Description = "Flame-like radiance descends on a creature that you can see within range. The target must succeed on a Dexterity saving throw or take 1d8 radiant damage.", Classes = new() { "Cleric" } },
-    new Spell { Name = "Spare the Dying", School = "Necromancy", CastingTime = "Action", Range = "Touch", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You touch a living creature that has 0 hit points. The creature becomes stable.", Classes = new() { "Cleric", "Druid", "Warlock" } },
-    new Spell { Name = "Thaumaturgy", School = "Transmutation", CastingTime = "Action", Range = "30 ft", Components = "V", Duration = "Up to 1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You manifest a minor wonder, a sign of supernatural power, within range.", Classes = new() { "Cleric" } },
-    new Spell { Name = "Toll the Dead", School = "Necromancy", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Necrotic", DamageDice = "1d8 or 1d12", RollType = "Wis Save", Description = "You point at one creature you can see within range, and the sound of a dolorous bell fills the air around it for a moment.", Classes = new() { "Cleric", "Warlock", "Wizard" } },
-    new Spell { Name = "Word of Radiance", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "V, M (a holy symbol)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Radiant", DamageDice = "1d6", RollType = "Con Save", Description = "You utter a divine word, and burning radiance erupts from you.", Classes = new() { "Cleric" } },
+        // ==================== SPELL DATABASE (original 5e via dnd5e.wikidot.com) ====================
+        // Full text, school, casting time, range, components, duration, roll type, damage dice,
+        // upcast rules. Loaded from Data/spells.json — regenerate with tools/fetch_wikidot_spells.py.
 
-    // === WIZARD / SORCERER / WARLOCK ===
-    new Spell { Name = "Acid Splash", School = "Conjuration", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Acid", DamageDice = "1d6", RollType = "Dex Save", Description = "You hurl a bubble of acid.", Classes = new() { "Wizard", "Sorcerer", "Artificer" } },
-    new Spell { Name = "Blade Ward", School = "Abjuration", CastingTime = "Action", Range = "Self", Components = "V, S", Duration = "1 round", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You extend your hand and trace a sigil of warding in the air.", Classes = new() { "Wizard", "Sorcerer", "Warlock", "Bard" } },
-    new Spell { Name = "Booming Blade", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "V, M (a melee weapon worth at least 1 sp)", Duration = "1 round", IsConcentration = false, DamageType = "Thunder", DamageDice = "1d8", RollType = "Spell Attack", Description = "You brandish the weapon used in the spell’s casting and make a melee attack with it against one creature within 5 feet of you.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
-    new Spell { Name = "Chill Touch", School = "Necromancy", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Necrotic", DamageDice = "1d8", RollType = "Spell Attack", Description = "You create a ghostly, skeletal hand in the space of a creature within range.", Classes = new() { "Sorcerer", "Warlock", "Wizard" } },
-    new Spell { Name = "Create Bonfire", School = "Conjuration", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "Fire", DamageDice = "1d8", RollType = "Dex Save", Description = "You create a bonfire on ground that you can see within range.", Classes = new() { "Druid", "Sorcerer", "Wizard", "Warlock" } },
-    new Spell { Name = "Dancing Lights", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S, M (a bit of phosphorus or wychwood, or a glowworm)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "You create up to four torch-sized lights within range.", Classes = new() { "Bard", "Sorcerer", "Wizard" } },
-    new Spell { Name = "Eldritch Blast", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Force", DamageDice = "1d10", RollType = "Spell Attack", Description = "A beam of crackling energy streaks toward a creature within range.", Classes = new() { "Warlock" } },
-    new Spell { Name = "Fire Bolt", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Fire", DamageDice = "1d10", RollType = "Spell Attack", Description = "You hurl a mote of fire at a creature or object within range.", Classes = new() { "Wizard", "Sorcerer" } },
-    new Spell { Name = "Frostbite", School = "Evocation", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Cold", DamageDice = "1d6", RollType = "Con Save", Description = "You cause numbing frost to form on one creature that you can see within range.", Classes = new() { "Druid", "Sorcerer", "Wizard" } },
-    new Spell { Name = "Green-Flame Blade", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "V, M (a melee weapon worth at least 1 sp)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Fire", DamageDice = "1d8", RollType = "Spell Attack", Description = "You brandish the weapon used in the spell’s casting and make a melee attack with it against one creature within 5 feet of you.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
-    new Spell { Name = "Gust", School = "Transmutation", CastingTime = "Action", Range = "30 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "Str Save", Description = "You seize the air and compel it to create one of the following effects at a point you can see within range.", Classes = new() { "Druid", "Sorcerer", "Wizard" } },
-    new Spell { Name = "Infestation", School = "Conjuration", CastingTime = "Action", Range = "30 ft", Components = "V, S, M (a living flea)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Poison", DamageDice = "1d6", RollType = "Con Save", Description = "You cause a cloud of mites, fleas, and other parasites to appear momentarily on one creature you can see within range.", Classes = new() { "Druid", "Sorcerer", "Warlock", "Wizard" } },
-    new Spell { Name = "Lightning Lure", School = "Evocation", CastingTime = "Action", Range = "15 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "Lightning", DamageDice = "1d8", RollType = "Str Save", Description = "You create a lash of lightning energy that strikes at one creature of your choice that you can see within 15 feet of you.", Classes = new() { "Sorcerer", "Wizard", "Warlock" } },
-    new Spell { Name = "Mage Hand", School = "Conjuration", CastingTime = "Action", Range = "30 ft", Components = "V, S", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "A spectral, floating hand appears at a point you choose within range.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
-    new Spell { Name = "Minor Illusion", School = "Illusion", CastingTime = "Action", Range = "30 ft", Components = "S, M (a bit of fleece)", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You create a sound or an image of an object within range that lasts for the duration.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
-    new Spell { Name = "Poison Spray", School = "Conjuration", CastingTime = "Action", Range = "10 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Poison", DamageDice = "1d12", RollType = "Con Save", Description = "You extend your hand toward a creature you can see within range and project a puff of noxious gas from your palm.", Classes = new() { "Druid", "Sorcerer", "Warlock", "Wizard" } },
-    new Spell { Name = "Prestidigitation", School = "Transmutation", CastingTime = "Action", Range = "10 ft", Components = "V, S", Duration = "Up to 1 hour", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "This spell is a minor magical trick that novice spellcasters use for practice.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
-    new Spell { Name = "Ray of Frost", School = "Evocation", CastingTime = "Action", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Cold", DamageDice = "1d8", RollType = "Spell Attack", Description = "A frigid beam of blue-white light streaks toward a creature within range.", Classes = new() { "Wizard", "Sorcerer" } },
-    new Spell { Name = "Shocking Grasp", School = "Evocation", CastingTime = "Action", Range = "Touch", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Lightning", DamageDice = "1d8", RollType = "Spell Attack", Description = "Lightning springs from your hand to deliver a shock to a creature you try to touch.", Classes = new() { "Wizard", "Sorcerer" } },
-    new Spell { Name = "Sword Burst", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "Force", DamageDice = "1d6", RollType = "Dex Save", Description = "You create a momentary circle of spectral blades that sweep around you.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
-    new Spell { Name = "Thunderclap", School = "Evocation", CastingTime = "Action", Range = "5 ft", Components = "S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Thunder", DamageDice = "1d6", RollType = "Con Save", Description = "You create a burst of thunderous sound that can be heard up to 100 feet away.", Classes = new() { "Bard", "Druid", "Sorcerer", "Wizard", "Warlock" } },
-    new Spell { Name = "True Strike", School = "Divination", CastingTime = "Action", Range = "30 ft", Components = "S", Duration = "Concentration, up to 1 round", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "You extend your hand and point a finger at a target in range. Your magic grants you a brief insight into the target's defenses.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
+        /// <summary>Every SRD spell (cantrips–9th). Prefer this over level-specific lists.</summary>
+        public static System.Collections.Generic.IReadOnlyList<Spell> AllSpells => Nemo.SpellCatalog.All;
 
-    // === DRUID ===
-    new Spell { Name = "Druidcraft", School = "Transmutation", CastingTime = "Action", Range = "30 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "Whispering to the spirits of nature, you create one of several minor effects within range.", Classes = new() { "Druid" } },
-    new Spell { Name = "Produce Flame", School = "Conjuration", CastingTime = "Action", Range = "Self (30 ft)", Components = "V, S", Duration = "10 minutes", IsConcentration = false, DamageType = "Fire", DamageDice = "1d8", RollType = "Spell Attack", Description = "A flickering flame appears in your hand.", Classes = new() { "Druid" } },
-    new Spell { Name = "Shillelagh", School = "Transmutation", CastingTime = "Bonus Action", Range = "Touch", Components = "V, S, M (mistletoe, a shamrock leaf, and a club or quarterstaff)", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "The wood of a club or quarterstaff you are holding is imbued with nature's power.", Classes = new() { "Druid" } },
-    new Spell { Name = "Thorn Whip", School = "Transmutation", CastingTime = "Action", Range = "30 ft", Components = "V, S, M (the stem of a plant with thorns)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Piercing", DamageDice = "1d6", RollType = "Spell Attack", Description = "You create a long, vine-like whip covered in thorns that lashes out at your command toward a creature in range.", Classes = new() { "Druid" } },
+        /// <summary>Cantrips from the spell catalog.</summary>
+        public static System.Collections.Generic.List<Spell> AllCantrips => Nemo.SpellCatalog.Cantrips.ToList();
 
-    // === BARD ===
-    new Spell { Name = "Friends", School = "Enchantment", CastingTime = "Action", Range = "Self", Components = "S, M (a small amount of makeup applied to the face as this spell is cast)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "For the duration, you have advantage on all Charisma checks directed at one creature of your choice that isn't hostile toward you.", Classes = new() { "Bard", "Sorcerer", "Warlock", "Wizard" } },
-    new Spell { Name = "Vicious Mockery", School = "Enchantment", CastingTime = "Action", Range = "60 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "Psychic", DamageDice = "1d4", RollType = "Wis Save", Description = "You unleash a string of insults laced with subtle enchantments at a creature you can see within range.", Classes = new() { "Bard" } },
-};
+        /// <summary>1st-level spells (as LeveledSpell for existing UI).</summary>
+        public static System.Collections.Generic.List<LeveledSpell> All1stLevelSpells =>
+            Nemo.SpellCatalog.Level1.Select(AsLeveled).ToList();
 
-        // ==================== 1ST LEVEL SPELLS ====================
-        public static readonly List<LeveledSpell> All1stLevelSpells = new()
-{
-    // === CLERIC / PALADIN ===
-    new LeveledSpell { Level = 1, Name = "Bless", School = "Enchantment", CastingTime = "Action", Range = "30 ft", Components = "V, S, M (a sprinkling of holy water)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "You bless up to three creatures of your choice within range. Whenever a target makes an attack roll or a saving throw before the spell ends, the target can roll a d4 and add the number rolled to the attack roll or saving throw.", Classes = new() { "Cleric", "Paladin" } },
-    new LeveledSpell { Level = 1, Name = "Cure Wounds", School = "Evocation", CastingTime = "Action", Range = "Touch", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "1d8 + mod", RollType = "Healing", Description = "A creature you touch regains hit points equal to 1d8 + your spellcasting ability modifier.", Classes = new() { "Cleric", "Druid", "Bard", "Paladin", "Ranger", "Artificer" } },
-    new LeveledSpell { Level = 1, Name = "Healing Word", School = "Evocation", CastingTime = "Bonus Action", Range = "60 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "1d4 + mod", RollType = "Healing", Description = "A creature of your choice that you can see within range regains hit points equal to 1d4 + your spellcasting ability modifier.", Classes = new() { "Cleric", "Druid", "Bard" } },
-    new LeveledSpell { Level = 1, Name = "Guiding Bolt", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "1 round", IsConcentration = false, DamageType = "Radiant", DamageDice = "4d6", RollType = "Spell Attack", Description = "A flash of light streaks toward a creature of your choice within range. Make a ranged spell attack against the target.", Classes = new() { "Cleric" } },
-    new LeveledSpell { Level = 1, Name = "Shield of Faith", School = "Abjuration", CastingTime = "Bonus Action", Range = "60 ft", Components = "V, S, M (a small parchment with a holy text)", Duration = "Concentration, up to 10 minutes", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "None", Description = "A shimmering field appears and surrounds a creature of your choice within range, granting it a +2 bonus to AC for the duration.", Classes = new() { "Cleric", "Paladin" } },
+        /// <summary>Spells of a given level (0–9).</summary>
+        public static System.Collections.Generic.List<Spell> GetSpellsAtLevel(int level) =>
+            Nemo.SpellCatalog.GetByLevel(level).ToList();
 
-    // === WIZARD / SORCERER ===
-    new LeveledSpell { Level = 1, Name = "Magic Missile", School = "Evocation", CastingTime = "Action", Range = "120 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Force", DamageDice = "3d4 + 3", RollType = "Automatic Hit", Description = "You create three glowing darts of magical force. Each dart hits a creature of your choice that you can see within range.", Classes = new() { "Wizard", "Sorcerer" } },
-    new LeveledSpell { Level = 1, Name = "Shield", School = "Abjuration", CastingTime = "Reaction", Range = "Self", Components = "V, S", Duration = "1 round", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "An invisible barrier of magical force appears and protects you. Until the start of your next turn, you have a +5 bonus to AC, including against the triggering attack, and you take no damage from magic missile.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
-    new LeveledSpell { Level = 1, Name = "Mage Armor", School = "Abjuration", CastingTime = "Action", Range = "Touch", Components = "V, S, M (a piece of cured leather)", Duration = "8 hours", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You touch a willing creature who isn’t wearing armor. Until the spell ends, the target’s base AC becomes 13 + its Dexterity modifier.", Classes = new() { "Wizard", "Sorcerer", "Bard" } },
-    new LeveledSpell { Level = 1, Name = "Burning Hands", School = "Evocation", CastingTime = "Action", Range = "Self (15-ft cone)", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Fire", DamageDice = "3d6", RollType = "Dex Save", Description = "As you hold your hands with thumbs touching and fingers spread, a thin sheet of flames shoots forth from your outstretched fingertips.", Classes = new() { "Wizard", "Sorcerer", "Warlock" } },
-    new LeveledSpell { Level = 1, Name = "Chromatic Orb", School = "Evocation", CastingTime = "Action", Range = "90 ft", Components = "V, S, M (a diamond worth at least 50 gp)", Duration = "Instantaneous", IsConcentration = false, DamageType = "Varies", DamageDice = "3d8", RollType = "Spell Attack", Description = "You hurl a 4-inch-diameter sphere of energy at a creature that you can see within range.", Classes = new() { "Wizard", "Sorcerer" } },
+        public static Spell? FindSpell(string name) => Nemo.SpellCatalog.Find(name);
 
-    // === DRUID / RANGER ===
-    new LeveledSpell { Level = 1, Name = "Entangle", School = "Conjuration", CastingTime = "Action", Range = "90 ft", Components = "V, S", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "Str Save", Description = "Grasping weeds and vines sprout from the ground in a 20-foot square starting from a point within range.", Classes = new() { "Druid", "Ranger" } },
-    new LeveledSpell { Level = 1, Name = "Faerie Fire", School = "Evocation", CastingTime = "Action", Range = "60 ft", Components = "V", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "Dex Save", Description = "Each object in a 20-foot cube within range is outlined in blue, green, or violet light.", Classes = new() { "Druid", "Bard" } },
-    new LeveledSpell { Level = 1, Name = "Thunderwave", School = "Evocation", CastingTime = "Action", Range = "Self (15-ft cube)", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Thunder", DamageDice = "2d8", RollType = "Con Save", Description = "A wave of thunderous force sweeps out from you.", Classes = new() { "Druid", "Bard", "Sorcerer", "Wizard" } },
-    new LeveledSpell { Level = 1, Name = "Goodberry", School = "Transmutation", CastingTime = "Action", Range = "Touch", Components = "V, S, M (a sprig of mistletoe)", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "Up to ten berries appear in your hand and are infused with magic for the duration.", Classes = new() { "Druid", "Ranger" } },
-    new LeveledSpell { Level = 1, Name = "Hunter's Mark", School = "Divination", CastingTime = "Bonus Action", Range = "90 ft", Components = "V", Duration = "Concentration, up to 1 hour", IsConcentration = true, DamageType = "", DamageDice = "+1d6", RollType = "None", Description = "You choose a creature you can see within range and mystically mark it as your quarry.", Classes = new() { "Ranger" } },
-
-    // === BARD ===
-    new LeveledSpell { Level = 1, Name = "Dissonant Whispers", School = "Enchantment", CastingTime = "Action", Range = "60 ft", Components = "V", Duration = "Instantaneous", IsConcentration = false, DamageType = "Psychic", DamageDice = "3d6", RollType = "Wis Save", Description = "You whisper a discordant melody that only one creature of your choice within range can hear.", Classes = new() { "Bard" } },
-    new LeveledSpell { Level = 1, Name = "Tasha's Hideous Laughter", School = "Enchantment", CastingTime = "Action", Range = "30 ft", Components = "V, S, M (tiny tarts and a feather)", Duration = "Concentration, up to 1 minute", IsConcentration = true, DamageType = "", DamageDice = "", RollType = "Wis Save", Description = "A creature of your choice that you can see within range perceives everything as hilariously funny.", Classes = new() { "Bard", "Wizard" } },
-    new LeveledSpell { Level = 1, Name = "Sleep", School = "Enchantment", CastingTime = "Action", Range = "90 ft", Components = "V, S, M (a pinch of fine sand, rose petals, or a cricket)", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "This spell sends creatures into a magical slumber.", Classes = new() { "Bard", "Sorcerer", "Wizard" } },
-
-    // === WARLOCK ===
-    new LeveledSpell { Level = 1, Name = "Hex", School = "Enchantment", CastingTime = "Bonus Action", Range = "90 ft", Components = "V, S, M (the petrified eye of a newt)", Duration = "Concentration, up to 1 hour", IsConcentration = true, DamageType = "Necrotic", DamageDice = "+1d6", RollType = "None", Description = "You place a curse on a creature that you can see within range.", Classes = new() { "Warlock" } },
-    new LeveledSpell { Level = 1, Name = "Hellish Rebuke", School = "Evocation", CastingTime = "Reaction", Range = "60 ft", Components = "V, S", Duration = "Instantaneous", IsConcentration = false, DamageType = "Fire", DamageDice = "2d10", RollType = "Dex Save", Description = "You point your finger, and the creature that damaged you is momentarily surrounded by hellish flames.", Classes = new() { "Warlock" } },
-    new LeveledSpell { Level = 1, Name = "Armor of Agathys", School = "Abjuration", CastingTime = "Action", Range = "Self", Components = "V, S, M (a cup of water)", Duration = "1 hour", IsConcentration = false, DamageType = "Cold", DamageDice = "5", RollType = "None", Description = "A protective magical force surrounds you, manifesting as a spectral frost that covers you and your gear.", Classes = new() { "Warlock" } },
-
-    // === WIZARD ===
-    new LeveledSpell { Level = 1, Name = "Find Familiar", School = "Conjuration", CastingTime = "1 hour", Range = "10 ft", Components = "V, S, M (10 gp worth of charcoal, incense, and herbs)", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You gain the service of a familiar, a spirit that takes an animal form you choose.", Classes = new() { "Wizard" } },
-    new LeveledSpell { Level = 1, Name = "Grease", School = "Conjuration", CastingTime = "Action", Range = "60 ft", Components = "V, S, M (a bit of pork rind or butter)", Duration = "1 minute", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "Dex Save", Description = "Slick grease covers the ground in a 10-foot square centered on a point within range.", Classes = new() { "Wizard" } },
-    new LeveledSpell { Level = 1, Name = "Identify", School = "Divination", CastingTime = "1 minute", Range = "Touch", Components = "V, S, M (a pearl worth at least 100 gp and an owl feather)", Duration = "Instantaneous", IsConcentration = false, DamageType = "", DamageDice = "", RollType = "None", Description = "You choose one object that you must touch throughout the casting of the spell.", Classes = new() { "Bard", "Wizard", "Artificer" } },
-};
+        private static LeveledSpell AsLeveled(Spell s) => new()
+        {
+            Name = s.Name,
+            Level = s.Level,
+            School = s.School,
+            CastingTime = s.CastingTime,
+            Range = s.Range,
+            Components = s.Components,
+            Material = s.Material,
+            Duration = s.Duration,
+            IsConcentration = s.IsConcentration,
+            IsRitual = s.IsRitual,
+            DamageType = s.DamageType,
+            DamageDice = s.DamageDice,
+            RollType = s.RollType,
+            SaveAbility = s.SaveAbility,
+            DcSuccess = s.DcSuccess,
+            AttackType = s.AttackType,
+            Description = s.Description,
+            FullDescription = s.FullDescription,
+            HigherLevel = s.HigherLevel,
+            CanUpcast = s.CanUpcast,
+            UpcastIncrement = s.UpcastIncrement,
+            DamageAtSlotLevel = s.DamageAtSlotLevel != null
+                ? new System.Collections.Generic.Dictionary<string, string>(s.DamageAtSlotLevel)
+                : new System.Collections.Generic.Dictionary<string, string>(),
+            DamageAtCharacterLevel = s.DamageAtCharacterLevel != null
+                ? new System.Collections.Generic.Dictionary<string, string>(s.DamageAtCharacterLevel)
+                : new System.Collections.Generic.Dictionary<string, string>(),
+            HealAtSlotLevel = s.HealAtSlotLevel != null
+                ? new System.Collections.Generic.Dictionary<string, string>(s.HealAtSlotLevel)
+                : new System.Collections.Generic.Dictionary<string, string>(),
+            AreaOfEffect = s.AreaOfEffect,
+            Classes = s.Classes != null ? new System.Collections.Generic.List<string>(s.Classes) : new System.Collections.Generic.List<string>(),
+            Source = s.Source
+        };
 
     }
 }
@@ -2470,28 +2438,130 @@ public class Feat : INotifyPropertyChanged
 public class Spell
 {
     public string Name { get; set; } = "";
+    /// <summary>0 = cantrip, 1–9 = leveled spell.</summary>
+    public int Level { get; set; } = 0;
     public string School { get; set; } = "";
     public string CastingTime { get; set; } = "";
     public string Range { get; set; } = "";
     public string Components { get; set; } = "";
+    /// <summary>Material component detail (when Components includes M).</summary>
+    public string Material { get; set; } = "";
     public string Duration { get; set; } = "";
     public bool IsConcentration { get; set; } = false;
+    public bool IsRitual { get; set; } = false;
     public string DamageType { get; set; } = "";
+    /// <summary>Base damage/healing dice at the spell's minimum level (e.g. "8d6", "1d8 + MOD").</summary>
     public string DamageDice { get; set; } = "";
+    /// <summary>e.g. "Dex Save", "Ranged Spell Attack", "Healing", "None".</summary>
     public string RollType { get; set; } = "";
+    /// <summary>Save ability when RollType is a save (Str/Dex/Con/Int/Wis/Cha).</summary>
+    public string SaveAbility { get; set; } = "";
+    /// <summary>What happens on a successful save (e.g. "half", "none").</summary>
+    public string DcSuccess { get; set; } = "";
+    /// <summary>melee / ranged when the spell uses a spell attack.</summary>
+    public string AttackType { get; set; } = "";
+    /// <summary>Short blurb for list UIs.</summary>
     public string Description { get; set; } = "";
-
-    // NEW: List of classes that can learn this spell
+    /// <summary>Full exact spell description text (all paragraphs).</summary>
+    public string FullDescription { get; set; } = "";
+    /// <summary>Official "At Higher Levels" text.</summary>
+    public string HigherLevel { get; set; } = "";
+    /// <summary>True when the spell has an At Higher Levels entry.</summary>
+    public bool CanUpcast { get; set; } = false;
+    /// <summary>
+    /// Parsed upcast increment, e.g. "1d6" or "1d8 for each slot level above 1st" summary.
+    /// Prefer <see cref="HigherLevel"/> for the full wording.
+    /// </summary>
+    public string UpcastIncrement { get; set; } = "";
+    /// <summary>Slot level → damage dice (e.g. "3" → "8d6").</summary>
+    public Dictionary<string, string> DamageAtSlotLevel { get; set; } = new();
+    /// <summary>Character level → cantrip damage dice (e.g. "5" → "2d10").</summary>
+    public Dictionary<string, string> DamageAtCharacterLevel { get; set; } = new();
+    /// <summary>Slot level → healing expression (e.g. "1" → "1d8 + MOD").</summary>
+    public Dictionary<string, string> HealAtSlotLevel { get; set; } = new();
+    public string AreaOfEffect { get; set; } = "";
     public List<string> Classes { get; set; } = new();
-    public int Level { get; set; } = 0;
+    public string Source { get; set; } = "";
+
+    /// <summary>Display label: "Cantrip" or "1st-level", etc.</summary>
+    public string LevelLabel => Level switch
+    {
+        0 => "Cantrip",
+        1 => "1st-level",
+        2 => "2nd-level",
+        3 => "3rd-level",
+        _ when Level >= 4 && Level <= 9 => $"{Level}th-level",
+        _ => $"Level {Level}"
+    };
+
+    /// <summary>
+    /// Multi-line detail block for previews (school, casting, range, damage, full text, upcast).
+    /// </summary>
+    public string FormatDetails(bool includeFullText = true)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"**{Name}** ({LevelLabel} {School})");
+        sb.AppendLine($"Casting Time: {CastingTime}");
+        sb.AppendLine($"Range: {Range}");
+        sb.AppendLine($"Components: {Components}");
+        string dur = Duration;
+        if (IsConcentration && !dur.Contains("Concentration", StringComparison.OrdinalIgnoreCase))
+            dur += " (Concentration)";
+        if (IsRitual)
+            dur += " [Ritual]";
+        sb.AppendLine($"Duration: {dur}");
+
+        if (!string.IsNullOrWhiteSpace(AreaOfEffect))
+            sb.AppendLine($"Area: {AreaOfEffect}");
+
+        if (!string.IsNullOrWhiteSpace(RollType) &&
+            !RollType.Equals("None", StringComparison.OrdinalIgnoreCase))
+            sb.AppendLine($"Roll: {RollType}");
+
+        if (!string.IsNullOrWhiteSpace(DamageDice))
+        {
+            string kind = HealAtSlotLevel.Count > 0 ? "Healing" : "Damage";
+            string line = $"{kind}: {DamageDice}";
+            if (!string.IsNullOrWhiteSpace(DamageType) && kind == "Damage")
+                line += $" {DamageType}";
+            sb.AppendLine(line);
+        }
+
+        if (CanUpcast)
+        {
+            if (!string.IsNullOrWhiteSpace(UpcastIncrement))
+                sb.AppendLine($"Upcast: +{UpcastIncrement.TrimStart('+')} per higher slot (see At Higher Levels)");
+            else
+                sb.AppendLine("Upcast: Yes (see At Higher Levels)");
+        }
+
+        if (Classes != null && Classes.Count > 0)
+            sb.AppendLine($"Classes: {string.Join(", ", Classes)}");
+
+        if (includeFullText)
+        {
+            sb.AppendLine();
+            string body = !string.IsNullOrWhiteSpace(FullDescription) ? FullDescription : Description;
+            sb.AppendLine(body);
+            if (!string.IsNullOrWhiteSpace(HigherLevel))
+            {
+                sb.AppendLine();
+                sb.AppendLine("At Higher Levels:");
+                sb.AppendLine(HigherLevel);
+            }
+        }
+
+        return sb.ToString().TrimEnd();
+    }
 }
 
 /// <summary>
-/// Leveled spells (1st level and higher) - inherits all properties from Spell + Level
+/// Leveled spells (1st level and higher). Prefer using <see cref="Spell"/> with Level set;
+/// kept for backward compatibility with existing UI code.
 /// </summary>
 public class LeveledSpell : Spell
 {
-    public int Level { get; set; } = 1;
+    public LeveledSpell() { Level = 1; }
 }
 
 public class SavingThrow
