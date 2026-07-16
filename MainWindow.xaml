@@ -36,19 +36,22 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- ComboBox styling for dark theme -->
-        <!-- ComboBox Styling -->
+        <!-- ComboBox styling (matches explicit #2A2A2A combos used on Class/Race tabs).
+             WPF's default template often paints a light selection face, so Foreground is
+             dark gray for readable closed-state text; dropdown items stay light-on-dark. -->
         <Style TargetType="ComboBox">
             <Setter Property="Foreground"
-                    Value="White"/>
+                    Value="#2A2A2A"/>
             <Setter Property="Background"
-                    Value="Black"/>
-            <Setter Property="BorderBrush"
-                    Value="#555"/>
+                    Value="#2A2A2A"/>
             <Setter Property="BorderBrush"
                     Value="#555"/>
             <Setter Property="Padding"
                     Value="8,4"/>
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Left"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
         </Style>
 
         <Style TargetType="ComboBoxItem">
@@ -56,18 +59,22 @@
                     Value="White"/>
             <Setter Property="Background"
                     Value="#1E1E1E"/>
+            <Setter Property="Padding"
+                    Value="8,4"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver"
                          Value="True">
                     <Setter Property="Background"
-                            Value="#E0E0E0"/>
+                            Value="#3A7CA5"/>
+                    <Setter Property="Foreground"
+                            Value="White"/>
                 </Trigger>
                 <Trigger Property="IsSelected"
                          Value="True">
                     <Setter Property="Background"
                             Value="#4A7C59"/>
                     <Setter Property="Foreground"
-                            Value="#216891"/>
+                            Value="White"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -444,11 +451,9 @@
                     <ScrollViewer Grid.Column="1"
                                   Margin="25,0,0,0"
                                   VerticalScrollBarVisibility="Auto">
-                        <TextBlock x:Name="txtClassDetails"
-                                   TextWrapping="Wrap"
-                                   FontSize="13"
-                                   LineHeight="19"
-                                   Foreground="#DDD"/>
+                        <!-- Built in code: class stats, level-1 features always open,
+                             higher-level class/subclass features in Expanders -->
+                        <StackPanel x:Name="pnlClassDetails"/>
                     </ScrollViewer>
                 </Grid>
             </TabItem>
@@ -1016,8 +1021,133 @@
                 </StackPanel>
             </TabItem>
 
-            <!-- TAB 6: SKILLS &amp; PROFICIENCIES -->
-            <TabItem Header="6. Skills &amp; Proficiencies"
+            <!-- TAB 6: LEVEL &amp; MULTICLASS -->
+            <TabItem x:Name="tabLevelMulticlass"
+                     Header="6. Level &amp; Multiclass">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              Padding="20">
+                    <StackPanel>
+                        <TextBlock Text="LEVEL &amp; MULTICLASS"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Foreground="#7CFC00"
+                                   Margin="0,0,0,6"/>
+                        <TextBlock Text="Assign levels to one or more classes. When a class hits an ASI level (usually 4, 8, 12…), choose an Ability Score Improvement or a Feat. Feat picks increase how many feats you can select on the Feats tab."
+                                   TextWrapping="Wrap"
+                                   Foreground="#AAA"
+                                   FontSize="12"
+                                   Margin="0,0,0,12"/>
+
+                        <!-- Summary strip -->
+                        <Border Background="#252525"
+                                BorderBrush="#444"
+                                BorderThickness="1"
+                                Padding="12"
+                                Margin="0,0,0,14"
+                                CornerRadius="4">
+                            <StackPanel>
+                                <TextBlock x:Name="lblLevelSummary"
+                                           Text="Total level: 1  |  Proficiency: +2  |  Hit dice: —  |  HP: —"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="#9CDCFE"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock x:Name="lblMulticlassPrereqStatus"
+                                           Text=""
+                                           FontSize="12"
+                                           Foreground="#E8C36A"
+                                           TextWrapping="Wrap"
+                                           Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock Text="CLASS LEVELS"
+                                       FontWeight="Bold"
+                                       Foreground="#7CFC00"
+                                       FontSize="14"
+                                       VerticalAlignment="Center"/>
+                            <Button x:Name="btnAddClassLevel"
+                                    DockPanel.Dock="Right"
+                                    Content="+ Add class (multiclass)"
+                                    Padding="12,4"
+                                    Margin="12,0,0,0"
+                                    Click="btnAddClassLevel_Click"
+                                    Background="#3A7CA5"
+                                    Foreground="White"
+                                    FontWeight="SemiBold"/>
+                        </DockPanel>
+
+                        <StackPanel x:Name="pnlClassLevelRows"
+                                    Margin="0,0,0,16"/>
+
+                        <TextBlock Text="HIT POINT GAIN (levels after 1st)"
+                                   FontWeight="Bold"
+                                   Foreground="#7CFC00"
+                                   FontSize="14"
+                                   Margin="0,4,0,6"/>
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="0,0,0,8">
+                            <RadioButton x:Name="rbHpAverage"
+                                         Content="Fixed average (PHB)"
+                                         GroupName="HpGain"
+                                         IsChecked="True"
+                                         Checked="HpGainMethod_Changed"
+                                         Margin="0,0,18,0"/>
+                            <RadioButton x:Name="rbHpRolled"
+                                         Content="Rolled hit die"
+                                         GroupName="HpGain"
+                                         Checked="HpGainMethod_Changed"/>
+                        </StackPanel>
+
+                        <!-- Shown when Rolled is selected: one row per level after 1st -->
+                        <Border x:Name="pnlHpRollsSection"
+                                Visibility="Collapsed"
+                                Background="#252525"
+                                BorderBrush="#444"
+                                BorderThickness="1"
+                                Padding="12"
+                                Margin="0,0,0,16"
+                                CornerRadius="4">
+                            <StackPanel>
+                                <TextBlock Text="HIT DIE ROLLS (levels 2+)"
+                                           FontWeight="SemiBold"
+                                           Foreground="#9CDCFE"
+                                           Margin="0,0,0,4"/>
+                                <TextBlock Text="Enter the hit die result (1 through die size), or click Roll for a random die. HP gained that level = die + Constitution modifier (minimum 1). Level 1 always uses maximum hit die."
+                                           TextWrapping="Wrap"
+                                           Foreground="#AAA"
+                                           FontSize="11"
+                                           Margin="0,0,0,10"/>
+                                <StackPanel x:Name="pnlHpRollRows"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="ASI / FEAT CHOICES"
+                                   FontWeight="Bold"
+                                   Foreground="#7CFC00"
+                                   FontSize="14"
+                                   Margin="0,4,0,4"/>
+                        <TextBlock x:Name="lblAsiFeatHint"
+                                   Text="No ASI/feat milestones yet. Reach class level 4 (or Fighter 6, Rogue 10, …) to unlock choices."
+                                   Foreground="#AAA"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,8"/>
+                        <StackPanel x:Name="pnlAsiFeatChoices"/>
+
+                        <TextBlock x:Name="lblAsiBonusSummary"
+                                   Text="ASI bonuses applied: (none)"
+                                   Foreground="#9CDCFE"
+                                   FontSize="12"
+                                   Margin="0,12,0,0"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB 7: SKILLS &amp; PROFICIENCIES -->
+            <TabItem Header="7. Skills &amp; Proficiencies"
                      x:Name="tabSkills">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
@@ -1075,12 +1205,20 @@
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,16"/>
 
+                        <!-- PROFICIENCY BONUS (scales with total character level) -->
+                        <TextBlock x:Name="lblProficiencyBonus"
+                                   Text="Proficiency Bonus: +2 (character level 1)"
+                                   FontWeight="SemiBold"
+                                   Foreground="#9CDCFE"
+                                   FontSize="13"
+                                   Margin="0,16,0,8"/>
+
                         <!-- SAVING THROWS -->
                         <TextBlock Text="SAVING THROWS"
                                    FontWeight="Bold"
                                    Foreground="#7CFC00"
                                    FontSize="14"
-                                   Margin="0,16,0,8"/>
+                                   Margin="0,0,0,8"/>
 
                         <StackPanel Margin="0,0,0,20">
                             <StackPanel Orientation="Horizontal"
@@ -1240,8 +1378,8 @@
                 </Grid>
             </TabItem>
 
-            <!-- TAB 7: STARTING EQUIPMENT -->
-            <TabItem Header="7. Starting Equipment">
+            <!-- TAB 8: STARTING EQUIPMENT -->
+            <TabItem Header="8. Starting Equipment">
                 <Grid Margin="25">
                     <Grid.ColumnDefinitions>
                         <!-- Left: Labels + Choices -->
@@ -1495,9 +1633,9 @@
                     </StackPanel>
                 </Grid>
             </TabItem>
-            <!-- TAB 8: FEATS (Only visible for Variant Human / Custom Lineage) -->
+            <!-- TAB 9: FEATS (origin races and/or ASI feat picks) -->
             <TabItem x:Name="tabFeats"
-                     Header="8. Feats"
+                     Header="9. Feats"
                      Visibility="Collapsed">
                 <Grid Margin="20">
                     <Grid.ColumnDefinitions>
@@ -1507,10 +1645,16 @@
 
                     <!-- Left: Feat Table -->
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="SELECT ONE FEAT"
+                        <TextBlock x:Name="lblFeatTabHeader"
+                                   Text="SELECT FEATS"
                                    FontSize="16"
                                    FontWeight="Bold"
                                    Foreground="#7CFC00"
+                                   Margin="0,0,0,4"/>
+                        <TextBlock x:Name="lblFeatSelectionLimit"
+                                   Text="You can select 0 feats."
+                                   FontSize="12"
+                                   Foreground="#9CDCFE"
                                    Margin="0,0,0,10"/>
 
                         <DataGrid x:Name="dgFeats"
@@ -1650,9 +1794,9 @@
                 </Grid>
             </TabItem>
 
-            <!-- TAB 9: SPELLS & CANTRIPS -->
+            <!-- TAB 10: SPELLS & CANTRIPS -->
             <TabItem x:Name="tabSpells"
-                     Header="9. Spells &amp; Cantrips"
+                     Header="10. Spells &amp; Cantrips"
                      Visibility="Collapsed">
 
                 <StackPanel Margin="25">
@@ -1680,7 +1824,17 @@
                                Text="Subclass spells: (none yet)"
                                Foreground="#AAA"
                                FontSize="12"
+                               TextWrapping="Wrap"
                                Margin="0,0,0,8"/>
+
+                    <!-- Totals for prepared / known (across all spell levels) -->
+                    <TextBlock x:Name="lblSpellBudget"
+                               Text="Spell budget: —"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="#9CDCFE"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,10"/>
 
                     <!-- Two tables side by side -->
                     <Grid>
@@ -1722,7 +1876,8 @@
                                                 <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                           IsEnabled="{Binding IsSelectable}"
                                                           Checked="CantripCheckBox_Changed"
-                                                          Unchecked="CantripCheckBox_Changed"/>
+                                                          Unchecked="CantripCheckBox_Changed"
+                                                          PreviewMouseLeftButtonDown="SpellGridCheckBox_PreviewMouseLeftButtonDown"/>
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
@@ -1754,15 +1909,35 @@
                                        Margin="0,8,0,0"/>
                         </StackPanel>
 
-                        <!-- 1ST LEVEL SPELLS (Right) -->
+                        <!-- LEVELED SPELLS (Right) — level filter + selection -->
                         <StackPanel Grid.Column="1"
                                     Margin="25,0,0,0">
-                            <TextBlock x:Name="lblSpellHeader"
-                                       Text="1ST LEVEL SPELLS (prepare = Wis/Cha/Int mod + 1)"
-                                       FontWeight="Bold"
-                                       FontSize="14"
-                                       Foreground="#7CFC00"
-                                       Margin="0,0,0,8"/>
+                            <DockPanel Margin="0,0,0,8"
+                                       LastChildFill="True">
+                                <StackPanel DockPanel.Dock="Right"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center"
+                                            Margin="12,0,0,0">
+                                    <TextBlock Text="Spell level:"
+                                               VerticalAlignment="Center"
+                                               Foreground="#CCC"
+                                               Margin="0,0,8,0"/>
+                                    <ComboBox x:Name="cmbSpellLevel"
+                                              Width="130"
+                                              Height="28"
+                                              Background="#2A2A2A"
+                                              Foreground="#2A2A2A"
+                                              BorderBrush="#555"
+                                              SelectionChanged="cmbSpellLevel_SelectionChanged"/>
+                                </StackPanel>
+                                <TextBlock x:Name="lblSpellHeader"
+                                           Text="1ST-LEVEL SPELLS"
+                                           FontWeight="Bold"
+                                           FontSize="14"
+                                           Foreground="#7CFC00"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap"/>
+                            </DockPanel>
 
                             <DataGrid x:Name="dgSpells1"
                                       AutoGenerateColumns="False"
@@ -1789,7 +1964,8 @@
                                                 <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                           IsEnabled="{Binding IsSelectable}"
                                                           Checked="Spell1CheckBox_Changed"
-                                                          Unchecked="Spell1CheckBox_Changed"/>
+                                                          Unchecked="Spell1CheckBox_Changed"
+                                                          PreviewMouseLeftButtonDown="SpellGridCheckBox_PreviewMouseLeftButtonDown"/>
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
@@ -1816,9 +1992,14 @@
                             </DataGrid>
 
                             <TextBlock x:Name="lblSpellCount"
-                                       Text="Selected: 0 / 4"
+                                       Text="Selected this level: 0"
                                        Foreground="White"
                                        Margin="0,8,0,0"/>
+                            <TextBlock x:Name="lblSpellTotalCount"
+                                       Text="Total prepared/known: —"
+                                       Foreground="#9CDCFE"
+                                       FontSize="12"
+                                       Margin="0,2,0,0"/>
                         </StackPanel>
                     </Grid>
 
@@ -1849,8 +2030,8 @@
                 </StackPanel>
             </TabItem>
 
-            <!-- TAB 10: SUMMARY &amp; EXPORT -->
-            <TabItem Header="10. Summary &amp; Export">
+            <!-- TAB 11: SUMMARY &amp; EXPORT -->
+            <TabItem Header="11. Summary &amp; Export">
                 <StackPanel Margin="30"
                             MaxWidth="900">
                     <TextBlock Text="CHARACTER SUMMARY"

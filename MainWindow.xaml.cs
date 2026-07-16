@@ -36,7 +36,6 @@ namespace Nemo
         private Dictionary<string, int> racialBonuses = new();
         public ObservableCollection<SkillProficiency> allSkills = new();
         private int proficiencyBonus = 2;
-        private string baseClassDescription = "";
         private string raceGrantedSkill = "";
         private List<string> currentRaceAutomaticSkills = new List<string>();
         private List<string> pickedWeapons = new List<string>();
@@ -51,6 +50,8 @@ namespace Nemo
         private Dictionary<string, int> featStatBonuses = new();
         private int featInitiativeBonus = 0;
         private string currentFeatAbilityChoice = "";
+        /// <summary>Ability name granted save proficiency by Resilient (e.g. "Constitution").</summary>
+        private string resilientSaveAbility = "";
         private string featSelectedSpell = "";
         private string baseFeatDescription = "";
         private int featSpeedBonus = 0;   // ← NEW: For Mobile feat (+10 ft)
@@ -63,10 +64,52 @@ namespace Nemo
         private List<string> currentFeatSpells = new();
         public ObservableCollection<SelectableSpell> cantripOptions = new();
         private CollectionViewSource cantripViewSource = new CollectionViewSource();
+        /// <summary>All leveled spells (1–9) for the class grid; filtered by <see cref="currentSpellLevelFilter"/>.</summary>
         public ObservableCollection<SelectableSpell> spell1Options = new();
         private CollectionViewSource spell1ViewSource = new CollectionViewSource();
+        /// <summary>Currently displayed spell level in the leveled-spells grid (1–9).</summary>
+        private int currentSpellLevelFilter = 1;
+        private bool _suppressSpellLevelEvent;
+        private bool _suppressLevelTabRebuild;
+        private bool _suppressHpRollEvents;
+        private readonly Random _rng = new();
         private readonly Brush AccentGreen = (Brush)new BrushConverter().ConvertFromString("#7CFC00");
         private readonly Brush AccentGray = (Brush)new BrushConverter().ConvertFromString("#2A2A2A");
+        private static readonly string[] AbilityNames =
+            { "Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma" };
+
+        private static readonly Brush ComboBgBrush =
+            (Brush)new BrushConverter().ConvertFromString("#2A2A2A");
+        private static readonly Brush ComboFgBrush =
+            (Brush)new BrushConverter().ConvertFromString("#2A2A2A");
+        private static readonly Brush ComboBorderBrush =
+            (Brush)new BrushConverter().ConvertFromString("#555");
+
+        /// <summary>
+        /// Match XAML ComboBox chrome used elsewhere (e.g. Class tab): dark field + readable text.
+        /// </summary>
+        private void StyleAppComboBox(ComboBox cmb)
+        {
+            if (cmb == null) return;
+            cmb.Background = ComboBgBrush;
+            cmb.Foreground = ComboFgBrush;
+            cmb.BorderBrush = ComboBorderBrush;
+            cmb.Padding = new Thickness(8, 4, 8, 4);
+            cmb.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
+            cmb.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
+
+            // Prefer window-level styles when present
+            if (TryFindResource(typeof(ComboBox)) is System.Windows.Style comboStyle)
+                cmb.Style = comboStyle;
+            if (TryFindResource(typeof(ComboBoxItem)) is System.Windows.Style itemStyle)
+                cmb.ItemContainerStyle = itemStyle;
+
+            // Re-apply after Style so explicit theme colors win (default template often paints white)
+            cmb.Background = ComboBgBrush;
+            cmb.Foreground = ComboFgBrush;
+            cmb.BorderBrush = ComboBorderBrush;
+            cmb.Padding = new Thickness(8, 4, 8, 4);
+        }
 
 
         public MainWindow()
@@ -194,16 +237,9 @@ namespace Nemo
                 pnlFlexibleBonuses.Visibility = Visibility.Collapsed;
             }
 
-            // Show or hide Feats tab
-            bool showFeatsTab = GameData.FeatGrantingRaces.Contains(race);
-            tabFeats.Visibility = showFeatsTab ? Visibility.Visible : Visibility.Collapsed;
-
-            if (showFeatsTab && dgFeats.ItemsSource == null)
-            {
-                GameData.InitializeFeats();
-                dgFeats.ItemsSource = GameData.AllFeats;
-                dgFeats.SelectionChanged += DgFeats_SelectionChanged; // We'll add this next
-            }
+            // Feats tab: origin race and/or ASI→Feat picks
+            EnsureFeatsLoaded();
+            UpdateFeatsTabVisibility();
 
             // Cleanup when switching away from races that grant a skill choice
             if ((race != "Custom Lineage" && race != "Variant Human")
@@ -379,47 +415,1375 @@ namespace Nemo
 
         private string GetRacialCantrip()
         {
+            var grants = GetActiveRacialSpells();
+            var cantrip = grants.FirstOrDefault(g => g.SpellLevel <= 0);
+            return cantrip?.SpellName ?? "";
+        }
+
+        /// <summary>Racial innate spells available at the character's current level.</summary>
+        private List<RacialSpellGrant> GetActiveRacialSpells()
+        {
             string race = cmbRace.SelectedItem?.ToString() ?? "";
             string subrace = cmbSubrace.SelectedItem?.ToString() ?? "";
-
-            // Fixed racial cantrips
-            if (race == "Aasimar")
-                return "Light";
-
-            if (race == "Elf" && subrace == "Drow (Dark Elf)")
-                return "Dancing Lights";
-
-            if (race == "Gnome" && subrace == "Forest Gnome")
-                return "Minor Illusion";
-
-            // High Elf = player-chosen Wizard cantrip
-            if (race == "Elf" && subrace == "High Elf" && !string.IsNullOrEmpty(highElfCantrip))
-                return highElfCantrip;
-
-            return "";
+            int charLevel = GetEffectiveCharacterLevel();
+            return GameData.GetRacialSpells(race, subrace, charLevel, highElfCantrip);
         }
 
         private void UpdateRacialSpellsLabel()
         {
             if (lblRacialSpells == null) return;
 
-            string racialCantrip = GetRacialCantrip();
+            string race = cmbRace.SelectedItem?.ToString() ?? "";
+            string subrace = cmbSubrace.SelectedItem?.ToString() ?? "";
+            string displayName = !string.IsNullOrEmpty(subrace) ? subrace : race;
+            int charLevel = GetEffectiveCharacterLevel();
 
-            if (!string.IsNullOrEmpty(racialCantrip))
-            {
-                string race = cmbRace.SelectedItem?.ToString() ?? "";
-                string subrace = cmbSubrace.SelectedItem?.ToString() ?? "";
+            var available = GameData.GetRacialSpells(race, subrace, charLevel, highElfCantrip);
+            var locked = GameData.GetAllRacialSpellGrants(race, subrace, highElfCantrip)
+                .Where(g => g.MinCharacterLevel > charLevel)
+                .ToList();
 
-                string displayName = !string.IsNullOrEmpty(subrace) ? subrace : race;
-
-                lblRacialSpells.Text = $"Racial spells ({displayName}): {racialCantrip}";
-                lblRacialSpells.Foreground = AccentGreen;
-            }
-            else
+            if (available.Count == 0 && locked.Count == 0)
             {
                 lblRacialSpells.Text = "Racial spells: (none yet)";
                 lblRacialSpells.Foreground = (Brush)new BrushConverter().ConvertFromString("#AAA");
+                return;
             }
+
+            var parts = available.Select(FormatRacialGrant).ToList();
+            if (locked.Count > 0)
+            {
+                parts.Add("locked until higher level: " +
+                          string.Join(", ", locked.Select(g =>
+                              $"{g.SpellName} (L{Math.Max(g.SpellLevel, 0)} @ char {g.MinCharacterLevel}+)")));
+            }
+
+            lblRacialSpells.Text = string.IsNullOrEmpty(displayName)
+                ? $"Racial spells: {string.Join("; ", parts)}"
+                : $"Racial spells ({displayName}): {string.Join("; ", parts)}";
+            lblRacialSpells.Foreground = AccentGreen;
+        }
+
+        private static string FormatRacialGrant(RacialSpellGrant g)
+        {
+            string lvl = g.SpellLevel <= 0 ? "cantrip" : $"L{g.SpellLevel}";
+            string note = string.IsNullOrWhiteSpace(g.Notes) ? "" : $" [{g.Notes}]";
+            return $"{g.SpellName} ({lvl}{note})";
+        }
+
+        /// <summary>Active class levels from character data, or UI class/subclass at character level.</summary>
+        private List<ClassLevelEntry> GetActiveClassLevels()
+        {
+            SyncCharacterClassFromUi();
+            return LevelUpCalculator.GetClassLevelsFromCharacter(CurrentCharacter);
+        }
+
+        private int GetEffectiveCharacterLevel()
+        {
+            var levels = GetActiveClassLevels();
+            int sum = levels.Sum(e => e.Levels);
+            if (sum > 0) return Math.Clamp(sum, 1, 20);
+            return CurrentCharacter?.Level > 0 ? Math.Clamp(CurrentCharacter.Level, 1, 20) : 1;
+        }
+
+        /// <summary>
+        /// Keep Character.Class / Subclass mirrored from UI when ClassLevels is empty or single-class.
+        /// Multiclass (2+ rows) is owned by the Level &amp; Multiclass tab.
+        /// </summary>
+        private void SyncCharacterClassFromUi()
+        {
+            if (CurrentCharacter == null) return;
+
+            if (CurrentCharacter.Level <= 0)
+                CurrentCharacter.Level = 1;
+
+            // Multiclass builds: only ensure totals; do not clobber ClassLevels from Class tab combos
+            if (CurrentCharacter.ClassLevels != null && CurrentCharacter.ClassLevels.Count > 1)
+            {
+                CurrentCharacter.Level = Math.Max(1, CurrentCharacter.ClassLevels.Sum(e => e.Levels));
+                if (CurrentCharacter.ClassLevels.Count > 0)
+                {
+                    CurrentCharacter.Class = CurrentCharacter.ClassLevels[0].ClassName;
+                    CurrentCharacter.Subclass = CurrentCharacter.ClassLevels[0].Subclass ?? "";
+                }
+                return;
+            }
+
+            if (cmbClass?.SelectedItem is string className && !string.IsNullOrWhiteSpace(className))
+                CurrentCharacter.Class = className;
+
+            if (cmbSubclass?.SelectedItem is string sub)
+            {
+                if (!sub.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) &&
+                    !sub.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
+                    CurrentCharacter.Subclass = sub;
+            }
+
+            if (!string.IsNullOrWhiteSpace(CurrentCharacter.Class))
+            {
+                int lvl = CurrentCharacter.ClassLevels?.Count == 1
+                    ? Math.Max(1, CurrentCharacter.ClassLevels[0].Levels)
+                    : (CurrentCharacter.Level > 0 ? CurrentCharacter.Level : 1);
+
+                if (CurrentCharacter.ClassLevels == null || CurrentCharacter.ClassLevels.Count == 0)
+                {
+                    CurrentCharacter.ClassLevels = new List<ClassLevelEntry>
+                    {
+                        new(CurrentCharacter.Class, lvl, CurrentCharacter.Subclass)
+                    };
+                }
+                else
+                {
+                    var only = CurrentCharacter.ClassLevels[0];
+                    only.ClassName = CurrentCharacter.Class;
+                    only.Subclass = CurrentCharacter.Subclass;
+                    if (only.Levels <= 0)
+                        only.Levels = lvl;
+                    CurrentCharacter.Level = only.Levels;
+                }
+            }
+        }
+
+        private SpellBudgetSnapshot GetSpellBudget()
+        {
+            var levels = GetActiveClassLevels();
+            return SpellProgressionCalculator.GetBudget(levels, cls =>
+            {
+                if (!GameData.ClassData.TryGetValue(cls, out var data))
+                    return 0;
+                return CalculateModifier(GetFinalStat(data.SpellAbility));
+            });
+        }
+
+        // ───────────────────────── Level & Multiclass tab ─────────────────────────
+
+        private int GetAsiBonusForAbility(string abilityName)
+        {
+            if (string.IsNullOrWhiteSpace(abilityName) || CurrentCharacter?.AsiOrFeatDecisions == null)
+                return 0;
+            var map = LevelUpCalculator.GetAsiStatBonuses(CurrentCharacter.AsiOrFeatDecisions);
+            return map.TryGetValue(abilityName, out int v) ? v : 0;
+        }
+
+        /// <summary>
+        /// Max feats the player may select: origin race feat (+1) + each ASI milestone taken as Feat.
+        /// </summary>
+        public int GetMaxFeatSelections()
+        {
+            int max = 0;
+            string race = cmbRace?.SelectedItem?.ToString() ?? CurrentCharacter?.Race ?? "";
+            if (GameData.FeatGrantingRaces.Contains(race))
+                max += 1;
+            max += LevelUpCalculator.CountFeatPicksFromAsi(CurrentCharacter?.AsiOrFeatDecisions);
+            return max;
+        }
+
+        public void UpdateFeatSelectionLimitLabel()
+        {
+            if (lblFeatSelectionLimit == null) return;
+            int max = GetMaxFeatSelections();
+            int selected = GameData.AllFeats?.Count(f => f != null && f.IsSelected) ?? 0;
+            lblFeatSelectionLimit.Text = max <= 0
+                ? "You cannot select feats yet (need an origin feat race or an ASI→Feat pick)."
+                : $"Selected: {selected} / {max} feat(s)";
+            if (lblFeatTabHeader != null)
+                lblFeatTabHeader.Text = max == 1 ? "SELECT FEAT" : "SELECT FEATS";
+        }
+
+        private void EnsureFeatsLoaded()
+        {
+            if (dgFeats == null) return;
+            if (dgFeats.ItemsSource == null)
+            {
+                GameData.InitializeFeats();
+                dgFeats.ItemsSource = GameData.AllFeats;
+                dgFeats.SelectionChanged -= DgFeats_SelectionChanged;
+                dgFeats.SelectionChanged += DgFeats_SelectionChanged;
+            }
+        }
+
+        public void UpdateFeatsTabVisibility()
+        {
+            if (tabFeats == null) return;
+            int max = GetMaxFeatSelections();
+            if (max > 0)
+            {
+                EnsureFeatsLoaded();
+                tabFeats.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                // Hide only if nothing selected (avoid trapping the user with selected feats)
+                int selected = GameData.AllFeats?.Count(f => f != null && f.IsSelected) ?? 0;
+                tabFeats.Visibility = selected > 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            UpdateFeatSelectionLimitLabel();
+            TrimFeatsToLimit();
+        }
+
+        /// <summary>If the feat budget dropped, deselect extras (most recently kept = first in list order).</summary>
+        private void TrimFeatsToLimit()
+        {
+            if (GameData.AllFeats == null) return;
+            int max = GetMaxFeatSelections();
+            var selected = GameData.AllFeats.Where(f => f != null && f.IsSelected).ToList();
+            if (selected.Count <= max) return;
+
+            foreach (var feat in selected.Skip(max).ToList())
+                feat.IsSelected = false;
+            dgFeats?.Items.Refresh();
+            UpdateFeatSelectionLimitLabel();
+        }
+
+        /// <summary>Seed / refresh ClassLevels from the Class tab when empty.</summary>
+        /// <summary>Subclass chosen on the Class &amp; Subclass tab, or null if placeholder/none.</summary>
+        private string? GetUiSelectedSubclassName()
+        {
+            if (cmbSubclass?.SelectedItem is not string sub)
+                return null;
+            if (string.IsNullOrWhiteSpace(sub) ||
+                sub.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) ||
+                sub.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
+                return null;
+            return sub.Trim();
+        }
+
+        private void EnsureClassLevelsSeeded()
+        {
+            if (CurrentCharacter == null) return;
+
+            if (CurrentCharacter.ClassLevels == null)
+                CurrentCharacter.ClassLevels = new List<ClassLevelEntry>();
+
+            string? uiSub = GetUiSelectedSubclassName();
+
+            if (CurrentCharacter.ClassLevels.Count == 0 &&
+                cmbClass?.SelectedItem is string className &&
+                !string.IsNullOrWhiteSpace(className))
+            {
+                CurrentCharacter.ClassLevels.Add(new ClassLevelEntry(className, 1, uiSub));
+                CurrentCharacter.Class = className;
+                CurrentCharacter.Subclass = uiSub ?? "";
+                CurrentCharacter.Level = 1;
+            }
+
+            // Always carry Class-tab subclass onto the primary row when it matches the selected class
+            // (so Level & Multiclass shows the same subclass the player already picked).
+            if (CurrentCharacter.ClassLevels.Count >= 1 &&
+                cmbClass?.SelectedItem is string primaryClass &&
+                !string.IsNullOrWhiteSpace(primaryClass))
+            {
+                var primary = CurrentCharacter.ClassLevels.FirstOrDefault(c =>
+                                  c.ClassName.Equals(primaryClass, StringComparison.OrdinalIgnoreCase))
+                              ?? CurrentCharacter.ClassLevels[0];
+
+                if (primary.ClassName.Equals(primaryClass, StringComparison.OrdinalIgnoreCase) ||
+                    CurrentCharacter.ClassLevels.Count == 1)
+                {
+                    if (CurrentCharacter.ClassLevels.Count == 1)
+                        primary.ClassName = primaryClass;
+
+                    if (!string.IsNullOrWhiteSpace(uiSub))
+                    {
+                        primary.Subclass = uiSub;
+                        CurrentCharacter.Subclass = uiSub;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(primary.Subclass))
+                    {
+                        CurrentCharacter.Subclass = primary.Subclass ?? "";
+                    }
+                }
+            }
+
+            ReconcileAsiDecisions();
+        }
+
+        private void ReconcileAsiDecisions()
+        {
+            if (CurrentCharacter == null) return;
+            CurrentCharacter.AsiOrFeatDecisions = LevelUpCalculator.ReconcileAsiOrFeatDecisions(
+                CurrentCharacter.ClassLevels ?? new List<ClassLevelEntry>(),
+                CurrentCharacter.AsiOrFeatDecisions);
+        }
+
+        /// <summary>
+        /// Official 5e proficiency bonus from total character level
+        /// (1–4 → +2, 5–8 → +3, 9–12 → +4, 13–16 → +5, 17–20 → +6).
+        /// Updates the field, character model, and Skills-tab label.
+        /// </summary>
+        private void RefreshProficiencyBonus()
+        {
+            int total = 1;
+            try
+            {
+                total = GetEffectiveCharacterLevel();
+            }
+            catch
+            {
+                total = CurrentCharacter?.Level > 0 ? CurrentCharacter.Level : 1;
+            }
+
+            total = Math.Clamp(total, 1, 20);
+            proficiencyBonus = LevelUpCalculator.GetProficiencyBonus(total);
+
+            if (CurrentCharacter != null)
+            {
+                CurrentCharacter.Level = Math.Max(CurrentCharacter.Level, total);
+                // Keep Level in sync with class levels when those exist
+                if (CurrentCharacter.ClassLevels != null && CurrentCharacter.ClassLevels.Count > 0)
+                    CurrentCharacter.Level = Math.Clamp(
+                        CurrentCharacter.ClassLevels.Sum(e => e.Levels), 1, 20);
+                CurrentCharacter.ProficiencyBonus = proficiencyBonus;
+            }
+
+            if (lblProficiencyBonus != null)
+            {
+                int displayLevel = CurrentCharacter?.Level > 0 ? CurrentCharacter.Level : total;
+                lblProficiencyBonus.Text =
+                    $"Proficiency Bonus: +{proficiencyBonus} (character level {displayLevel})";
+            }
+        }
+
+        private void ApplyLevelDerivedState()
+        {
+            if (CurrentCharacter == null) return;
+
+            EnsureClassLevelsSeeded();
+            var levels = CurrentCharacter.ClassLevels ?? new List<ClassLevelEntry>();
+            int total = Math.Clamp(levels.Sum(e => e.Levels), 0, 20);
+            if (total <= 0) total = 1;
+
+            CurrentCharacter.Level = total;
+            RefreshProficiencyBonus();
+
+            if (levels.Count > 0)
+            {
+                CurrentCharacter.Class = levels[0].ClassName;
+                CurrentCharacter.Subclass = levels[0].Subclass ?? "";
+            }
+
+            if (rbHpAverage?.IsChecked == true)
+                CurrentCharacter.HpGainMethod = HpGainMethod.FixedAverage;
+            else if (rbHpRolled?.IsChecked == true)
+                CurrentCharacter.HpGainMethod = HpGainMethod.Rolled;
+
+            UpdateHitPoints();
+            UpdateSkillBonuses();
+            UpdateSavingThrows();
+            UpdateFeatsTabVisibility();
+            UpdateStatDisplays();
+            if (tabSpells != null && tabSpells.IsVisible)
+            {
+                RefreshSpellLevelDropdown();
+                UpdateSpellStats();
+                UpdateCantripCounter();
+                UpdateSpellCounter();
+            }
+        }
+
+        private void RefreshLevelMulticlassTab()
+        {
+            if (pnlClassLevelRows == null) return;
+            if (_suppressLevelTabRebuild) return;
+
+            _suppressLevelTabRebuild = true;
+            try
+            {
+                EnsureClassLevelsSeeded();
+                RebuildClassLevelRows();
+                RebuildAsiFeatChoicePanels();
+                RebuildHpRollRows();
+                ApplyLevelDerivedState();
+                UpdateLevelSummaryLabels();
+            }
+            finally
+            {
+                _suppressLevelTabRebuild = false;
+            }
+        }
+
+        /// <summary>
+        /// Character levels after 1st, in the same order used by <see cref="LevelUpCalculator.CalculateHitPoints"/>.
+        /// </summary>
+        private List<(int CharLevel, string ClassName, int DieSize)> GetPostLevel1HpSteps()
+        {
+            var steps = new List<(int CharLevel, string ClassName, int DieSize)>();
+            var levels = CurrentCharacter?.ClassLevels;
+            if (levels == null || levels.Count == 0)
+                return steps;
+
+            int charLevel = 0;
+            bool first = true;
+            foreach (var entry in levels)
+            {
+                if (entry == null || entry.Levels <= 0 || string.IsNullOrWhiteSpace(entry.ClassName))
+                    continue;
+                int die = LevelUpCalculator.GetHitDieSize(entry.ClassName);
+                for (int i = 0; i < entry.Levels; i++)
+                {
+                    charLevel++;
+                    if (first)
+                    {
+                        first = false;
+                        continue;
+                    }
+                    steps.Add((charLevel, entry.ClassName, die));
+                }
+            }
+            return steps;
+        }
+
+        private void EnsureHitPointRollsSized()
+        {
+            if (CurrentCharacter == null) return;
+            if (CurrentCharacter.HitPointRolls == null)
+                CurrentCharacter.HitPointRolls = new List<int>();
+
+            int needed = GetPostLevel1HpSteps().Count;
+            while (CurrentCharacter.HitPointRolls.Count < needed)
+                CurrentCharacter.HitPointRolls.Add(0); // 0 = not set yet → calculator falls back to average
+            while (CurrentCharacter.HitPointRolls.Count > needed)
+                CurrentCharacter.HitPointRolls.RemoveAt(CurrentCharacter.HitPointRolls.Count - 1);
+        }
+
+        private int GetExtraHpPerLevelForCalc()
+        {
+            int extra = 0;
+            if (cmbSubrace?.SelectedItem is string subrace && subrace == "Hill Dwarf")
+                extra += 1;
+            // Draconic Resilience: +1 HP per sorcerer level — treated as +1 per character level when pure Draconic Sorcerer
+            string className = cmbClass?.SelectedItem as string ?? CurrentCharacter?.Class ?? "";
+            string subclass = cmbSubclass?.SelectedItem as string ?? CurrentCharacter?.Subclass ?? "";
+            if (className == "Sorcerer" &&
+                subclass.Contains("Draconic", StringComparison.OrdinalIgnoreCase))
+                extra += 1;
+            return extra;
+        }
+
+        private void RebuildHpRollRows()
+        {
+            if (pnlHpRollRows == null || pnlHpRollsSection == null) return;
+
+            bool rolled = rbHpRolled?.IsChecked == true ||
+                          CurrentCharacter?.HpGainMethod == HpGainMethod.Rolled;
+            pnlHpRollsSection.Visibility = rolled ? Visibility.Visible : Visibility.Collapsed;
+            if (!rolled)
+            {
+                pnlHpRollRows.Children.Clear();
+                return;
+            }
+
+            EnsureHitPointRollsSized();
+            var steps = GetPostLevel1HpSteps();
+            int conMod = CalculateModifier(GetFinalStat("Constitution"));
+            int extra = GetExtraHpPerLevelForCalc();
+
+            _suppressHpRollEvents = true;
+            try
+            {
+                pnlHpRollRows.Children.Clear();
+
+                if (steps.Count == 0)
+                {
+                    pnlHpRollRows.Children.Add(new TextBlock
+                    {
+                        Text = "No levels after 1st yet — raise a class level above 1 to roll HP.",
+                        Foreground = ClassDetailMutedBrush,
+                        FontSize = 12
+                    });
+                    return;
+                }
+
+                for (int i = 0; i < steps.Count; i++)
+                {
+                    int rollIndex = i;
+                    var step = steps[i];
+                    int stored = (CurrentCharacter.HitPointRolls != null &&
+                                  rollIndex < CurrentCharacter.HitPointRolls.Count)
+                        ? CurrentCharacter.HitPointRolls[rollIndex]
+                        : 0;
+
+                    var row = new DockPanel { Margin = new Thickness(0, 0, 0, 8), LastChildFill = true };
+
+                    var btnRoll = new Button
+                    {
+                        Content = "Roll",
+                        Width = 56,
+                        Height = 28,
+                        Margin = new Thickness(8, 0, 0, 0),
+                        Background = (Brush)new BrushConverter().ConvertFromString("#5C8A6E"),
+                        Foreground = Brushes.White,
+                        FontWeight = FontWeights.SemiBold,
+                        Tag = rollIndex
+                    };
+                    DockPanel.SetDock(btnRoll, Dock.Right);
+
+                    var txtDie = new TextBox
+                    {
+                        Width = 48,
+                        Height = 28,
+                        Text = stored >= 1 && stored <= step.DieSize ? stored.ToString() : "",
+                        TextAlignment = System.Windows.TextAlignment.Center,
+                        VerticalContentAlignment = System.Windows.VerticalAlignment.Center,
+                        Background = (Brush)new BrushConverter().ConvertFromString("#1E1E1E"),
+                        Foreground = Brushes.White,
+                        BorderBrush = (Brush)new BrushConverter().ConvertFromString("#555"),
+                        Tag = rollIndex,
+                        ToolTip = $"Hit die result (1–{step.DieSize})"
+                    };
+                    DockPanel.SetDock(txtDie, Dock.Right);
+
+                    var lblGain = new TextBlock
+                    {
+                        Name = $"lblHpGain_{rollIndex}",
+                        VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                        Margin = new Thickness(12, 0, 8, 0),
+                        Foreground = AccentGreen,
+                        FontSize = 12,
+                        MinWidth = 160,
+                        Tag = rollIndex
+                    };
+                    DockPanel.SetDock(lblGain, Dock.Right);
+
+                    var lblInfo = new TextBlock
+                    {
+                        Text = $"Character level {step.CharLevel} — {step.ClassName} (d{step.DieSize})",
+                        VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                        Foreground = Brushes.White,
+                        FontSize = 12,
+                        TextWrapping = TextWrapping.Wrap
+                    };
+
+                    void RefreshGainLabel()
+                    {
+                        int dieVal = 0;
+                        if (int.TryParse(txtDie.Text, out int parsed))
+                            dieVal = parsed;
+                        bool valid = dieVal >= 1 && dieVal <= step.DieSize;
+                        if (!valid)
+                        {
+                            int avg = LevelUpCalculator.GetFixedAverageHitDieValue(step.DieSize);
+                            int avgGain = Math.Max(1, avg + conMod + extra);
+                            lblGain.Text = $"HP: (unset → avg {avgGain})";
+                            lblGain.Foreground = ClassDetailMutedBrush;
+                            return;
+                        }
+                        int gain = Math.Max(1, dieVal + conMod + extra);
+                        string conPart = conMod >= 0 ? $"+{conMod}" : $"{conMod}";
+                        string extraPart = extra > 0 ? $"+{extra}" : "";
+                        lblGain.Text = $"HP +{gain}  ({dieVal}{conPart}{extraPart} Con)";
+                        lblGain.Foreground = AccentGreen;
+                    }
+
+                    RefreshGainLabel();
+
+                    txtDie.TextChanged += (s, e) =>
+                    {
+                        if (_suppressHpRollEvents) return;
+                        if (CurrentCharacter?.HitPointRolls == null) return;
+                        EnsureHitPointRollsSized();
+                        if (rollIndex >= CurrentCharacter.HitPointRolls.Count) return;
+
+                        if (int.TryParse(txtDie.Text.Trim(), out int dieRoll))
+                        {
+                            dieRoll = Math.Clamp(dieRoll, 0, step.DieSize);
+                            CurrentCharacter.HitPointRolls[rollIndex] = dieRoll;
+                        }
+                        else if (string.IsNullOrWhiteSpace(txtDie.Text))
+                        {
+                            CurrentCharacter.HitPointRolls[rollIndex] = 0;
+                        }
+                        RefreshGainLabel();
+                        UpdateHitPoints();
+                        UpdateLevelSummaryLabels();
+                    };
+
+                    btnRoll.Click += (s, e) =>
+                    {
+                        int dieRoll = _rng.Next(1, step.DieSize + 1);
+                        EnsureHitPointRollsSized();
+                        if (CurrentCharacter?.HitPointRolls == null ||
+                            rollIndex >= CurrentCharacter.HitPointRolls.Count)
+                            return;
+
+                        CurrentCharacter.HitPointRolls[rollIndex] = dieRoll;
+                        _suppressHpRollEvents = true;
+                        try { txtDie.Text = dieRoll.ToString(); }
+                        finally { _suppressHpRollEvents = false; }
+
+                        int gain = Math.Max(1, dieRoll + conMod + extra);
+                        RefreshGainLabel();
+                        UpdateHitPoints();
+                        UpdateLevelSummaryLabels();
+
+                        // Brief feedback — die + Con is what the player “gets”
+                        btnRoll.ToolTip = $"Rolled {dieRoll} on d{step.DieSize} → +{gain} HP (includes Con)";
+                    };
+
+                    // Layout: info | gain label | textbox | roll
+                    // DockPanel: last child fills — add docks first (right to left), then fill
+                    row.Children.Add(btnRoll);
+                    row.Children.Add(txtDie);
+                    row.Children.Add(lblGain);
+                    row.Children.Add(lblInfo);
+                    pnlHpRollRows.Children.Add(row);
+                }
+            }
+            finally
+            {
+                _suppressHpRollEvents = false;
+            }
+        }
+
+        /// <summary>
+        /// Hard-check PHB multiclass ability prerequisites for every listed class.
+        /// Uses final scores (base + racial + feat + ASI).
+        /// </summary>
+        private bool ValidateMulticlassPrerequisites(IEnumerable<string> classNames, out string failMessage)
+        {
+            failMessage = "";
+            var fails = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var raw in classNames)
+            {
+                if (string.IsNullOrWhiteSpace(raw) || !seen.Add(raw.Trim()))
+                    continue;
+                string cls = raw.Trim();
+                if (!LevelUpCalculator.MeetsMulticlassPrerequisites(cls, ab => GetFinalStat(ab), out string req))
+                {
+                    string scoreHint = GetMulticlassScoreHint(cls);
+                    fails.Add($"{cls}: needs {req}{scoreHint}");
+                }
+            }
+
+            if (fails.Count == 0)
+                return true;
+
+            failMessage =
+                "Multiclass blocked — ability scores (including racial, feat, and ASI bonuses) do not meet the requirements:\n\n• " +
+                string.Join("\n• ", fails) +
+                "\n\nRaise ability scores or take an ASI first, then try again.";
+            return false;
+        }
+
+        private string GetMulticlassScoreHint(string className)
+        {
+            // Short current-score note for the relevant abilities
+            return (className ?? "").Trim() switch
+            {
+                "Barbarian" => $" (Str {GetFinalStat("Strength")})",
+                "Bard" or "Sorcerer" or "Warlock" => $" (Cha {GetFinalStat("Charisma")})",
+                "Cleric" or "Druid" => $" (Wis {GetFinalStat("Wisdom")})",
+                "Fighter" => $" (Str {GetFinalStat("Strength")}, Dex {GetFinalStat("Dexterity")})",
+                "Monk" => $" (Dex {GetFinalStat("Dexterity")}, Wis {GetFinalStat("Wisdom")})",
+                "Paladin" => $" (Str {GetFinalStat("Strength")}, Cha {GetFinalStat("Charisma")})",
+                "Ranger" => $" (Dex {GetFinalStat("Dexterity")}, Wis {GetFinalStat("Wisdom")})",
+                "Rogue" => $" (Dex {GetFinalStat("Dexterity")})",
+                "Wizard" or "Artificer" => $" (Int {GetFinalStat("Intelligence")})",
+                _ => ""
+            };
+        }
+
+        /// <summary>First unused class that meets multiclass prereqs, or null.</summary>
+        private string? FindEligibleMulticlassOption(HashSet<string> used)
+        {
+            foreach (var cls in GameData.ClassData.Keys.OrderBy(c => c))
+            {
+                if (used.Contains(cls)) continue;
+                // Must pass prereq for this class AND all already-taken classes
+                var trial = used.Append(cls);
+                if (ValidateMulticlassPrerequisites(trial, out _))
+                    return cls;
+            }
+            return null;
+        }
+
+        private void UpdateLevelSummaryLabels()
+        {
+            if (lblLevelSummary == null) return;
+
+            var levels = CurrentCharacter?.ClassLevels ?? new List<ClassLevelEntry>();
+            int total = Math.Max(1, levels.Sum(e => e.Levels));
+            int pb = LevelUpCalculator.GetProficiencyBonus(total);
+            string dice = LevelUpCalculator.FormatHitDicePool(LevelUpCalculator.GetHitDicePool(levels));
+            string hp = txtHitPoints?.Text ?? "—";
+
+            string breakdown = levels.Count == 0
+                ? "—"
+                : string.Join(" / ", levels.Select(e =>
+                    string.IsNullOrWhiteSpace(e.Subclass)
+                        ? $"{e.ClassName} {e.Levels}"
+                        : $"{e.ClassName} {e.Levels} ({e.Subclass})"));
+
+            lblLevelSummary.Text =
+                $"Total level: {total}  |  Proficiency: +{pb}  |  Hit dice: {dice}  |  HP: {hp}\n" +
+                $"Classes: {breakdown}";
+
+            if (lblMulticlassPrereqStatus != null)
+            {
+                if (levels.Count <= 1)
+                {
+                    lblMulticlassPrereqStatus.Text = "Single-class — multiclass ability prerequisites apply when you add another class.";
+                    lblMulticlassPrereqStatus.Foreground = ClassDetailMutedBrush;
+                }
+                else
+                {
+                    var fails = new List<string>();
+                    foreach (var e in levels)
+                    {
+                        if (!LevelUpCalculator.MeetsMulticlassPrerequisites(
+                                e.ClassName, ab => GetFinalStat(ab), out string req))
+                            fails.Add($"{e.ClassName}: needs {req}");
+                    }
+                    if (fails.Count == 0)
+                    {
+                        lblMulticlassPrereqStatus.Text = "Multiclass prerequisites: all classes OK with current ability scores.";
+                        lblMulticlassPrereqStatus.Foreground = AccentGreen;
+                    }
+                    else
+                    {
+                        lblMulticlassPrereqStatus.Text =
+                            "Multiclass prerequisites not met (scores include racial/feat/ASI bonuses):\n• " +
+                            string.Join("\n• ", fails);
+                        lblMulticlassPrereqStatus.Foreground = (Brush)new BrushConverter().ConvertFromString("#E74C3C");
+                    }
+                }
+            }
+
+            var asiMap = LevelUpCalculator.GetAsiStatBonuses(CurrentCharacter?.AsiOrFeatDecisions);
+            if (lblAsiBonusSummary != null)
+            {
+                if (asiMap.Count == 0)
+                    lblAsiBonusSummary.Text = "ASI bonuses applied: (none)";
+                else
+                    lblAsiBonusSummary.Text = "ASI bonuses applied: " +
+                        string.Join(", ", asiMap.OrderBy(kv => kv.Key).Select(kv => $"+{kv.Value} {kv.Key}"));
+            }
+        }
+
+        private void RebuildClassLevelRows()
+        {
+            if (pnlClassLevelRows == null || CurrentCharacter == null) return;
+            pnlClassLevelRows.Children.Clear();
+
+            var levels = CurrentCharacter.ClassLevels ?? new List<ClassLevelEntry>();
+            if (levels.Count == 0)
+            {
+                pnlClassLevelRows.Children.Add(new TextBlock
+                {
+                    Text = "Select a class on the Class & Subclass tab first.",
+                    Foreground = ClassDetailMutedBrush,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+                return;
+            }
+
+            var allClassNames = GameData.ClassData.Keys.OrderBy(c => c).ToList();
+            int totalLevels = levels.Sum(e => e.Levels);
+
+            for (int i = 0; i < levels.Count; i++)
+            {
+                int index = i;
+                var entry = levels[i];
+                var row = new Border
+                {
+                    Background = (Brush)new BrushConverter().ConvertFromString("#2A2A2A"),
+                    BorderBrush = (Brush)new BrushConverter().ConvertFromString("#444"),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(10),
+                    Margin = new Thickness(0, 0, 0, 8),
+                    CornerRadius = new CornerRadius(3)
+                };
+
+                var grid = new Grid();
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                // Class combo
+                var cmbClassRow = new ComboBox
+                {
+                    ItemsSource = allClassNames,
+                    SelectedItem = allClassNames.FirstOrDefault(c =>
+                        c.Equals(entry.ClassName, StringComparison.OrdinalIgnoreCase)) ?? entry.ClassName,
+                    Height = 30,
+                    Margin = new Thickness(0, 0, 8, 0)
+                };
+                StyleAppComboBox(cmbClassRow);
+                Grid.SetColumn(cmbClassRow, 0);
+
+                // Level steppers
+                var levelPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = System.Windows.VerticalAlignment.Center };
+                var btnMinus = new Button { Content = "−", Width = 32, Height = 28, Margin = new Thickness(0, 0, 4, 0) };
+                var txtLvl = new TextBlock
+                {
+                    Text = entry.Levels.ToString(),
+                    Width = 28,
+                    TextAlignment = System.Windows.TextAlignment.Center,
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                    FontWeight = FontWeights.Bold,
+                    FontSize = 14
+                };
+                var btnPlus = new Button { Content = "+", Width = 32, Height = 28, Margin = new Thickness(4, 0, 0, 0) };
+                levelPanel.Children.Add(btnMinus);
+                levelPanel.Children.Add(txtLvl);
+                levelPanel.Children.Add(btnPlus);
+                Grid.SetColumn(levelPanel, 1);
+
+                // Subclass
+                var subPanel = new StackPanel { Margin = new Thickness(8, 0, 8, 0) };
+                int subReq = GameData.GetSubclassLevel(entry.ClassName);
+                var lblSub = new TextBlock
+                {
+                    Text = entry.Levels >= subReq ? "Subclass" : $"Subclass (at lvl {subReq})",
+                    FontSize = 11,
+                    Foreground = ClassDetailMutedBrush
+                };
+                var subNames = GameData.GetSubclassNames(entry.ClassName);
+                var cmbSub = new ComboBox
+                {
+                    ItemsSource = subNames,
+                    Height = 30,
+                    // Allow viewing the planned subclass even before unlock level; editing when unlocked
+                    IsEnabled = subNames.Count > 0
+                };
+                StyleAppComboBox(cmbSub);
+
+                // Prefer ClassLevels subclass; for primary row also fall back to Class-tab selection
+                string? desiredSub = entry.Subclass;
+                if (string.IsNullOrWhiteSpace(desiredSub) && index == 0)
+                    desiredSub = GetUiSelectedSubclassName();
+
+                if (!string.IsNullOrWhiteSpace(desiredSub))
+                {
+                    var match = subNames.FirstOrDefault(s =>
+                        s.Equals(desiredSub, StringComparison.OrdinalIgnoreCase));
+                    if (match != null)
+                    {
+                        cmbSub.SelectedItem = match;
+                        // Keep ClassLevels in sync if we resolved from UI
+                        if (string.IsNullOrWhiteSpace(entry.Subclass))
+                            entry.Subclass = match;
+                    }
+                    else if (subNames.Count > 0)
+                        cmbSub.SelectedIndex = 0;
+                }
+                else if (subNames.Count > 0)
+                {
+                    cmbSub.SelectedIndex = 0;
+                    // Persist auto-selected first subclass onto the entry so it sticks
+                    if (cmbSub.SelectedItem is string autoSub && string.IsNullOrWhiteSpace(entry.Subclass))
+                        entry.Subclass = autoSub;
+                }
+
+                if (entry.Levels < subReq && subNames.Count > 0)
+                {
+                    cmbSub.ToolTip =
+                        $"Normally chosen at {entry.ClassName} level {subReq}. You can plan ahead; it unlocks at that level.";
+                }
+
+                subPanel.Children.Add(lblSub);
+                subPanel.Children.Add(cmbSub);
+                Grid.SetColumn(subPanel, 2);
+
+                bool canRemove = levels.Count > 1;
+                var btnRemove = new Button
+                {
+                    Content = "Remove",
+                    Padding = new Thickness(10, 4, 10, 4),
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                    // Keep enabled for color control; block clicks when single-class
+                    IsEnabled = true,
+                    IsHitTestVisible = canRemove,
+                    Focusable = canRemove,
+                    Cursor = canRemove ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
+                    Background = canRemove
+                        ? (Brush)new BrushConverter().ConvertFromString("#8B3A3A")
+                        : (Brush)new BrushConverter().ConvertFromString("#3A3A3A"),
+                    Foreground = canRemove
+                        ? Brushes.White
+                        : (Brush)new BrushConverter().ConvertFromString("#999999"),
+                    BorderBrush = canRemove
+                        ? (Brush)new BrushConverter().ConvertFromString("#A05050")
+                        : (Brush)new BrushConverter().ConvertFromString("#555555"),
+                    BorderThickness = new Thickness(1),
+                    Opacity = canRemove ? 1.0 : 0.85,
+                    ToolTip = canRemove
+                        ? "Remove this class from your multiclass build"
+                        : "Remove is available after you add a second class (multiclass)"
+                };
+                Grid.SetColumn(btnRemove, 3);
+
+                // Events
+                cmbClassRow.SelectionChanged += (s, e) =>
+                {
+                    if (_suppressLevelTabRebuild) return;
+                    if (cmbClassRow.SelectedItem is not string newClass) return;
+                    if (index < 0 || index >= CurrentCharacter.ClassLevels.Count) return;
+
+                    string previousClass = CurrentCharacter.ClassLevels[index].ClassName;
+
+                    // Prevent duplicate classes
+                    if (CurrentCharacter.ClassLevels.Where((x, xi) => xi != index)
+                        .Any(x => x.ClassName.Equals(newClass, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        MessageBox.Show("That class is already on your character. Increase its level instead.",
+                            "Duplicate Class", MessageBoxButton.OK, MessageBoxImage.Information);
+                        RefreshLevelMulticlassTab();
+                        return;
+                    }
+
+                    // Multiclass: hard-block if changing class when 2+ classes, or all classes after change fail prereqs
+                    if (CurrentCharacter.ClassLevels.Count > 1)
+                    {
+                        var projected = CurrentCharacter.ClassLevels
+                            .Select((x, xi) => xi == index ? newClass : x.ClassName)
+                            .ToList();
+                        if (!ValidateMulticlassPrerequisites(projected, out string failMsg))
+                        {
+                            MessageBox.Show(failMsg, "Multiclass Prerequisite",
+                                MessageBoxButton.OK, MessageBoxImage.Warning);
+                            // Revert combo
+                            _suppressLevelTabRebuild = true;
+                            try { cmbClassRow.SelectedItem = previousClass; }
+                            finally { _suppressLevelTabRebuild = false; }
+                            return;
+                        }
+                    }
+
+                    var rowEntry = CurrentCharacter.ClassLevels[index];
+                    rowEntry.ClassName = newClass;
+                    rowEntry.Subclass = null;
+                    RefreshLevelMulticlassTab();
+                    SyncClassTabFromLevels();
+                };
+
+                btnPlus.Click += (s, e) =>
+                {
+                    if (index >= CurrentCharacter.ClassLevels.Count) return;
+                    int sum = CurrentCharacter.ClassLevels.Sum(x => x.Levels);
+                    if (sum >= 20)
+                    {
+                        MessageBox.Show("Character level cannot exceed 20.", "Max Level",
+                            MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+                    CurrentCharacter.ClassLevels[index].Levels++;
+                    RefreshLevelMulticlassTab();
+                    SyncClassTabFromLevels();
+                };
+
+                btnMinus.Click += (s, e) =>
+                {
+                    if (index >= CurrentCharacter.ClassLevels.Count) return;
+                    var rowEntry = CurrentCharacter.ClassLevels[index];
+                    if (rowEntry.Levels <= 1)
+                    {
+                        if (CurrentCharacter.ClassLevels.Count > 1)
+                        {
+                            CurrentCharacter.ClassLevels.RemoveAt(index);
+                            RefreshLevelMulticlassTab();
+                            SyncClassTabFromLevels();
+                        }
+                        return;
+                    }
+                    rowEntry.Levels--;
+                    RefreshLevelMulticlassTab();
+                    SyncClassTabFromLevels();
+                };
+
+                cmbSub.SelectionChanged += (s, e) =>
+                {
+                    if (_suppressLevelTabRebuild) return;
+                    if (index >= CurrentCharacter.ClassLevels.Count) return;
+                    if (cmbSub.SelectedItem is string subName)
+                    {
+                        CurrentCharacter.ClassLevels[index].Subclass = subName;
+                        // Mirror to Class tab when this is the primary class
+                        if (index == 0 && cmbSubclass != null)
+                        {
+                            var match = cmbSubclass.Items.Cast<object>()
+                                .Select(o => o?.ToString())
+                                .FirstOrDefault(x => x != null &&
+                                    x.Equals(subName, StringComparison.OrdinalIgnoreCase));
+                            if (match != null)
+                            {
+                                _suppressLevelTabRebuild = true;
+                                try { cmbSubclass.SelectedItem = match; }
+                                finally { _suppressLevelTabRebuild = false; }
+                            }
+                        }
+                        UpdateLevelSummaryLabels();
+                        ApplyLevelDerivedState();
+                        RebuildAsiFeatChoicePanels();
+                    }
+                };
+
+                btnRemove.Click += (s, e) =>
+                {
+                    if (CurrentCharacter.ClassLevels.Count <= 1) return;
+                    if (index < CurrentCharacter.ClassLevels.Count)
+                    {
+                        CurrentCharacter.ClassLevels.RemoveAt(index);
+                        RefreshLevelMulticlassTab();
+                        SyncClassTabFromLevels();
+                    }
+                };
+
+                grid.Children.Add(cmbClassRow);
+                grid.Children.Add(levelPanel);
+                grid.Children.Add(subPanel);
+                grid.Children.Add(btnRemove);
+                row.Child = grid;
+                pnlClassLevelRows.Children.Add(row);
+
+                // Prereq hint under row for multiclass
+                if (levels.Count > 1)
+                {
+                    string req = LevelUpCalculator.GetMulticlassPrerequisiteText(entry.ClassName);
+                    bool ok = LevelUpCalculator.MeetsMulticlassPrerequisites(
+                        entry.ClassName, ab => GetFinalStat(ab), out _);
+                    pnlClassLevelRows.Children.Add(new TextBlock
+                    {
+                        Text = ok ? $"  ✓ {entry.ClassName} prereq ({req})" : $"  ✗ {entry.ClassName} needs {req}",
+                        Foreground = ok ? AccentGreen : (Brush)new BrushConverter().ConvertFromString("#E74C3C"),
+                        FontSize = 11,
+                        Margin = new Thickness(4, -4, 0, 8)
+                    });
+                }
+            }
+        }
+
+        private void RebuildAsiFeatChoicePanels()
+        {
+            if (pnlAsiFeatChoices == null || CurrentCharacter == null) return;
+            pnlAsiFeatChoices.Children.Clear();
+
+            ReconcileAsiDecisions();
+            var decisions = CurrentCharacter.AsiOrFeatDecisions ?? new List<AsiOrFeatDecision>();
+
+            if (lblAsiFeatHint != null)
+            {
+                lblAsiFeatHint.Text = decisions.Count == 0
+                    ? "No ASI/feat milestones yet. Reach class level 4 (Fighter also 6/14, Rogue also 10, …) to unlock choices."
+                    : $"You have {decisions.Count} ASI/feat choice(s). Pick Ability Score Improvement or Feat for each.";
+            }
+
+            foreach (var decision in decisions)
+            {
+                var card = BuildAsiFeatChoiceCard(decision);
+                pnlAsiFeatChoices.Children.Add(card);
+            }
+        }
+
+        private Border BuildAsiFeatChoiceCard(AsiOrFeatDecision decision)
+        {
+            var border = new Border
+            {
+                Background = (Brush)new BrushConverter().ConvertFromString("#252525"),
+                BorderBrush = (Brush)new BrushConverter().ConvertFromString("#555"),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 10),
+                CornerRadius = new CornerRadius(3)
+            };
+
+            var stack = new StackPanel();
+            stack.Children.Add(new TextBlock
+            {
+                Text = $"{decision.ClassName} level {decision.ClassLevel} — Ability Score Improvement or Feat",
+                FontWeight = FontWeights.SemiBold,
+                Foreground = ClassDetailSectionBrush,
+                FontSize = 13,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            string groupName = $"AsiFeat_{decision.ClassName}_{decision.ClassLevel}";
+
+            var rbAsi = new RadioButton
+            {
+                Content = "Ability Score Improvement (+2 to one score, or +1 to two scores)",
+                GroupName = groupName,
+                IsChecked = decision.Kind == AsiOrFeatKind.AbilityScoreImprovement,
+                Margin = new Thickness(0, 0, 0, 4),
+                Foreground = Brushes.White
+            };
+            var rbFeat = new RadioButton
+            {
+                Content = "Feat (adds +1 to your feat selection limit on the Feats tab)",
+                GroupName = groupName,
+                IsChecked = decision.Kind == AsiOrFeatKind.Feat,
+                Margin = new Thickness(0, 0, 0, 8),
+                Foreground = Brushes.White
+            };
+
+            var asiPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(20, 0, 0, 4),
+                Visibility = decision.Kind == AsiOrFeatKind.AbilityScoreImprovement
+                    ? Visibility.Visible
+                    : Visibility.Collapsed
+            };
+
+            var cmbA = new ComboBox
+            {
+                Width = 130,
+                ItemsSource = AbilityNames.ToList(),
+                Margin = new Thickness(0, 0, 8, 0),
+                Height = 28
+            };
+            var cmbB = new ComboBox
+            {
+                Width = 130,
+                ItemsSource = AbilityNames.ToList(),
+                Height = 28
+            };
+            StyleAppComboBox(cmbA);
+            StyleAppComboBox(cmbB);
+
+            if (!string.IsNullOrWhiteSpace(decision.AbilityPlusOneA) &&
+                AbilityNames.Contains(decision.AbilityPlusOneA))
+                cmbA.SelectedItem = decision.AbilityPlusOneA;
+            else
+                cmbA.SelectedIndex = 0;
+
+            if (!string.IsNullOrWhiteSpace(decision.AbilityPlusOneB) &&
+                AbilityNames.Contains(decision.AbilityPlusOneB))
+                cmbB.SelectedItem = decision.AbilityPlusOneB;
+            else
+                cmbB.SelectedIndex = 0;
+
+            asiPanel.Children.Add(new TextBlock
+            {
+                Text = "+1",
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0)
+            });
+            asiPanel.Children.Add(cmbA);
+            asiPanel.Children.Add(new TextBlock
+            {
+                Text = "and +1",
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 6, 0)
+            });
+            asiPanel.Children.Add(cmbB);
+            asiPanel.Children.Add(new TextBlock
+            {
+                Text = "(same ability twice = +2; max 20)",
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Foreground = ClassDetailMutedBrush,
+                FontSize = 11,
+                Margin = new Thickness(10, 0, 0, 0)
+            });
+
+            var featNote = new TextBlock
+            {
+                Text = decision.Kind == AsiOrFeatKind.Feat
+                    ? "Open the Feats tab to choose which feat you gain from this milestone."
+                    : "",
+                Foreground = AccentGreen,
+                FontSize = 12,
+                Margin = new Thickness(20, 0, 0, 0),
+                TextWrapping = TextWrapping.Wrap,
+                Visibility = decision.Kind == AsiOrFeatKind.Feat ? Visibility.Visible : Visibility.Collapsed
+            };
+
+            void CommitAsiAbilities()
+            {
+                if (decision.Kind != AsiOrFeatKind.AbilityScoreImprovement) return;
+                decision.AbilityPlusOneA = cmbA.SelectedItem as string ?? "";
+                decision.AbilityPlusOneB = cmbB.SelectedItem as string ?? "";
+                // Soft cap notice
+                ValidateAsiAgainstCap(decision);
+                UpdateLevelSummaryLabels();
+                UpdateStatDisplays();
+            }
+
+            cmbA.SelectionChanged += (s, e) => CommitAsiAbilities();
+            cmbB.SelectionChanged += (s, e) => CommitAsiAbilities();
+
+            rbAsi.Checked += (s, e) =>
+            {
+                decision.Kind = AsiOrFeatKind.AbilityScoreImprovement;
+                if (string.IsNullOrWhiteSpace(decision.AbilityPlusOneA))
+                    decision.AbilityPlusOneA = cmbA.SelectedItem as string ?? "Strength";
+                if (string.IsNullOrWhiteSpace(decision.AbilityPlusOneB))
+                    decision.AbilityPlusOneB = cmbB.SelectedItem as string ?? decision.AbilityPlusOneA;
+                asiPanel.Visibility = Visibility.Visible;
+                featNote.Visibility = Visibility.Collapsed;
+                featNote.Text = "";
+                UpdateFeatsTabVisibility();
+                UpdateStatDisplays();
+                UpdateLevelSummaryLabels();
+            };
+
+            rbFeat.Checked += (s, e) =>
+            {
+                decision.Kind = AsiOrFeatKind.Feat;
+                decision.AbilityPlusOneA = "";
+                decision.AbilityPlusOneB = "";
+                asiPanel.Visibility = Visibility.Collapsed;
+                featNote.Visibility = Visibility.Visible;
+                featNote.Text = "Open the Feats tab to choose which feat you gain from this milestone.";
+                EnsureFeatsLoaded();
+                UpdateFeatsTabVisibility();
+                UpdateStatDisplays();
+                UpdateLevelSummaryLabels();
+            };
+
+            stack.Children.Add(rbAsi);
+            stack.Children.Add(asiPanel);
+            stack.Children.Add(rbFeat);
+            stack.Children.Add(featNote);
+            border.Child = stack;
+            return border;
+        }
+
+        private void ValidateAsiAgainstCap(AsiOrFeatDecision decision)
+        {
+            // Informational only — still apply; PHB max 20 is enforced visually in summary if over
+            foreach (var ab in AbilityNames)
+            {
+                int final = GetFinalStat(ab);
+                if (final > 20)
+                {
+                    // Don't message spam; summary shows final scores on Ability Scores tab
+                }
+            }
+        }
+
+        private void SyncClassTabFromLevels()
+        {
+            if (CurrentCharacter?.ClassLevels == null || CurrentCharacter.ClassLevels.Count == 0)
+                return;
+
+            var primary = CurrentCharacter.ClassLevels[0];
+            if (cmbClass != null &&
+                cmbClass.Items.Cast<object>().Select(o => o?.ToString())
+                    .Any(c => c != null && c.Equals(primary.ClassName, StringComparison.OrdinalIgnoreCase)))
+            {
+                if (cmbClass.SelectedItem as string != primary.ClassName)
+                {
+                    _suppressLevelTabRebuild = true;
+                    try
+                    {
+                        cmbClass.SelectedItem = primary.ClassName;
+                    }
+                    finally
+                    {
+                        _suppressLevelTabRebuild = false;
+                    }
+                }
+            }
+
+            // Refresh subclass dropdown for primary class then select
+            if (!_suppressLevelTabRebuild)
+                PopulateSubclassDropdown(primary.ClassName);
+
+            if (cmbSubclass != null && !string.IsNullOrWhiteSpace(primary.Subclass))
+            {
+                var match = cmbSubclass.Items.Cast<object>()
+                    .Select(o => o?.ToString())
+                    .FirstOrDefault(x => x != null &&
+                        x.Equals(primary.Subclass, StringComparison.OrdinalIgnoreCase));
+                if (match != null && !Equals(cmbSubclass.SelectedItem, match))
+                {
+                    _suppressLevelTabRebuild = true;
+                    try { cmbSubclass.SelectedItem = match; }
+                    finally { _suppressLevelTabRebuild = false; }
+                }
+            }
+        }
+
+        private void btnAddClassLevel_Click(object sender, RoutedEventArgs e)
+        {
+            EnsureClassLevelsSeeded();
+            if (CurrentCharacter.ClassLevels == null)
+                CurrentCharacter.ClassLevels = new List<ClassLevelEntry>();
+
+            int sum = CurrentCharacter.ClassLevels.Sum(x => x.Levels);
+            if (sum >= 20)
+            {
+                MessageBox.Show("Character level cannot exceed 20.", "Max Level",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var used = new HashSet<string>(
+                CurrentCharacter.ClassLevels.Select(c => c.ClassName),
+                StringComparer.OrdinalIgnoreCase);
+
+            // Existing classes must already qualify before any multiclass is allowed (PHB)
+            if (!ValidateMulticlassPrerequisites(used, out string existingFail))
+            {
+                MessageBox.Show(
+                    "Cannot multiclass yet.\n\n" + existingFail,
+                    "Multiclass Prerequisite",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            // Prefer a class that meets prereqs (with all existing classes)
+            string? next = FindEligibleMulticlassOption(used);
+
+            if (next == null)
+            {
+                // Either all classes taken, or no remaining class meets ability scores
+                bool anyUnused = GameData.ClassData.Keys.Any(c => !used.Contains(c));
+                if (!anyUnused)
+                {
+                    MessageBox.Show("All classes are already on this character.", "Multiclass",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Build a helpful list of why remaining options fail
+                var reasons = new List<string>();
+                foreach (var cls in GameData.ClassData.Keys.OrderBy(c => c))
+                {
+                    if (used.Contains(cls)) continue;
+                    if (!LevelUpCalculator.MeetsMulticlassPrerequisites(cls, ab => GetFinalStat(ab), out string req))
+                        reasons.Add($"{cls}: needs {req}{GetMulticlassScoreHint(cls)}");
+                }
+
+                MessageBox.Show(
+                    "No available class meets multiclass ability prerequisites with your current scores " +
+                    "(including racial, feat, and ASI bonuses).\n\n" +
+                    string.Join("\n", reasons.Take(12)) +
+                    (reasons.Count > 12 ? "\n…" : ""),
+                    "Multiclass Prerequisite",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            // Final hard check: existing + new
+            var allAfter = used.Append(next).ToList();
+            if (!ValidateMulticlassPrerequisites(allAfter, out string failMsg))
+            {
+                MessageBox.Show(failMsg, "Multiclass Prerequisite",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            CurrentCharacter.ClassLevels.Add(new ClassLevelEntry(next, 1, null));
+            RefreshLevelMulticlassTab();
+        }
+
+        private void HpGainMethod_Changed(object sender, RoutedEventArgs e)
+        {
+            if (CurrentCharacter == null) return;
+            if (rbHpRolled?.IsChecked == true)
+                CurrentCharacter.HpGainMethod = HpGainMethod.Rolled;
+            else
+                CurrentCharacter.HpGainMethod = HpGainMethod.FixedAverage;
+            RebuildHpRollRows();
+            UpdateHitPoints();
+            UpdateLevelSummaryLabels();
         }
 
         private void cmbSubrace_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -620,50 +1984,174 @@ namespace Nemo
                 UpdateSkillChoices(className);
         }
 
-        /// <summary>
-        /// Appends the new detailed ClassFeature entries (name + description) to the given StringBuilder.
-        /// Skips any features whose name contains "Spellcasting" (we already show spellcasting stats elsewhere).
-        /// Also skips any names passed in excludeNames (e.g. "Domain Spells" for Cleric, "Expanded Spell List" for Warlock,
-        /// because those are already shown via the DOMAIN SPELLS / PATRON SPELLS lines above).
-        /// If sectionTitle is provided, it is printed as a header first.
-        /// </summary>
-        private void AppendDetailedFeatures(System.Text.StringBuilder sb, List<ClassFeature> features, string sectionTitle = null, IEnumerable<string> excludeNames = null)
-        {
-            if (features == null || features.Count == 0) return;
+        // ───────────────────────── Class & Subclass details panel ─────────────────────────
 
-            // Build a case-insensitive set of names to exclude (in addition to the Spellcasting rule)
+        private static readonly Brush ClassDetailBodyBrush =
+            (Brush)new BrushConverter().ConvertFromString("#DDD");
+        private static readonly Brush ClassDetailHeaderBrush =
+            (Brush)new BrushConverter().ConvertFromString("#9CDCFE");
+        private static readonly Brush ClassDetailMutedBrush =
+            (Brush)new BrushConverter().ConvertFromString("#AAA");
+        private static readonly Brush ClassDetailUsesBrush =
+            (Brush)new BrushConverter().ConvertFromString("#7CFC00");
+        private static readonly Brush ClassDetailSectionBrush =
+            (Brush)new BrushConverter().ConvertFromString("#E8C36A");
+
+        /// <summary>
+        /// Filters progression features for the details panel.
+        /// Skips "Spellcasting" (already covered by the SPELLCASTING summary) and optional exclude names.
+        /// </summary>
+        private static List<ClassFeature> FilterDetailFeatures(
+            IEnumerable<ClassFeature> features, IEnumerable<string> excludeNames = null)
+        {
+            if (features == null) return new List<ClassFeature>();
+
             var excludeSet = (excludeNames ?? Enumerable.Empty<string>())
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Select(s => s.Trim())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var filtered = features
+            return features
                 .Where(f => !string.IsNullOrWhiteSpace(f.Name) &&
                             !f.Name.Contains("Spellcasting", StringComparison.OrdinalIgnoreCase) &&
                             !excludeSet.Contains(f.Name.Trim()))
                 .ToList();
-
-            if (filtered.Count == 0) return;
-
-            if (!string.IsNullOrEmpty(sectionTitle))
-            {
-                sb.AppendLine(sectionTitle);
-            }
-
-            foreach (var f in filtered)
-            {
-                if (f.Level > 0)
-                    sb.AppendLine($"• (Lv {f.Level}) {f.Name}: {f.Description}");
-                else
-                    sb.AppendLine($"• {f.Name}: {f.Description}");
-            }
-
-            sb.AppendLine();
         }
 
-        private void cmbClass_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private TextBlock MakeClassDetailText(
+            string text,
+            bool bold = false,
+            double fontSize = 13,
+            Brush foreground = null,
+            Thickness? margin = null)
         {
-            if (cmbClass.SelectedItem is not string className || !GameData.ClassData.ContainsKey(className)) return;
+            return new TextBlock
+            {
+                Text = text ?? "",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = fontSize,
+                FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = foreground ?? ClassDetailBodyBrush,
+                LineHeight = fontSize + 6,
+                Margin = margin ?? new Thickness(0, 0, 0, 2)
+            };
+        }
+
+        /// <summary>Adds feature bullets (optionally with Uses) to a panel.</summary>
+        private void AddFeatureDetailBlocks(Panel parent, IEnumerable<ClassFeature> features, bool showLevelPrefix = true)
+        {
+            if (parent == null || features == null) return;
+
+            foreach (var f in features)
+            {
+                string name = f.Name?.Trim() ?? "";
+                if (f.IsOptional && !name.Contains("Optional", StringComparison.OrdinalIgnoreCase))
+                    name += " (Optional)";
+
+                string title = showLevelPrefix && f.Level > 0
+                    ? $"• (Lv {f.Level}) {name}"
+                    : $"• {name}";
+
+                parent.Children.Add(MakeClassDetailText(title, bold: true, margin: new Thickness(0, 6, 0, 1)));
+
+                if (!string.IsNullOrWhiteSpace(f.Description))
+                {
+                    parent.Children.Add(MakeClassDetailText(
+                        f.Description,
+                        bold: false,
+                        fontSize: 12.5,
+                        foreground: ClassDetailBodyBrush,
+                        margin: new Thickness(14, 0, 0, 1)));
+                }
+
+                if (!string.IsNullOrWhiteSpace(f.Uses) &&
+                    !string.Equals(f.Uses, "Passive", StringComparison.OrdinalIgnoreCase))
+                {
+                    parent.Children.Add(MakeClassDetailText(
+                        $"Uses: {f.Uses}",
+                        bold: false,
+                        fontSize: 12,
+                        foreground: ClassDetailUsesBrush,
+                        margin: new Thickness(14, 0, 0, 2)));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Collapsed expander listing features from <paramref name="minLevel"/> upward, grouped by level.
+        /// </summary>
+        private Expander BuildHigherLevelFeaturesExpander(
+            string header,
+            IEnumerable<ClassFeature> features,
+            int minLevel)
+        {
+            var higher = features
+                .Where(f => f.Level >= minLevel)
+                .OrderBy(f => f.Level)
+                .ThenBy(f => f.Name)
+                .ToList();
+
+            var content = new StackPanel { Margin = new Thickness(8, 4, 0, 4) };
+
+            if (higher.Count == 0)
+            {
+                content.Children.Add(MakeClassDetailText(
+                    "(No additional features listed.)",
+                    foreground: ClassDetailMutedBrush));
+            }
+            else
+            {
+                foreach (var group in higher.GroupBy(f => f.Level).OrderBy(g => g.Key))
+                {
+                    content.Children.Add(MakeClassDetailText(
+                        $"Level {group.Key}",
+                        bold: true,
+                        fontSize: 12.5,
+                        foreground: ClassDetailHeaderBrush,
+                        margin: new Thickness(0, 8, 0, 2)));
+                    AddFeatureDetailBlocks(content, group, showLevelPrefix: false);
+                }
+            }
+
+            var headerBlock = new TextBlock
+            {
+                Text = header,
+                Foreground = ClassDetailHeaderBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap
+            };
+
+            return new Expander
+            {
+                Header = headerBlock,
+                IsExpanded = false,
+                Foreground = ClassDetailHeaderBrush,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(0, 6, 0, 10),
+                Padding = new Thickness(0, 2, 0, 2),
+                Content = content
+            };
+        }
+
+        /// <summary>
+        /// Rebuilds the Class &amp; Subclass tab details panel for the current class and subclass selection.
+        /// Level 1 (or subclass starting level) features stay open; later levels are in expanders.
+        /// </summary>
+        private void RefreshClassDetailsPanel()
+        {
+            if (pnlClassDetails == null) return;
+            pnlClassDetails.Children.Clear();
+
+            if (cmbClass.SelectedItem is not string className ||
+                !GameData.ClassData.ContainsKey(className))
+            {
+                pnlClassDetails.Children.Add(MakeClassDetailText(
+                    "Select a class to see features and level-up progression.",
+                    foreground: ClassDetailMutedBrush));
+                return;
+            }
 
             var data = GameData.ClassData[className];
 
@@ -675,48 +2163,46 @@ namespace Nemo
                     hitDie = die;
             }
 
-            string subclassLevelText = className switch
-            {
-                "Cleric" or "Sorcerer" or "Warlock" => "SUBCLASSES (available at level 1)",
-                "Druid" or "Wizard" => "SUBCLASSES (available at level 2)",
-                _ => "SUBCLASSES (available at level 3)"
-            };
-
-            var desc = new System.Text.StringBuilder();
-
-            desc.AppendLine($"HIT DICE: {data.HitDie}");
-            desc.AppendLine($"HP AT 1ST LEVEL: {hitDie} + Con mod");
-            desc.AppendLine();
+            // ── Core class stats ──
+            pnlClassDetails.Children.Add(MakeClassDetailText($"HIT DICE: {data.HitDie}", bold: true));
+            pnlClassDetails.Children.Add(MakeClassDetailText(
+                $"HP AT 1ST LEVEL: {hitDie} + Con mod",
+                margin: new Thickness(0, 0, 0, 8)));
 
             if (data.SavingThrowProficiencies.Count > 0)
             {
-                desc.AppendLine("SAVING THROW PROFICIENCIES");
-                desc.AppendLine("• " + string.Join(", ", data.SavingThrowProficiencies));
-                desc.AppendLine();
+                pnlClassDetails.Children.Add(MakeClassDetailText("SAVING THROW PROFICIENCIES", bold: true, foreground: ClassDetailSectionBrush));
+                pnlClassDetails.Children.Add(MakeClassDetailText(
+                    "• " + string.Join(", ", data.SavingThrowProficiencies),
+                    margin: new Thickness(0, 0, 0, 8)));
             }
 
             if (data.ArmorProficiencies.Count > 0)
             {
-                desc.AppendLine("ARMOR PROFICIENCIES");
-                desc.AppendLine("• " + string.Join(", ", data.ArmorProficiencies));
-                desc.AppendLine();
+                pnlClassDetails.Children.Add(MakeClassDetailText("ARMOR PROFICIENCIES", bold: true, foreground: ClassDetailSectionBrush));
+                pnlClassDetails.Children.Add(MakeClassDetailText(
+                    "• " + string.Join(", ", data.ArmorProficiencies),
+                    margin: new Thickness(0, 0, 0, 8)));
             }
 
             if (data.WeaponProficiencies.Count > 0)
             {
-                desc.AppendLine("WEAPON PROFICIENCIES");
-                desc.AppendLine("• " + string.Join(", ", data.WeaponProficiencies));
-                desc.AppendLine();
+                pnlClassDetails.Children.Add(MakeClassDetailText("WEAPON PROFICIENCIES", bold: true, foreground: ClassDetailSectionBrush));
+                pnlClassDetails.Children.Add(MakeClassDetailText(
+                    "• " + string.Join(", ", data.WeaponProficiencies),
+                    margin: new Thickness(0, 0, 0, 8)));
             }
 
-            desc.AppendLine($"SKILL PROFICIENCIES ({data.SkillChoiceCount} skills from {string.Join(", ", data.SkillChoices)})");
-            desc.AppendLine();
+            pnlClassDetails.Children.Add(MakeClassDetailText("SKILL PROFICIENCIES", bold: true, foreground: ClassDetailSectionBrush));
+            pnlClassDetails.Children.Add(MakeClassDetailText(
+                $"({data.SkillChoiceCount} skills from {string.Join(", ", data.SkillChoices)})",
+                margin: new Thickness(0, 0, 0, 8)));
 
             if (data.Spellcasting)
             {
-                desc.AppendLine("SPELLCASTING");
-                desc.AppendLine($"Ability: {data.SpellAbility}");
-                desc.AppendLine($"Cantrips: {data.CantripsKnown}");
+                pnlClassDetails.Children.Add(MakeClassDetailText("SPELLCASTING", bold: true, foreground: ClassDetailSectionBrush));
+                pnlClassDetails.Children.Add(MakeClassDetailText($"Ability: {data.SpellAbility}"));
+                pnlClassDetails.Children.Add(MakeClassDetailText($"Cantrips: {data.CantripsKnown}"));
 
                 int slotsAtLevel1 = className switch
                 {
@@ -724,36 +2210,250 @@ namespace Nemo
                     "Warlock" => 1,
                     _ => 2
                 };
-                desc.AppendLine($"1st-level Spell Slots: {slotsAtLevel1}");
+                pnlClassDetails.Children.Add(MakeClassDetailText($"1st-level Spell slots: {slotsAtLevel1}"));
 
                 if (data.SpellsKnown > 0)
-                    desc.AppendLine($"Spells Known: {data.SpellsKnown}");
+                    pnlClassDetails.Children.Add(MakeClassDetailText($"Spells Known: {data.SpellsKnown}"));
                 else if (!string.IsNullOrEmpty(data.SpellsPrepared))
-                    desc.AppendLine($"Spells Prepared: {data.SpellsPrepared}");
+                    pnlClassDetails.Children.Add(MakeClassDetailText($"Spells Prepared: {data.SpellsPrepared}"));
 
-                desc.AppendLine();
-                PopulateSpells();
+                pnlClassDetails.Children.Add(new FrameworkElement { Height = 8 });
             }
 
-            // Base-class features through current supported level (level 1 for now; progression data goes to 20)
-            var classFeats = GameData.GetClassFeaturesUpToLevel(className, 1, includeOptional: true);
-            if (classFeats.Count == 0 && GameData.ClassLevel1Features.TryGetValue(className, out var legacyFeats))
-                classFeats = legacyFeats;
-            if (classFeats.Count > 0)
-                AppendDetailedFeatures(desc, classFeats, "CLASS FEATURES (Level 1)", excludeNames: null);
+            // ── Base class features (full 1–20; level 1 open, 2–20 collapsed) ──
+            var allClassFeats = FilterDetailFeatures(
+                GameData.GetClassProgression(className, includeOptional: true));
+            if (allClassFeats.Count == 0 &&
+                GameData.ClassLevel1Features.TryGetValue(className, out var legacyClassFeats))
+            {
+                allClassFeats = FilterDetailFeatures(legacyClassFeats);
+            }
 
-            desc.AppendLine(subclassLevelText);
-            desc.AppendLine(string.Join(", ", data.Subclasses));
+            var classLevel1 = allClassFeats.Where(f => f.Level <= 1).ToList();
+            var classHigher = allClassFeats.Where(f => f.Level > 1).ToList();
 
-            // Save the base description so we can replace only the subclass part later
-            baseClassDescription = desc.ToString();
+            pnlClassDetails.Children.Add(MakeClassDetailText(
+                "CLASS FEATURES (Level 1)",
+                bold: true,
+                fontSize: 14,
+                foreground: ClassDetailSectionBrush,
+                margin: new Thickness(0, 4, 0, 2)));
 
-            txtClassDetails.Text = baseClassDescription;
+            if (classLevel1.Count > 0)
+                AddFeatureDetailBlocks(pnlClassDetails, classLevel1, showLevelPrefix: false);
+            else
+                pnlClassDetails.Children.Add(MakeClassDetailText(
+                    "(No level 1 class features listed.)",
+                    foreground: ClassDetailMutedBrush));
+
+            if (classHigher.Count > 0)
+            {
+                int maxClassLevel = classHigher.Max(f => f.Level);
+                pnlClassDetails.Children.Add(BuildHigherLevelFeaturesExpander(
+                    $"Class level-up features (Levels 2–{maxClassLevel}) — click to expand",
+                    classHigher,
+                    minLevel: 2));
+            }
+
+            // ── Subclass availability list ──
+            string subclassLevelText = className switch
+            {
+                "Cleric" or "Sorcerer" or "Warlock" => "SUBCLASSES (available at level 1)",
+                "Druid" or "Wizard" => "SUBCLASSES (available at level 2)",
+                _ => "SUBCLASSES (available at level 3)"
+            };
+
+            pnlClassDetails.Children.Add(MakeClassDetailText(
+                subclassLevelText,
+                bold: true,
+                foreground: ClassDetailSectionBrush,
+                margin: new Thickness(0, 8, 0, 2)));
+            pnlClassDetails.Children.Add(MakeClassDetailText(
+                string.Join(", ", data.Subclasses),
+                margin: new Thickness(0, 0, 0, 10)));
+
+            // ── Selected subclass details ──
+            AppendSelectedSubclassDetails(className);
+        }
+
+        /// <summary>Appends header + starting-level features + expander for later subclass features.</summary>
+        private void AppendSelectedSubclassDetails(string className)
+        {
+            if (cmbSubclass?.SelectedItem is not string selectedSub) return;
+
+            if (selectedSub.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) ||
+                selectedSub.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            int subLevel = GameData.GetSubclassLevel(className);
+            var catalog = GameData.GetSubclassInfo(className, selectedSub);
+
+            pnlClassDetails.Children.Add(new Separator
+            {
+                Margin = new Thickness(0, 4, 0, 10),
+                Background = (Brush)new BrushConverter().ConvertFromString("#555")
+            });
+
+            string displayName = catalog?.Name ?? selectedSub;
+            pnlClassDetails.Children.Add(MakeClassDetailText(
+                $"=== {displayName.ToUpperInvariant()} ===",
+                bold: true,
+                fontSize: 14,
+                foreground: ClassDetailSectionBrush,
+                margin: new Thickness(0, 0, 0, 4)));
+
+            if (catalog != null)
+            {
+                pnlClassDetails.Children.Add(MakeClassDetailText(
+                    $"Available at: {className} level {catalog.LevelAvailable}"));
+                if (!string.IsNullOrWhiteSpace(catalog.Source))
+                    pnlClassDetails.Children.Add(MakeClassDetailText($"Source: {catalog.Source}"));
+                if (!string.IsNullOrWhiteSpace(catalog.Summary))
+                    pnlClassDetails.Children.Add(MakeClassDetailText(
+                        catalog.Summary,
+                        margin: new Thickness(0, 4, 0, 4)));
+                if (subLevel > 1)
+                {
+                    pnlClassDetails.Children.Add(MakeClassDetailText(
+                        $"(Note: Nemo's builder is level-1 focused. This subclass is normally chosen at level {subLevel}.)",
+                        fontSize: 12,
+                        foreground: ClassDetailMutedBrush,
+                        margin: new Thickness(0, 2, 0, 6)));
+                }
+            }
+
+            // Bonus proficiencies / spell hints from legacy subclass tables
+            if (className == "Cleric" && GameData.ClericSubclasses.TryGetValue(selectedSub, out var clericSub))
+            {
+                if (clericSub.AdditionalCantrips.Count > 0)
+                    pnlClassDetails.Children.Add(MakeClassDetailText(
+                        $"ADDITIONAL CANTRIPS: {string.Join(", ", clericSub.AdditionalCantrips)}"));
+                if (clericSub.ArmorProficiencies.Count > 0)
+                    pnlClassDetails.Children.Add(MakeClassDetailText(
+                        $"ARMOR: {string.Join(", ", clericSub.ArmorProficiencies)}"));
+                if (clericSub.WeaponProficiencies.Count > 0)
+                    pnlClassDetails.Children.Add(MakeClassDetailText(
+                        $"WEAPONS: {string.Join(", ", clericSub.WeaponProficiencies)}"));
+            }
+            else if (className == "Warlock" && GameData.WarlockSubclasses.TryGetValue(selectedSub, out var warlockSub))
+            {
+                if (warlockSub.ArmorProficiencies.Count > 0)
+                    pnlClassDetails.Children.Add(MakeClassDetailText(
+                        $"ARMOR: {string.Join(", ", warlockSub.ArmorProficiencies)}"));
+                if (warlockSub.WeaponProficiencies.Count > 0)
+                    pnlClassDetails.Children.Add(MakeClassDetailText(
+                        $"WEAPONS: {string.Join(", ", warlockSub.WeaponProficiencies)}"));
+            }
+            else if (className == "Sorcerer" && GameData.SorcererSubclasses.TryGetValue(selectedSub, out var sorcSub))
+            {
+                if (sorcSub.AdditionalSpells.Count > 0)
+                    pnlClassDetails.Children.Add(MakeClassDetailText(
+                        $"ORIGIN SPELLS (summary): {string.Join(", ", sorcSub.AdditionalSpells)}"));
+            }
+
+            // Subclass progression: starting-level features open; later levels in expander
+            var progression = FilterDetailFeatures(GameData.GetSubclassProgression(selectedSub));
+            bool usedLegacy = false;
+            if (progression.Count == 0 &&
+                GameData.SubclassLevel1Features.TryGetValue(selectedSub, out var legacySubFeats))
+            {
+                progression = FilterDetailFeatures(legacySubFeats);
+                usedLegacy = true;
+            }
+
+            if (progression.Count == 0) return;
+
+            // Starting level = earliest feature level, or catalog/class subclass level
+            int startLevel = progression.Min(f => f.Level > 0 ? f.Level : subLevel);
+            if (catalog != null && catalog.LevelAvailable > 0)
+                startLevel = Math.Min(startLevel, catalog.LevelAvailable);
+            if (subLevel > 0)
+                startLevel = Math.Min(startLevel, subLevel);
+            if (startLevel < 1) startLevel = 1;
+
+            var startingFeats = progression.Where(f => f.Level <= startLevel).ToList();
+            var laterFeats = progression.Where(f => f.Level > startLevel).ToList();
+
+            string startHeader = usedLegacy
+                ? $"{displayName.ToUpperInvariant()} FEATURES"
+                : $"{displayName.ToUpperInvariant()} FEATURES (Level {startLevel})";
+
+            pnlClassDetails.Children.Add(MakeClassDetailText(
+                startHeader,
+                bold: true,
+                fontSize: 13.5,
+                foreground: ClassDetailSectionBrush,
+                margin: new Thickness(0, 10, 0, 2)));
+
+            if (startingFeats.Count > 0)
+                AddFeatureDetailBlocks(pnlClassDetails, startingFeats, showLevelPrefix: false);
+            else
+                pnlClassDetails.Children.Add(MakeClassDetailText(
+                    "(No features at subclass start level.)",
+                    foreground: ClassDetailMutedBrush));
+
+            if (laterFeats.Count > 0)
+            {
+                int maxSubLevel = laterFeats.Max(f => f.Level);
+                pnlClassDetails.Children.Add(BuildHigherLevelFeaturesExpander(
+                    $"{displayName} level-up features (Levels {startLevel + 1}–{maxSubLevel}) — click to expand",
+                    laterFeats,
+                    minLevel: startLevel + 1));
+            }
+        }
+
+        private void cmbClass_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (cmbClass.SelectedItem is not string className || !GameData.ClassData.ContainsKey(className)) return;
+
+            var data = GameData.ClassData[className];
+
+            // When the player picks a class on tab 4 (not a programmatic sync), re-seed class levels
+            // if we're still single-class or empty.
+            if (!_suppressLevelTabRebuild && CurrentCharacter != null)
+            {
+                if (CurrentCharacter.ClassLevels == null || CurrentCharacter.ClassLevels.Count <= 1)
+                {
+                    string? keepSub = null;
+                    int keepLevels = 1;
+                    if (CurrentCharacter.ClassLevels?.Count == 1 &&
+                        CurrentCharacter.ClassLevels[0].ClassName.Equals(className, StringComparison.OrdinalIgnoreCase))
+                    {
+                        keepLevels = Math.Max(1, CurrentCharacter.ClassLevels[0].Levels);
+                        keepSub = CurrentCharacter.ClassLevels[0].Subclass;
+                    }
+
+                    CurrentCharacter.Class = className;
+                    CurrentCharacter.ClassLevels = new List<ClassLevelEntry>
+                    {
+                        new(className, keepLevels, keepSub)
+                    };
+                    CurrentCharacter.Level = keepLevels;
+                    ReconcileAsiDecisions();
+                }
+            }
+
+            if (data.Spellcasting)
+                PopulateSpells();
 
             // Subclass dropdown — full official list for every class.
-            // Nemo is level-1 focused: only subclasses available at level 1 are selectable.
-            // Higher-level subclasses are still listed so players can plan / save for later.
             PopulateSubclassDropdown(className);
+
+            // After subclass list is filled, stamp the Class-tab selection onto ClassLevels
+            if (!_suppressLevelTabRebuild && CurrentCharacter?.ClassLevels != null)
+            {
+                string? uiSub = GetUiSelectedSubclassName();
+                if (!string.IsNullOrWhiteSpace(uiSub) &&
+                    (CurrentCharacter.ClassLevels.Count == 1 ||
+                     CurrentCharacter.ClassLevels[0].ClassName.Equals(className, StringComparison.OrdinalIgnoreCase)))
+                {
+                    CurrentCharacter.ClassLevels[0].Subclass = uiSub;
+                    CurrentCharacter.Subclass = uiSub;
+                }
+            }
+
+            // Rebuild full details (class + selected subclass)
+            RefreshClassDetailsPanel();
 
             UpdateSpellTabVisibility();
             GenerateEquipmentChoices(className);
@@ -766,20 +2466,18 @@ namespace Nemo
             UpdateSubclassSpellsLabel();
             UpdateCantripChoices(className);
 
-            // Refresh details for the selected subclass
-            cmbSubclass_SelectionChanged(null, null);
+            if (!_suppressLevelTabRebuild && tabLevelMulticlass != null)
+                RefreshLevelMulticlassTab();
         }
 
         /// <summary>
         /// Fills the subclass combo from <see cref="GameData.GetSubclassNames"/>.
-        /// Selectable when the subclass is available at level 1 (current app support);
-        /// otherwise items remain visible but the control notes the required level.
+        /// Full catalog is always shown for planning; details panel explains required level.
         /// </summary>
         private void PopulateSubclassDropdown(string className)
         {
             if (cmbSubclass == null) return;
 
-            int requiredLevel = GameData.GetSubclassLevel(className);
             var names = GameData.GetSubclassNames(className);
 
             if (names.Count == 0)
@@ -790,91 +2488,47 @@ namespace Nemo
                 return;
             }
 
-            // Always show the full catalog. Enable selection for planning/import even when
-            // the mechanical level isn't supported yet (details panel explains required level).
             cmbSubclass.IsEnabled = true;
-            cmbSubclass.ItemsSource = names;
-            cmbSubclass.SelectedIndex = 0;
 
-            // Optional: surface required level in the class details header line already printed above
-            if (requiredLevel > 1 && !string.IsNullOrEmpty(baseClassDescription))
+            // Preserve prior ClassLevels / Character subclass when repopulating the list
+            string? prefer = GetUiSelectedSubclassName()
+                             ?? CurrentCharacter?.Subclass
+                             ?? CurrentCharacter?.ClassLevels?.FirstOrDefault()?.Subclass;
+
+            cmbSubclass.ItemsSource = names;
+
+            if (!string.IsNullOrWhiteSpace(prefer))
             {
-                // baseClassDescription already includes subclass list from ClassData
+                var match = names.FirstOrDefault(n =>
+                    n.Equals(prefer, StringComparison.OrdinalIgnoreCase));
+                cmbSubclass.SelectedItem = match ?? names[0];
+            }
+            else
+            {
+                cmbSubclass.SelectedIndex = 0;
             }
         }
 
         private void cmbSubclass_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (cmbClass.SelectedItem is not string className) return;
-            if (cmbSubclass.SelectedItem is not string selectedSub)
+
+            // Mirror subclass onto primary ClassLevels row when single-class / primary match
+            if (!_suppressLevelTabRebuild &&
+                CurrentCharacter?.ClassLevels != null &&
+                cmbSubclass.SelectedItem is string subName &&
+                !subName.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) &&
+                !subName.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
             {
-                txtClassDetails.Text = baseClassDescription;
-                return;
+                var primary = CurrentCharacter.ClassLevels.FirstOrDefault(c =>
+                    c.ClassName.Equals(className, StringComparison.OrdinalIgnoreCase))
+                    ?? CurrentCharacter.ClassLevels.FirstOrDefault();
+                if (primary != null)
+                    primary.Subclass = subName;
+                CurrentCharacter.Subclass = subName;
             }
 
-            // Ignore placeholder rows
-            if (selectedSub.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) ||
-                selectedSub.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
-            {
-                txtClassDetails.Text = baseClassDescription;
-                return;
-            }
-
-            var extra = new System.Text.StringBuilder();
-            int subLevel = GameData.GetSubclassLevel(className);
-            var catalog = GameData.GetSubclassInfo(className, selectedSub);
-
-            if (catalog != null)
-            {
-                extra.AppendLine($"\n\n=== {catalog.Name.ToUpperInvariant()} ===");
-                extra.AppendLine($"Available at: {className} level {catalog.LevelAvailable}");
-                if (!string.IsNullOrWhiteSpace(catalog.Source))
-                    extra.AppendLine($"Source: {catalog.Source}");
-                if (!string.IsNullOrWhiteSpace(catalog.Summary))
-                    extra.AppendLine(catalog.Summary);
-                if (subLevel > 1)
-                    extra.AppendLine($"\n(Note: Nemo's builder is level-1 focused. This subclass is normally chosen at level {subLevel}.)");
-            }
-            else
-            {
-                extra.AppendLine($"\n\n=== {selectedSub.ToUpperInvariant()} ===");
-            }
-
-            // Bonus proficiencies / 1st-level spell hints from legacy subclass tables
-            if (className == "Cleric" && GameData.ClericSubclasses.TryGetValue(selectedSub, out var clericSub))
-            {
-                if (clericSub.AdditionalCantrips.Count > 0)
-                    extra.AppendLine($"ADDITIONAL CANTRIPS: {string.Join(", ", clericSub.AdditionalCantrips)}");
-                if (clericSub.ArmorProficiencies.Count > 0)
-                    extra.AppendLine($"ARMOR: {string.Join(", ", clericSub.ArmorProficiencies)}");
-                if (clericSub.WeaponProficiencies.Count > 0)
-                    extra.AppendLine($"WEAPONS: {string.Join(", ", clericSub.WeaponProficiencies)}");
-            }
-            else if (className == "Warlock" && GameData.WarlockSubclasses.TryGetValue(selectedSub, out var warlockSub))
-            {
-                if (warlockSub.ArmorProficiencies.Count > 0)
-                    extra.AppendLine($"ARMOR: {string.Join(", ", warlockSub.ArmorProficiencies)}");
-                if (warlockSub.WeaponProficiencies.Count > 0)
-                    extra.AppendLine($"WEAPONS: {string.Join(", ", warlockSub.WeaponProficiencies)}");
-            }
-            else if (className == "Sorcerer" && GameData.SorcererSubclasses.TryGetValue(selectedSub, out var sorcSub))
-            {
-                if (sorcSub.AdditionalSpells.Count > 0)
-                    extra.AppendLine($"ORIGIN SPELLS (summary): {string.Join(", ", sorcSub.AdditionalSpells)}");
-            }
-
-            // Full subclass level-up progression (all feature levels)
-            var progression = GameData.GetSubclassProgression(selectedSub);
-            if (progression.Count > 0)
-            {
-                AppendDetailedFeatures(extra, progression, $"\n=== {selectedSub.ToUpperInvariant()} LEVEL-UP FEATURES ===");
-            }
-            else if (GameData.SubclassLevel1Features.TryGetValue(selectedSub, out var legacySubFeats))
-            {
-                AppendDetailedFeatures(extra, legacySubFeats, $"\n=== {selectedSub.ToUpperInvariant()} FEATURES ===");
-            }
-
-            txtClassDetails.Text = baseClassDescription + extra.ToString();
+            RefreshClassDetailsPanel();
             PopulateSpells();
 
             UpdateEquipmentProficiencySummary();
@@ -1492,6 +3146,8 @@ namespace Nemo
         {
             if (allSkills == null || dgSkills == null) return;
 
+            RefreshProficiencyBonus();
+
             foreach (var skill in allSkills)
             {
                 int mod = skill.Ability switch
@@ -1512,34 +3168,66 @@ namespace Nemo
             //dgSkills.Items.Refresh();
         }
 
-        private void UpdateSavingThrows()
+        /// <summary>True if the character has save proficiency from class and/or Resilient (etc.).</summary>
+        private bool HasSaveProficiency(string abilityName, IEnumerable<string> classProficientSaves)
         {
-            if (cmbClass.SelectedItem is not string className || !GameData.ClassData.ContainsKey(className)) return;
-
-            var data = GameData.ClassData[className];
-            var profSaves = data.SavingThrowProficiencies;
-
-            int strMod = GetModifierFromText(txtStrMod.Text);
-            int dexMod = GetModifierFromText(txtDexMod.Text);
-            int conMod = GetModifierFromText(txtConMod.Text);
-            int intMod = GetModifierFromText(txtIntMod.Text);
-            int wisMod = GetModifierFromText(txtWisMod.Text);
-            int chaMod = GetModifierFromText(txtChaMod.Text);
-
-            txtStrSave.Text = FormatSave(strMod, profSaves.Contains("Strength"));
-            txtDexSave.Text = FormatSave(dexMod, profSaves.Contains("Dexterity"));
-            txtConSave.Text = FormatSave(conMod, profSaves.Contains("Constitution"));
-            txtIntSave.Text = FormatSave(intMod, profSaves.Contains("Intelligence"));
-            txtWisSave.Text = FormatSave(wisMod, profSaves.Contains("Wisdom"));
-            txtChaSave.Text = FormatSave(chaMod, profSaves.Contains("Charisma"));
-
-            txtInitiative.Text = txtDexMod.Text;   // Initiative = Dex modifier
+            if (string.IsNullOrWhiteSpace(abilityName)) return false;
+            if (classProficientSaves != null &&
+                classProficientSaves.Contains(abilityName, StringComparer.OrdinalIgnoreCase))
+                return true;
+            if (!string.IsNullOrEmpty(resilientSaveAbility) &&
+                resilientSaveAbility.Equals(abilityName, StringComparison.OrdinalIgnoreCase))
+                return true;
+            return false;
         }
 
-        private string FormatSave(int mod, bool proficient)
+        private void UpdateSavingThrows()
         {
-            int total = mod + (proficient ? 2 : 0);
-            return total >= 0 ? $"+{total}" : total.ToString();
+            if (txtStrSave == null) return;
+
+            RefreshProficiencyBonus();
+
+            List<string> profSaves = new();
+            if (cmbClass.SelectedItem is string className &&
+                GameData.ClassData.TryGetValue(className, out var data))
+            {
+                profSaves = data.SavingThrowProficiencies ?? new List<string>();
+            }
+
+            int strMod = GetModifierFromText(txtStrMod?.Text);
+            int dexMod = GetModifierFromText(txtDexMod?.Text);
+            int conMod = GetModifierFromText(txtConMod?.Text);
+            int intMod = GetModifierFromText(txtIntMod?.Text);
+            int wisMod = GetModifierFromText(txtWisMod?.Text);
+            int chaMod = GetModifierFromText(txtChaMod?.Text);
+
+            txtStrSave.Text = FormatSave(strMod, HasSaveProficiency("Strength", profSaves), "Strength");
+            txtDexSave.Text = FormatSave(dexMod, HasSaveProficiency("Dexterity", profSaves), "Dexterity");
+            txtConSave.Text = FormatSave(conMod, HasSaveProficiency("Constitution", profSaves), "Constitution");
+            txtIntSave.Text = FormatSave(intMod, HasSaveProficiency("Intelligence", profSaves), "Intelligence");
+            txtWisSave.Text = FormatSave(wisMod, HasSaveProficiency("Wisdom", profSaves), "Wisdom");
+            txtChaSave.Text = FormatSave(chaMod, HasSaveProficiency("Charisma", profSaves), "Charisma");
+
+            UpdateInitiative();
+        }
+
+        private string FormatSave(int mod, bool proficient, string abilityName = "")
+        {
+            int total = mod + (proficient ? proficiencyBonus : 0);
+            string text = total >= 0 ? $"+{total}" : total.ToString();
+            if (!proficient)
+                return text;
+
+            // Note source when proficiency is only from Resilient (not the class)
+            bool fromResilient = !string.IsNullOrEmpty(resilientSaveAbility) &&
+                resilientSaveAbility.Equals(abilityName, StringComparison.OrdinalIgnoreCase);
+            bool fromClass = cmbClass.SelectedItem is string cn &&
+                GameData.ClassData.TryGetValue(cn, out var cd) &&
+                (cd.SavingThrowProficiencies?.Contains(abilityName) ?? false);
+
+            if (fromResilient && !fromClass)
+                return $"{text}  (Proficient — Resilient)";
+            return $"{text}  (Proficient)";
         }
 
         // Helper method to parse modifier text
@@ -1659,14 +3347,16 @@ namespace Nemo
             featSelectedSpell = "";
             lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE(S) TO INCREASE";
 
-            // === 1. RESILIENT → Only ability score (cmb1) ===
+            // === 1. RESILIENT → ability score (+1) and save proficiency (cmb1) ===
             if (name.Contains("resilient"))
             {
                 var allAbilities = new List<string> { "Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma" };
                 cmbFeatStatChoice1.ItemsSource = allAbilities;
                 cmbFeatStatChoice1.SelectedIndex = 0;
-                lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE TO INCREASE";
+                lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY (+1 SCORE & SAVE PROFICIENCY)";
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
+                // Ensure default Strength pick applies +1 and save proficiency even if SelectionChanged is skipped
+                FeatStatChoice_Changed(cmbFeatStatChoice1, null);
             }
             // === 2. SPELL SNIPER → Only cantrip with attack roll (cmb2) ===
             else if (name.Contains("spell sniper"))
@@ -1891,8 +3581,9 @@ namespace Nemo
                 _ => ""
             };
             featVal = featStatBonuses.TryGetValue(abilityName, out int f) ? f : 0;
+            int asiVal = GetAsiBonusForAbility(abilityName);
 
-            int finalVal = baseVal + racialVal + featVal;
+            int finalVal = baseVal + racialVal + featVal + asiVal;
 
             int mod = CalculateModifier(finalVal);
 
@@ -1992,23 +3683,16 @@ namespace Nemo
             string className = cmbClass.SelectedItem as string ?? "";
             string subclass = cmbSubclass?.SelectedItem as string ?? "";
 
-            // Builder is still level-1 focused; LevelUpCalculator supports higher levels when ClassLevels is set.
             int level = CurrentCharacter?.Level > 0 ? CurrentCharacter.Level : 1;
             var classLevels = CurrentCharacter?.ClassLevels != null && CurrentCharacter.ClassLevels.Count > 0
                 ? CurrentCharacter.ClassLevels
                 : new List<ClassLevelEntry> { new(className, Math.Max(1, level), subclass) };
 
-            int extraHpPerLevel = 0;
-            // Hill Dwarf (Dwarven Toughness): +1 HP per level
-            if (cmbSubrace?.SelectedItem is string subrace && subrace == "Hill Dwarf")
-                extraHpPerLevel += 1;
-            // Draconic Resilience: +1 HP per sorcerer level — applied as flat per character level only when pure Draconic Sorcerer
-            if (className == "Sorcerer" &&
-                subclass.Contains("Draconic", StringComparison.OrdinalIgnoreCase))
-                extraHpPerLevel += 1;
+            int extraHpPerLevel = GetExtraHpPerLevelForCalc();
 
             var method = CurrentCharacter?.HpGainMethod ?? HpGainMethod.FixedAverage;
-            var rolls = CurrentCharacter?.HitPointRolls;
+            // 0 entries mean “not rolled yet” → calculator uses fixed average for that level
+            var rolls = method == HpGainMethod.Rolled ? CurrentCharacter?.HitPointRolls : null;
 
             var snap = LevelUpCalculator.Calculate(
                 classLevels,
@@ -2023,9 +3707,10 @@ namespace Nemo
             if (CurrentCharacter != null)
             {
                 CurrentCharacter.HitPoints = snap.HitPointMaximum;
-                CurrentCharacter.ProficiencyBonus = snap.ProficiencyBonus;
                 if (CurrentCharacter.Level <= 0)
                     CurrentCharacter.Level = snap.TotalCharacterLevel;
+                // Prefer level-derived PB (same formula as snap) so skills/saves stay consistent
+                RefreshProficiencyBonus();
             }
         }
 
@@ -2577,6 +4262,10 @@ namespace Nemo
                 currentFeatAbilityChoice = "";
             }
 
+            // Clear Resilient save when changing feats / ability picks (re-applied below if still Resilient)
+            if (!string.IsNullOrEmpty(resilientSaveAbility))
+                resilientSaveAbility = "";
+
             // ===================== MAGIC INITIATE =====================
             if (name.Contains("magic initiate"))
             {
@@ -2661,6 +4350,23 @@ namespace Nemo
                 return;
             }
 
+            // ===================== RESILIENT =====================
+            // +1 to chosen ability and proficiency in that ability's saving throws
+            if (name.Contains("resilient"))
+            {
+                if (cmbFeatStatChoice1.SelectedItem is string resilientAbility)
+                {
+                    featStatBonuses[resilientAbility] = featStatBonuses.GetValueOrDefault(resilientAbility, 0) + 1;
+                    currentFeatAbilityChoice = resilientAbility;
+                    resilientSaveAbility = resilientAbility;
+                }
+
+                UpdateStatDisplays();
+                UpdateSavingThrows();
+                UpdateInitiative();
+                return;
+            }
+
             // ===================== EXISTING ABILITY SCORE LOGIC =====================
             if (cmbFeatStatChoice1.Visibility == Visibility.Visible &&
                 cmbFeatStatChoice1.SelectedItem is string ability1)
@@ -2679,6 +4385,7 @@ namespace Nemo
             }
 
             UpdateStatDisplays();
+            UpdateSavingThrows();
             UpdateInitiative();
         }
 
@@ -2926,6 +4633,13 @@ namespace Nemo
                     featStatBonuses[currentFeatAbilityChoice] = Math.Max(0, featStatBonuses.GetValueOrDefault(currentFeatAbilityChoice, 0) - 1);
                     currentFeatAbilityChoice = "";
                 }
+
+                string featName = feat.Name?.ToLowerInvariant() ?? "";
+                if (featName.Contains("resilient") || !string.IsNullOrEmpty(resilientSaveAbility))
+                {
+                    resilientSaveAbility = "";
+                    UpdateSavingThrows();
+                }
                 return;
             }
 
@@ -3031,32 +4745,61 @@ namespace Nemo
         {
             if (lblSubclassSpells == null) return;
 
-            if (cmbClass.SelectedItem is not string className ||
-                cmbSubclass.SelectedItem is not string subName)
+            var classLevels = GetActiveClassLevels();
+            var parts = new List<string>();
+
+            foreach (var entry in classLevels)
             {
-                lblSubclassSpells.Text = "Subclass spells: (none yet)";
-                lblSubclassSpells.Foreground = (Brush)new BrushConverter().ConvertFromString("#AAA");
-                return;
+                if (string.IsNullOrWhiteSpace(entry.Subclass))
+                    continue;
+
+                string subName = entry.Subclass.Trim();
+                if (subName.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) ||
+                    subName.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var grants = SubclassSpellCalculator.GetGrantsUpToLevel(subName, entry.Levels);
+                if (grants.Count == 0)
+                {
+                    // Fallback: legacy level-1 domain/patron tables
+                    List<string> legacy = new();
+                    if (entry.ClassName.Equals("Cleric", StringComparison.OrdinalIgnoreCase) &&
+                        GameData.ClericSubclasses.TryGetValue(subName, out var clericSub))
+                        legacy = clericSub.DomainSpells;
+                    else if (entry.ClassName.Equals("Warlock", StringComparison.OrdinalIgnoreCase) &&
+                             GameData.WarlockSubclasses.TryGetValue(subName, out var warlockSub))
+                        legacy = warlockSub.DomainSpells;
+                    else if (entry.ClassName.Equals("Sorcerer", StringComparison.OrdinalIgnoreCase) &&
+                             GameData.SorcererSubclasses.TryGetValue(subName, out var sorcSub))
+                        legacy = sorcSub.AdditionalSpells;
+
+                    if (legacy.Count > 0)
+                        parts.Add($"{subName} (class {entry.Levels}): {string.Join(", ", legacy)}");
+                    continue;
+                }
+
+                var prepared = grants.Where(g => g.Kind == SubclassSpellGrantKind.AlwaysPrepared).ToList();
+                var known = grants.Where(g => g.Kind == SubclassSpellGrantKind.AlwaysKnown).ToList();
+                var expanded = grants.Where(g => g.Kind == SubclassSpellGrantKind.ExpandedList).ToList();
+
+                var chunks = new List<string>();
+                if (prepared.Count > 0)
+                    chunks.Add("always prepared: " + string.Join(", ",
+                        prepared.Select(g => $"{g.SpellName} (L{g.SpellLevel})")));
+                if (known.Count > 0)
+                    chunks.Add("always known: " + string.Join(", ",
+                        known.Select(g => $"{g.SpellName} (L{g.SpellLevel})")));
+                if (expanded.Count > 0)
+                    chunks.Add("expanded list: " + string.Join(", ",
+                        expanded.Select(g => $"{g.SpellName} (L{g.SpellLevel})")));
+
+                if (chunks.Count > 0)
+                    parts.Add($"{subName} @ {entry.ClassName} {entry.Levels}: {string.Join(" | ", chunks)}");
             }
 
-            List<string> spells = new();
-
-            if (className == "Cleric" && GameData.ClericSubclasses.ContainsKey(subName))
+            if (parts.Count > 0)
             {
-                spells = GameData.ClericSubclasses[subName].DomainSpells;
-            }
-            else if (className == "Warlock" && GameData.WarlockSubclasses.ContainsKey(subName))
-            {
-                spells = GameData.WarlockSubclasses[subName].DomainSpells;
-            }
-            else if (className == "Sorcerer" && GameData.SorcererSubclasses.ContainsKey(subName))
-            {
-                spells = GameData.SorcererSubclasses[subName].AdditionalSpells;
-            }
-
-            if (spells.Count > 0)
-            {
-                lblSubclassSpells.Text = $"Subclass spells ({subName}): {string.Join(", ", spells)}";
+                lblSubclassSpells.Text = "Subclass spells: " + string.Join("  ||  ", parts);
                 lblSubclassSpells.Foreground = AccentGreen;
             }
             else
@@ -3073,62 +4816,65 @@ namespace Nemo
                 // === SKILLS TAB ===
                 if (tab == tabSkills)
                 {
-                    if (cmbClass?.SelectedItem is string classNameSkills)
+                    Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        Dispatcher.BeginInvoke(new Action(() =>
+                        // Ensure PB matches current total character level before painting bonuses
+                        RefreshProficiencyBonus();
+                        UpdateSkillBonuses();
+                        UpdateSavingThrows();
+
+                        if (cmbClass?.SelectedItem is string classNameSkills)
                         {
                             UpdateSkillChoices(classNameSkills);
-                        }), System.Windows.Threading.DispatcherPriority.Background);
-                    }
-                    else
-                    {
-                        // No class selected yet — show helpful message
-                        if (lblClassSkillCounter != null)
+                        }
+                        else if (lblClassSkillCounter != null)
+                        {
                             lblClassSkillCounter.Text = "Please select a Class first";
-                    }
+                        }
+                    }), System.Windows.Threading.DispatcherPriority.Background);
                 }
 
-                // === SPELLS TAB ===
-                else if (tab == tabSpells && cmbClass.SelectedItem is string classNameSpells)
+                // === LEVEL & MULTICLASS TAB ===
+                else if (tab == tabLevelMulticlass)
                 {
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        // NEW: Show any spells chosen via feats (Magic Initiate, Fey Touched, etc.)
+                        RefreshLevelMulticlassTab();
+                    }), System.Windows.Threading.DispatcherPriority.Background);
+                }
+
+                // === FEATS TAB ===
+                else if (tab == tabFeats)
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        EnsureFeatsLoaded();
+                        UpdateFeatSelectionLimitLabel();
+                    }), System.Windows.Threading.DispatcherPriority.Background);
+                }
+
+                // === SPELLS TAB ===
+                else if (tab == tabSpells)
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
                         UpdateFeatSpellsLabel();
+                        UpdateRacialSpellsLabel();
+                        UpdateSubclassSpellsLabel();
 
-                        // === CANTRIPS ===
-                        if (cantripOptions.Count == 0)
+                        if (cmbClass.SelectedItem is string classNameSpells)
                         {
-                            UpdateCantripChoices(classNameSpells);
-                        }
-                        else
-                        {
-                            int max = GameData.ClassData[classNameSpells].CantripsKnown;
-                            int selected = cantripOptions.Count(s => s.IsChecked);
-                            foreach (var item in cantripOptions)
+                            if (cantripOptions.Count == 0 || spell1Options.Count == 0)
+                                PopulateSpells();
+                            else
                             {
-                                bool isForThisClass = item.FullSpell.Classes.Contains(classNameSpells, StringComparer.OrdinalIgnoreCase);
-                                item.IsSelectable = isForThisClass && ((selected < max) || item.IsChecked);
+                                RefreshSpellLevelDropdown();
+                                ApplyCantripSelectableState();
+                                ApplyLeveledSpellSelectableState();
+                                UpdateSpellStats();
+                                UpdateCantripCounter();
+                                UpdateSpellCounter();
                             }
-                            UpdateCantripCounter();
-                        }
-
-                        // === 1ST LEVEL SPELLS ===
-                        if (spell1Options.Count == 0)
-                        {
-                            UpdateSpell1Choices(classNameSpells);
-                        }
-                        else
-                        {
-                            var classDataRef = GameData.ClassData[classNameSpells];
-                            int max = GetMax1stLevelSpells(classNameSpells, classDataRef);
-                            int selected = spell1Options.Count(s => s.IsChecked);
-                            foreach (var item in spell1Options)
-                            {
-                                bool isForThisClass = item.FullSpell.Classes.Contains(classNameSpells, StringComparer.OrdinalIgnoreCase);
-                                item.IsSelectable = isForThisClass && ((selected < max) || item.IsChecked);
-                            }
-                            UpdateSpellCounter();
                         }
                     }), System.Windows.Threading.DispatcherPriority.Background);
                 }
@@ -3140,16 +4886,36 @@ namespace Nemo
             if (cmbClass.SelectedItem is not string className || !GameData.ClassData.ContainsKey(className))
                 return;
 
+            SyncCharacterClassFromUi();
             UpdateCantripChoices(className);
-            UpdateSpell1Choices(className);           // ← NEW
+            UpdateSpell1Choices(className);
+            RefreshSpellLevelDropdown();
+            UpdateSpellStats();
+        }
+
+        private HashSet<string> GetActiveSpellListClasses()
+        {
+            var fromLevels = SpellProgressionCalculator.GetSpellListClassNames(GetActiveClassLevels());
+            if (fromLevels.Count > 0)
+                return fromLevels;
+
+            // Fallback: selected class only
+            if (cmbClass.SelectedItem is string className)
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase) { className };
+
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private bool SpellOnActiveClassList(Spell spell)
+        {
+            if (spell?.Classes == null) return false;
+            var lists = GetActiveSpellListClasses();
+            return spell.Classes.Any(c => lists.Contains(c));
         }
 
         public void UpdateCantripChoices(string className)
         {
             if (!GameData.ClassData.ContainsKey(className)) return;
-
-            var classData = GameData.ClassData[className];
-            int maxCantrips = classData.CantripsKnown;
 
             // Build master list only once
             if (cantripOptions.Count == 0)
@@ -3172,39 +4938,31 @@ namespace Nemo
                 }
 
                 cantripViewSource.Source = cantripOptions;
-                dgCantrips.ItemsSource = cantripViewSource.View;
+                if (dgCantrips != null)
+                    dgCantrips.ItemsSource = cantripViewSource.View;
             }
 
-            // === KEY PART: Uncheck everything when changing classes ===
+            // Uncheck everything when changing classes
             foreach (var item in cantripOptions)
-            {
                 item.IsChecked = false;
-            }
 
-            // Apply filter for the new class
             cantripViewSource.Filter -= CantripFilter;
             cantripViewSource.Filter += CantripFilter;
+            cantripViewSource.View?.Refresh();
 
-            // Update selectable state for the new class
-            foreach (var item in cantripOptions)
-            {
-                bool isForThisClass = item.FullSpell.Classes.Contains(className, StringComparer.OrdinalIgnoreCase);
-                item.IsSelectable = isForThisClass;
-            }
-
-            // Hide preview panel when switching classes
-            pnlCantripPreview.Visibility = Visibility.Collapsed;
+            ApplyCantripSelectableState();
+            if (pnlCantripPreview != null)
+                pnlCantripPreview.Visibility = Visibility.Collapsed;
 
             UpdateCantripCounter();
         }
 
-        // Filter method (add this new method)
         private void CantripFilter(object sender, FilterEventArgs e)
         {
-            if (e.Item is SelectableSpell spell && cmbClass.SelectedItem is string className)
-            {
-                e.Accepted = spell.FullSpell.Classes.Contains(className, StringComparer.OrdinalIgnoreCase);
-            }
+            if (e.Item is SelectableSpell spell)
+                e.Accepted = SpellOnActiveClassList(spell.FullSpell);
+            else
+                e.Accepted = false;
         }
 
         private void dgCantrips_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -3220,30 +4978,29 @@ namespace Nemo
             }
         }
 
+        /// <summary>
+        /// Loads all leveled spells (1–9) once; filters by class list + selected spell level.
+        /// Does not clear checkboxes when only the level filter changes.
+        /// </summary>
         public void UpdateSpell1Choices(string className)
         {
             if (!GameData.ClassData.ContainsKey(className)) return;
 
-            var classData = GameData.ClassData[className];
-            int maxSpells = GetMax1stLevelSpells(className, classData);
-
-            // Build master list only once
+            // Build master list once from full catalog (levels 1–9)
             if (spell1Options.Count == 0)
             {
-                foreach (var spell in GameData.All1stLevelSpells)
+                foreach (var spell in GameData.AllSpells.Where(s => s.Level >= 1 && s.Level <= 9)
+                             .OrderBy(s => s.Level).ThenBy(s => s.Name))
                 {
-                    // === SAFETY: Only include actual 1st-level spells ===
-                    if (spell.Level != 1) continue;
-
                     var selectable = new SelectableSpell
                     {
                         Name = spell.Name,
                         DamageDice = spell.DamageDice,
                         RollType = spell.RollType,
                         DamageType = spell.DamageType,
-                        Description = spell.Description.Length > 80
+                        Description = spell.Description != null && spell.Description.Length > 80
                             ? spell.Description.Substring(0, 77) + "..."
-                            : spell.Description,
+                            : spell.Description ?? "",
                         FullSpell = spell,
                         IsChecked = false
                     };
@@ -3251,66 +5008,184 @@ namespace Nemo
                 }
 
                 spell1ViewSource.Source = spell1Options;
-                dgSpells1.ItemsSource = spell1ViewSource.View;
+                if (dgSpells1 != null)
+                    dgSpells1.ItemsSource = spell1ViewSource.View;
             }
-
-            // Uncheck everything when class changes
-            foreach (var item in spell1Options)
+            else
             {
-                item.IsChecked = false;
+                // Class changed: clear selections
+                foreach (var item in spell1Options)
+                    item.IsChecked = false;
             }
 
-            // Apply filter
             spell1ViewSource.Filter -= Spell1Filter;
             spell1ViewSource.Filter += Spell1Filter;
+            spell1ViewSource.View?.Refresh();
 
-            // Update selectable state
-            foreach (var item in spell1Options)
-            {
-                bool isForThisClass = item.FullSpell.Classes.Contains(className, StringComparer.OrdinalIgnoreCase);
-                item.IsSelectable = isForThisClass;
-            }
-
-            UpdateSpellStats();
+            ApplyLeveledSpellSelectableState();
             UpdateSpellCounter();
         }
 
         private void Spell1Filter(object sender, FilterEventArgs e)
         {
-            if (e.Item is SelectableSpell spell && cmbClass.SelectedItem is string className)
+            if (e.Item is not SelectableSpell spell || spell.FullSpell == null)
             {
-                e.Accepted = spell.FullSpell.Classes.Contains(className, StringComparer.OrdinalIgnoreCase);
+                e.Accepted = false;
+                return;
             }
+
+            e.Accepted = spell.FullSpell.Level == currentSpellLevelFilter &&
+                         SpellOnActiveClassList(spell.FullSpell);
+        }
+
+        private void cmbSpellLevel_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_suppressSpellLevelEvent) return;
+            if (cmbSpellLevel?.SelectedItem is not string label) return;
+
+            int level = ParseSpellLevelLabel(label);
+            if (level < 1 || level > 9) return;
+
+            currentSpellLevelFilter = level;
+            spell1ViewSource.View?.Refresh();
+            ApplyLeveledSpellSelectableState();
+            UpdateSpellStats();
+            UpdateSpellCounter();
+        }
+
+        private static int ParseSpellLevelLabel(string label)
+        {
+            if (string.IsNullOrWhiteSpace(label)) return 1;
+            // "1st-level", "2nd-level", … or "1", "Level 3"
+            var digits = new string(label.TakeWhile(char.IsDigit).ToArray());
+            if (int.TryParse(digits, out int n) && n >= 1 && n <= 9)
+                return n;
+            for (int i = 1; i <= 9; i++)
+            {
+                if (label.StartsWith(i.ToString(), StringComparison.Ordinal))
+                    return i;
+            }
+            return 1;
+        }
+
+        private static string FormatSpellLevelLabel(int level) => level switch
+        {
+            1 => "1st-level",
+            2 => "2nd-level",
+            3 => "3rd-level",
+            _ when level >= 4 && level <= 9 => $"{level}th-level",
+            _ => $"Level {level}"
+        };
+
+        /// <summary>
+        /// Fills the spell-level dropdown with levels the character has slots for (at least 1st).
+        /// Defaults to 1st-level when available.
+        /// </summary>
+        private void RefreshSpellLevelDropdown()
+        {
+            if (cmbSpellLevel == null) return;
+
+            var budget = GetSpellBudget();
+            int highest = Math.Max(1, budget.HighestSpellLevelAvailable);
+            // Always allow browsing at least level 1 for planning; cap at highest slot or 1
+            if (budget.HighestSpellLevelAvailable <= 0)
+                highest = 1;
+
+            var items = new List<string>();
+            for (int lvl = 1; lvl <= highest; lvl++)
+                items.Add(FormatSpellLevelLabel(lvl));
+
+            // Also include higher levels already selected (so checked spells remain browsable)
+            if (spell1Options != null)
+            {
+                foreach (var s in spell1Options.Where(x => x.IsChecked && x.FullSpell != null))
+                {
+                    int sl = s.FullSpell.Level;
+                    if (sl >= 1 && sl <= 9)
+                    {
+                        string lab = FormatSpellLevelLabel(sl);
+                        if (!items.Contains(lab))
+                            items.Add(lab);
+                    }
+                }
+            }
+
+            items = items
+                .OrderBy(ParseSpellLevelLabel)
+                .ToList();
+
+            _suppressSpellLevelEvent = true;
+            try
+            {
+                string? previous = cmbSpellLevel.SelectedItem as string;
+                cmbSpellLevel.ItemsSource = items;
+
+                string prefer = FormatSpellLevelLabel(currentSpellLevelFilter);
+                if (items.Contains(prefer))
+                    cmbSpellLevel.SelectedItem = prefer;
+                else if (items.Contains(FormatSpellLevelLabel(1)))
+                {
+                    cmbSpellLevel.SelectedItem = FormatSpellLevelLabel(1);
+                    currentSpellLevelFilter = 1;
+                }
+                else if (items.Count > 0)
+                {
+                    cmbSpellLevel.SelectedIndex = 0;
+                    currentSpellLevelFilter = ParseSpellLevelLabel(items[0]);
+                }
+                else if (!string.IsNullOrEmpty(previous))
+                {
+                    cmbSpellLevel.SelectedItem = previous;
+                }
+            }
+            finally
+            {
+                _suppressSpellLevelEvent = false;
+            }
+
+            spell1ViewSource.View?.Refresh();
+        }
+
+        /// <summary>
+        /// Single-click toggle for cantrip/spell DataGrid checkboxes.
+        /// First click on a DataGrid row normally only focuses the row; this applies the check immediately
+        /// (same pattern as skill proficiency checkboxes).
+        /// </summary>
+        private void SpellGridCheckBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not CheckBox cb)
+                return;
+            if (!cb.IsEnabled)
+                return;
+            if (cb.DataContext is not SelectableSpell spell)
+                return;
+
+            // Toggle immediately; budget/limit enforcement runs in Checked/Unchecked handlers
+            bool willCheck = cb.IsChecked != true;
+            spell.IsChecked = willCheck;
+            e.Handled = true;
         }
 
         private void Spell1CheckBox_Changed(object sender, RoutedEventArgs e)
         {
-            if (cmbClass.SelectedItem is not string className) return;
-            if (!GameData.ClassData.TryGetValue(className, out var classData)) return;
+            var budget = GetSpellBudget();
+            CountLeveledSelections(budget, out int preparedSel, out int knownSel);
 
-            int max = GetMax1stLevelSpells(className, classData);
+            bool overPrepared = budget.HasPreparedCaster && preparedSel > budget.PreparedMax;
+            bool overKnown = budget.HasKnownCaster && knownSel > budget.KnownMax;
+            bool overNone = !budget.HasPreparedCaster && !budget.HasKnownCaster &&
+                            (spell1Options?.Count(s => s.IsChecked) ?? 0) > 0;
 
-            int currentSelected = spell1Options.Count(s => s.IsChecked);
-
-            if (currentSelected > max)
+            if ((overPrepared || overKnown || overNone) &&
+                sender is CheckBox cb &&
+                cb.DataContext is SelectableSpell spell &&
+                spell.IsChecked)
             {
-                if (sender is CheckBox cb && cb.DataContext is SelectableSpell spell)
-                {
-                    spell.IsChecked = false;
-                    return;
-                }
+                spell.IsChecked = false;
+                return;
             }
 
-            int nowSelected = spell1Options.Count(s => s.IsChecked);
-            foreach (var item in spell1Options)
-            {
-                bool shouldBeSelectable = (nowSelected < max) || item.IsChecked;
-                if (item.IsSelectable != shouldBeSelectable)
-                {
-                    item.IsSelectable = shouldBeSelectable;
-                }
-            }
-
+            ApplyLeveledSpellSelectableState();
             UpdateSpellStats();
             UpdateSpellCounter();
         }
@@ -3328,80 +5203,242 @@ namespace Nemo
             }
         }
 
-        private void UpdateSpellStats()
+        /// <summary>
+        /// Attribute a leveled spell to prepared vs known pools for multiclass budgets.
+        /// Dual-list spells count as prepared first.
+        /// </summary>
+        private void ClassifyLeveledSpell(SelectableSpell spell, SpellBudgetSnapshot budget,
+            out bool countsPrepared, out bool countsKnown)
         {
-            if (cmbClass.SelectedItem is not string className || !GameData.ClassData.TryGetValue(className, out var data))
-                return;
+            countsPrepared = false;
+            countsKnown = false;
+            if (spell?.FullSpell?.Classes == null) return;
 
-            string ability = data.SpellAbility;
-            int mod = 0;
-            if (ability == "Wisdom") mod = CalculateModifier(GetFinalStat("Wisdom"));
-            else if (ability == "Charisma") mod = CalculateModifier(GetFinalStat("Charisma"));
-            else if (ability == "Intelligence") mod = CalculateModifier(GetFinalStat("Intelligence"));
+            bool onPrepared = budget.HasPreparedCaster &&
+                budget.PreparedClassNames.Any(pc =>
+                    spell.FullSpell.Classes.Contains(pc, StringComparer.OrdinalIgnoreCase));
 
-            int dc = 8 + proficiencyBonus + mod;
-            int attack = proficiencyBonus + mod;
-
-            lblSpellStats.Text = $"Spellcasting Ability: {ability} | Spell Save DC: {dc} | Spell Attack: +{attack}";
-            // TODO: Update these when racial/feat spell functionality is added
-            if (lblRacialSpells != null)
-                lblRacialSpells.Text = "Racial spells: (none yet)";
-
-            if (lblFeatSpells != null)
-                lblFeatSpells.Text = "Feat spells: (none yet)";
-
-            if (lblSubclassSpells != null)
-                lblSubclassSpells.Text = "Subclass spells: (none yet)";
-
-            // === DYNAMIC HEADERS ===
-            if (lblCantripHeader != null)
-                lblCantripHeader.Text = $"CANTRIPS ({data.CantripsKnown} known)";
-
-            int spellSlots = className == "Warlock" ? 1 : 2;
-            string spellType = (className == "Wizard" || className == "Cleric" || className == "Druid" || className == "Artificer")
-                ? "prepared" : "known";
-
-            int spellCount = GetMax1stLevelSpells(className, data);
-
-            if (lblSpellHeader != null)
+            // Known-list class names may be "Bard" or "Fighter (Eldritch Knight)" — map to spell list classes
+            bool onKnown = false;
+            if (budget.HasKnownCaster)
             {
-                if (spellCount > 0)
-                    lblSpellHeader.Text = $"1ST LEVEL SPELLS ({spellCount} {spellType}, {spellSlots} slot{(spellSlots > 1 ? "s" : "")})";
-                else
-                    lblSpellHeader.Text = "1ST LEVEL SPELLS (none at this level)";
+                var knownListClasses = GetKnownSpellListClassNames();
+                onKnown = spell.FullSpell.Classes.Any(c => knownListClasses.Contains(c));
             }
 
-            int selectedSpells = spell1Options.Count(s => s.IsChecked);
-            lblSpellCount.Text = $"Selected: {selectedSpells} / {spellCount}";
+            if (onPrepared)
+                countsPrepared = true;
+            else if (onKnown)
+                countsKnown = true;
+        }
+
+        private HashSet<string> GetKnownSpellListClassNames()
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in GetActiveClassLevels())
+            {
+                if (!SpellProgressionCalculator.IsKnownCaster(e.ClassName, e.Subclass))
+                    continue;
+                if (SpellProgressionCalculator.IsThirdCasterSubclass(e.ClassName, e.Subclass))
+                    set.Add("Wizard");
+                else
+                    set.Add(e.ClassName);
+            }
+            return set;
+        }
+
+        private void CountLeveledSelections(SpellBudgetSnapshot budget, out int preparedSel, out int knownSel)
+        {
+            preparedSel = 0;
+            knownSel = 0;
+            if (spell1Options == null) return;
+
+            foreach (var s in spell1Options.Where(x => x.IsChecked))
+            {
+                ClassifyLeveledSpell(s, budget, out bool prep, out bool known);
+                if (prep) preparedSel++;
+                if (known) knownSel++;
+            }
+        }
+
+        private void ApplyCantripSelectableState()
+        {
+            var budget = GetSpellBudget();
+            int max = budget.CantripsKnownMax;
+            int selected = cantripOptions?.Count(s => s.IsChecked) ?? 0;
+
+            if (cantripOptions == null) return;
+            foreach (var item in cantripOptions)
+            {
+                bool onList = SpellOnActiveClassList(item.FullSpell);
+                item.IsSelectable = onList && ((selected < max) || item.IsChecked);
+            }
+        }
+
+        private void ApplyLeveledSpellSelectableState()
+        {
+            var budget = GetSpellBudget();
+            CountLeveledSelections(budget, out int preparedSel, out int knownSel);
+
+            if (spell1Options == null) return;
+
+            bool canAddPrepared = !budget.HasPreparedCaster || preparedSel < budget.PreparedMax;
+            bool canAddKnown = !budget.HasKnownCaster || knownSel < budget.KnownMax;
+            // If neither caster type, nothing selectable
+            bool anyCaster = budget.HasPreparedCaster || budget.HasKnownCaster;
+
+            foreach (var item in spell1Options)
+            {
+                if (!SpellOnActiveClassList(item.FullSpell))
+                {
+                    item.IsSelectable = false;
+                    continue;
+                }
+
+                if (item.IsChecked)
+                {
+                    item.IsSelectable = true;
+                    continue;
+                }
+
+                if (!anyCaster || budget.HighestSpellLevelAvailable <= 0 && item.FullSpell.Level > 0)
+                {
+                    // Still allow selecting level-1 spells at character level 1 for full casters even if slots exist
+                }
+
+                ClassifyLeveledSpell(item, budget, out bool wouldPrep, out bool wouldKnown);
+                bool allowed = false;
+                if (wouldPrep && canAddPrepared) allowed = true;
+                else if (wouldKnown && canAddKnown) allowed = true;
+                // Spells only on expanded warlock list etc. still on Warlock list as known
+
+                // If spell is on active list but classification failed (e.g. only expanded), treat by caster type of primary class
+                if (!wouldPrep && !wouldKnown && anyCaster)
+                {
+                    if (budget.HasKnownCaster && canAddKnown) allowed = true;
+                    else if (budget.HasPreparedCaster && canAddPrepared) allowed = true;
+                }
+
+                // Only allow spell levels the character has slots for (or already browsing)
+                int highest = Math.Max(budget.HighestSpellLevelAvailable, 1);
+                if (item.FullSpell.Level > highest)
+                    allowed = false;
+
+                item.IsSelectable = allowed;
+            }
+        }
+
+        private void UpdateSpellStats()
+        {
+            if (lblSpellStats == null) return;
+
+            var classLevels = GetActiveClassLevels();
+            if (classLevels.Count == 0)
+            {
+                lblSpellStats.Text = "Spellcasting Ability: —";
+                return;
+            }
+
+            // Build ability / DC / attack for each casting class
+            var abilityParts = new List<string>();
+            foreach (var e in classLevels)
+            {
+                if (!GameData.ClassData.TryGetValue(e.ClassName, out var data) || !data.Spellcasting)
+                {
+                    // Third casters still cast with Int
+                    if (SpellProgressionCalculator.IsThirdCasterSubclass(e.ClassName, e.Subclass))
+                    {
+                        int modEk = CalculateModifier(GetFinalStat("Intelligence"));
+                        int pb = CurrentCharacter?.ProficiencyBonus > 0
+                            ? CurrentCharacter.ProficiencyBonus
+                            : proficiencyBonus;
+                        abilityParts.Add($"{e.ClassName}: Int (DC {8 + pb + modEk}, +{pb + modEk})");
+                    }
+                    continue;
+                }
+
+                string ability = data.SpellAbility;
+                int mod = CalculateModifier(GetFinalStat(ability));
+                int pb2 = CurrentCharacter?.ProficiencyBonus > 0
+                    ? CurrentCharacter.ProficiencyBonus
+                    : proficiencyBonus;
+                int dc = 8 + pb2 + mod;
+                int attack = pb2 + mod;
+                abilityParts.Add($"{e.ClassName}: {ability} (DC {dc}, +{attack})");
+            }
+
+            var slots = SpellSlotCalculator.Calculate(classLevels);
+            string slotText = FormatSlotSummary(slots);
+
+            lblSpellStats.Text = abilityParts.Count > 0
+                ? string.Join("  |  ", abilityParts) + (string.IsNullOrEmpty(slotText) ? "" : "  ||  " + slotText)
+                : "Spellcasting Ability: —";
+
+            UpdateFeatSpellsLabel();
             UpdateSubclassSpellsLabel();
             UpdateRacialSpellsLabel();
+
+            var budget = GetSpellBudget();
+            if (lblCantripHeader != null)
+                lblCantripHeader.Text = $"CANTRIPS ({budget.CantripsKnownMax} known)";
+
+            if (lblSpellHeader != null)
+                lblSpellHeader.Text = $"{FormatSpellLevelLabel(currentSpellLevelFilter).ToUpperInvariant()} SPELLS";
+
+            if (lblSpellBudget != null)
+            {
+                var bits = new List<string>();
+                if (budget.HasPreparedCaster)
+                    bits.Add($"Prepared: {budget.PreparedMax} max ({string.Join(", ", budget.PreparedClassNames)})");
+                if (budget.HasKnownCaster)
+                    bits.Add($"Known: {budget.KnownMax} max ({string.Join(", ", budget.KnownClassNames)})");
+                if (bits.Count == 0)
+                    bits.Add("No prepared/known spellcasting at current level");
+                bits.Add($"Highest slot level: {Math.Max(0, budget.HighestSpellLevelAvailable)}");
+                lblSpellBudget.Text = "Spell budget: " + string.Join("  |  ", bits);
+            }
+
+            UpdateSpellCounter();
+        }
+
+        private static string FormatSlotSummary(MulticlassSpellSlotResult slots)
+        {
+            if (slots == null) return "";
+            var parts = new List<string>();
+            if (slots.SharedSlots != null && slots.SharedSlots.HighestSlotLevel > 0)
+            {
+                var by = new List<string>();
+                for (int i = 1; i <= 9; i++)
+                {
+                    int n = slots.SharedSlots.GetSlots(i);
+                    if (n > 0) by.Add($"{i}:{n}");
+                }
+                if (by.Count > 0)
+                    parts.Add("Slots " + string.Join(" ", by));
+            }
+            if (slots.PactMagicSlots != null && slots.PactMagicSlots.HighestSlotLevel > 0)
+            {
+                int lvl = slots.PactMagicSlots.PactSlotLevel ?? slots.PactMagicSlots.HighestSlotLevel;
+                int n = slots.PactMagicSlots.GetSlots(lvl);
+                parts.Add($"Pact {n}×L{lvl}");
+            }
+            return string.Join(" · ", parts);
         }
 
         public void UpdateCantripCounter()
         {
             if (lblCantripCount == null) return;
 
-            if (cmbClass.SelectedItem is not string className)
-            {
-                lblCantripCount.Text = "Selected: 0 / 0";
-                return;
-            }
-
-            if (GameData.ClassData.TryGetValue(className, out var classData))
-            {
-                int selected = cantripOptions?.Count(s => s.IsChecked) ?? 0;
-                lblCantripCount.Text = $"Selected: {selected} / {classData.CantripsKnown}";
-            }
+            var budget = GetSpellBudget();
+            int selected = cantripOptions?.Count(s => s.IsChecked) ?? 0;
+            lblCantripCount.Text = $"Selected: {selected} / {budget.CantripsKnownMax}";
         }
 
         private void CantripCheckBox_Changed(object sender, RoutedEventArgs e)
         {
-            if (cmbClass.SelectedItem is not string className) return;
-            if (!GameData.ClassData.TryGetValue(className, out var classData)) return;
-
-            int max = classData.CantripsKnown;
-
-            int currentSelected = cantripOptions.Count(s => s.IsChecked);
+            var budget = GetSpellBudget();
+            int max = budget.CantripsKnownMax;
+            int currentSelected = cantripOptions?.Count(s => s.IsChecked) ?? 0;
 
             if (currentSelected > max)
             {
@@ -3412,17 +5449,7 @@ namespace Nemo
                 }
             }
 
-            // Update IsSelectable (binding will handle the UI)
-            int nowSelected = cantripOptions.Count(s => s.IsChecked);
-            foreach (var item in cantripOptions)
-            {
-                bool shouldBeSelectable = (nowSelected < max) || item.IsChecked;
-                if (item.IsSelectable != shouldBeSelectable)
-                {
-                    item.IsSelectable = shouldBeSelectable;
-                }
-            }
-
+            ApplyCantripSelectableState();
             UpdateCantripCounter();
         }
 
@@ -3430,53 +5457,45 @@ namespace Nemo
         {
             if (lblSpellCount == null) return;
 
-            if (cmbClass.SelectedItem is not string className)
+            var budget = GetSpellBudget();
+            CountLeveledSelections(budget, out int preparedSel, out int knownSel);
+
+            int thisLevel = spell1Options?.Count(s =>
+                s.IsChecked && s.FullSpell != null && s.FullSpell.Level == currentSpellLevelFilter) ?? 0;
+
+            lblSpellCount.Text = $"Selected this level: {thisLevel}";
+
+            if (lblSpellTotalCount != null)
             {
-                lblSpellCount.Text = "Selected: 0 / 0";
-                return;
+                var parts = new List<string>();
+                if (budget.HasPreparedCaster)
+                    parts.Add($"Prepared {preparedSel} / {budget.PreparedMax}");
+                if (budget.HasKnownCaster)
+                    parts.Add($"Known {knownSel} / {budget.KnownMax}");
+                if (parts.Count == 0)
+                    parts.Add("No spell budget");
+                lblSpellTotalCount.Text = "Total: " + string.Join("  |  ", parts);
             }
-
-            if (!GameData.ClassData.TryGetValue(className, out var classData))
-                return;
-
-            int selected = spell1Options?.Count(s => s.IsChecked) ?? 0;
-            int max = GetMax1stLevelSpells(className, classData);
-
-            lblSpellCount.Text = $"Selected: {selected} / {max}";
         }
 
         private int CalculateModifier(int score)
         {
             // Official 5e formula: floor( (score - 10) / 2 )
-            // C# integer division truncates toward zero, so we fix negative numbers explicitly
-            //return (score - 10) / 2 - (score < 10 && (score - 10) % 2 != 0 ? 1 : 0);
             return (int)Math.Floor((score - 10) / 2.0);
         }
 
         /// <summary>
-        /// Returns the correct maximum number of 1st-level spells for the given class.
-        /// - Known spells classes (Bard, Sorcerer, Warlock, Ranger): uses SpellsKnown from GameData
-        /// - Prepared spells classes (Cleric, Druid, Wizard, Artificer): uses modifier + 1 (min 1)
-        /// - Classes with no spells at current level (e.g. Ranger level 1): returns 0
+        /// Max leveled spells the character may choose (prepared + known budgets combined for limits).
+        /// Kept for any legacy call sites.
         /// </summary>
         private int GetMax1stLevelSpells(string className, ClassData classData)
         {
-            if (classData.SpellsKnown > 0)
-            {
-                // Known spells classes (Bard, Sorcerer, Warlock, Ranger)
-                return classData.SpellsKnown;
-            }
-            else if (className == "Wizard" || className == "Cleric" || className == "Druid" || className == "Artificer")
-            {
-                // Prepared spells classes
-                int mod = CalculateModifier(GetFinalStat(classData.SpellAbility));
-                return Math.Max(1, mod + 1);
-            }
-            else
-            {
-                // No 1st-level spells at this level (e.g. Ranger level 1)
-                return 0;
-            }
+            var budget = GetSpellBudget();
+            if (budget.HasPreparedCaster && !budget.HasKnownCaster)
+                return budget.PreparedMax;
+            if (budget.HasKnownCaster && !budget.HasPreparedCaster)
+                return budget.KnownMax;
+            return budget.PreparedMax + budget.KnownMax;
         }
 
         private int GetFinalStat(string ability)
@@ -3548,7 +5567,8 @@ namespace Nemo
                 classProficientSaves = classData.SavingThrowProficiencies ?? new List<string>();
             }
 
-            int prof = CurrentCharacter.ProficiencyBonus;
+            RefreshProficiencyBonus();
+            int prof = proficiencyBonus > 0 ? proficiencyBonus : Math.Max(2, CurrentCharacter.ProficiencyBonus);
 
             foreach (var ability in abilities)
             {
@@ -3563,7 +5583,7 @@ namespace Nemo
                     _ => 0
                 };
 
-                bool isProficient = classProficientSaves.Contains(ability);
+                bool isProficient = HasSaveProficiency(ability, classProficientSaves);
 
                 result.Add(new SavingThrow
                 {
@@ -5233,7 +7253,7 @@ namespace Nemo
                 CurrentCharacter.SelectedFeat = feat.Name;
 
             PopulateAbilityScores();
-            CurrentCharacter.ProficiencyBonus = 2;
+            RefreshProficiencyBonus();
             CurrentCharacter.SavingThrows = GetSavingThrows();
 
             // Calculate and store final speed (including Mobile feat)

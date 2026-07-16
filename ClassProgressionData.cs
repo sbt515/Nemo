@@ -71,6 +71,23 @@ namespace Nemo
                 .ToList();
         }
 
+        /// <summary>Full base-class progression table (all levels 1–20).</summary>
+        public static List<ClassFeature> GetClassProgression(string className, bool includeOptional = true)
+        {
+            if (string.IsNullOrWhiteSpace(className))
+                return new List<ClassFeature>();
+
+            if (!ClassProgression.TryGetValue(className.Trim(), out var all) || all == null)
+                return new List<ClassFeature>();
+
+            return all
+                .Where(f => includeOptional || !f.IsOptional)
+                .OrderBy(f => f.Level)
+                .ThenBy(f => f.Name)
+                .Select(CloneFeature)
+                .ToList();
+        }
+
         /// <summary>
         /// Compact level→feature-name map for tables/UI (e.g. "2: Channel Divinity, Turn Undead").
         /// </summary>

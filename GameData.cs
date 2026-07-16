@@ -2155,6 +2155,11 @@ public class Character
     /// When empty, treat as single-class using <see cref="Class"/> / <see cref="Subclass"/> / <see cref="Level"/>.
     /// </summary>
     public List<Nemo.ClassLevelEntry> ClassLevels { get; set; } = new();
+    /// <summary>
+    /// ASI vs Feat decisions for each milestone earned from class levels
+    /// (e.g. Fighter 4, Wizard 4).
+    /// </summary>
+    public List<Nemo.AsiOrFeatDecision> AsiOrFeatDecisions { get; set; } = new();
     public string SelectedFeat { get; set; } = "";
     public int Speed { get; set; } = 30;
 
@@ -2398,7 +2403,22 @@ public class Feat : INotifyPropertyChanged
                 {
                     if (value) // Trying to select the feat
                     {
-                        if (mainWindow.MeetsPrerequisite(this))
+                        // Count other already-selected feats (this one is already set true above)
+                        int others = Nemo.GameData.AllFeats?.Count(f => f != null && f.IsSelected && !ReferenceEquals(f, this)) ?? 0;
+                        int max = mainWindow.GetMaxFeatSelections();
+                        if (others >= max)
+                        {
+                            _isSelected = false;
+                            OnPropertyChanged(nameof(IsSelected));
+                            mainWindow.dgFeats?.Items.Refresh();
+                            MessageBox.Show(
+                                $"You can only select {max} feat(s).\n\n" +
+                                "Origin feats (Variant Human / Custom Lineage) and ASI→Feat choices on the Level & Multiclass tab increase this limit.",
+                                "Feat Limit Reached",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Information);
+                        }
+                        else if (mainWindow.MeetsPrerequisite(this))
                         {
                             mainWindow.ApplyFeatBonus(this);
                         }
@@ -2423,6 +2443,7 @@ public class Feat : INotifyPropertyChanged
                         mainWindow.RemoveFeatBonus(this);
                     }
 
+                    mainWindow.UpdateFeatSelectionLimitLabel();
                     mainWindow.UpdateStatDisplays();
                     mainWindow.UpdateInitiative();
                 }

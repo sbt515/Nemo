@@ -33,6 +33,8 @@
     <Compile Include="SubclassProgressionFighterMonkPaladin.cs" />
     <Compile Include="SubclassProgressionRangerRogueWizard.cs" />
     <Compile Include="SubclassProgression_ClericDruidSorcererWarlock.cs" />
+    <Compile Include="SpellProgressionCalculator.cs" />
+    <Compile Include="RacialSpellData.cs" />
     <Page Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
   </ItemGroup>

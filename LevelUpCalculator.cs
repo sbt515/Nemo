@@ -61,6 +61,39 @@ namespace Nemo
         public override string ToString() => $"{ClassName} {ClassLevel}: ASI or Feat";
     }
 
+    /// <summary>Player decision for an ASI/feat milestone.</summary>
+    public enum AsiOrFeatKind
+    {
+        Unchosen = 0,
+        AbilityScoreImprovement = 1,
+        Feat = 2
+    }
+
+    /// <summary>
+    /// Persisted ASI or Feat pick for a specific class level (e.g. Fighter 4).
+    /// ASI applies two +1 increments (same ability twice = +2).
+    /// </summary>
+    public sealed class AsiOrFeatDecision
+    {
+        public string ClassName { get; set; } = "";
+        public int ClassLevel { get; set; }
+        public AsiOrFeatKind Kind { get; set; } = AsiOrFeatKind.Unchosen;
+        /// <summary>First +1 ability (e.g. "Strength").</summary>
+        public string AbilityPlusOneA { get; set; } = "";
+        /// <summary>Second +1 ability (same as A for +2 to one score).</summary>
+        public string AbilityPlusOneB { get; set; } = "";
+
+        public string Key => $"{ClassName?.Trim() ?? ""}|{ClassLevel}";
+
+        public override string ToString() => Kind switch
+        {
+            AsiOrFeatKind.Feat => $"{ClassName} {ClassLevel}: Feat",
+            AsiOrFeatKind.AbilityScoreImprovement =>
+                $"{ClassName} {ClassLevel}: ASI ({AbilityPlusOneA}/ {AbilityPlusOneB})",
+            _ => $"{ClassName} {ClassLevel}: (unchosen)"
+        };
+    }
+
     /// <summary>
     /// Complete calculated snapshot for a character's levels (single-class or multiclass).
     /// Pure rules math — no UI dependency.
@@ -541,8 +574,12 @@ namespace Nemo
             int extraHpPerLevel = 0)
         {
             int die = GetHitDieSize(className);
-            int baseFromDie = method == HpGainMethod.Rolled && rolledDieResult.HasValue
-                ? Math.Clamp(rolledDieResult.Value, 1, die)
+            // Valid die results are 1..die. Missing/0/null while Rolled → fall back to fixed average.
+            bool useRoll = method == HpGainMethod.Rolled &&
+                           rolledDieResult.HasValue &&
+                           rolledDieResult.Value >= 1;
+            int baseFromDie = useRoll
+                ? Math.Clamp(rolledDieResult!.Value, 1, die)
                 : GetFixedAverageHitDieValue(die);
 
             int hp = baseFromDie + constitutionModifier + extraHpPerLevel;
@@ -653,6 +690,138 @@ namespace Nemo
                 .ThenBy(a => a.ClassLevel)
                 .ToList();
         }
+
+        /// <summary>
+        /// Ensure a decisions list has one entry per earned ASI/feat slot; drop obsolete slots.
+        /// Preserves existing Kind / ability picks when the slot still exists.
+        /// </summary>
+        public static List<AsiOrFeatDecision> ReconcileAsiOrFeatDecisions(
+            IEnumerable<ClassLevelEntry> classLevels,
+            IEnumerable<AsiOrFeatDecision>? existing)
+        {
+            var earned = GetAsiOrFeatChoices(classLevels);
+            var map = new Dictionary<string, AsiOrFeatDecision>(StringComparer.OrdinalIgnoreCase);
+            if (existing != null)
+            {
+                foreach (var d in existing)
+                {
+                    if (d == null || string.IsNullOrWhiteSpace(d.ClassName) || d.ClassLevel < 1)
+                        continue;
+                    map[d.Key] = d;
+                }
+            }
+
+            var result = new List<AsiOrFeatDecision>();
+            foreach (var slot in earned)
+            {
+                string key = $"{slot.ClassName}|{slot.ClassLevel}";
+                if (map.TryGetValue(key, out var prior))
+                {
+                    prior.ClassName = slot.ClassName;
+                    prior.ClassLevel = slot.ClassLevel;
+                    result.Add(prior);
+                }
+                else
+                {
+                    result.Add(new AsiOrFeatDecision
+                    {
+                        ClassName = slot.ClassName,
+                        ClassLevel = slot.ClassLevel,
+                        Kind = AsiOrFeatKind.Unchosen
+                    });
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Sum of ability score increases from ASI decisions (not feats).
+        /// Keys: Strength, Dexterity, …
+        /// </summary>
+        public static Dictionary<string, int> GetAsiStatBonuses(IEnumerable<AsiOrFeatDecision>? decisions)
+        {
+            var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (decisions == null) return result;
+
+            foreach (var d in decisions)
+            {
+                if (d == null || d.Kind != AsiOrFeatKind.AbilityScoreImprovement)
+                    continue;
+                AddAsiPoint(result, d.AbilityPlusOneA);
+                AddAsiPoint(result, d.AbilityPlusOneB);
+            }
+            return result;
+        }
+
+        private static void AddAsiPoint(Dictionary<string, int> map, string? ability)
+        {
+            if (string.IsNullOrWhiteSpace(ability)) return;
+            string a = ability.Trim();
+            map[a] = map.GetValueOrDefault(a, 0) + 1;
+        }
+
+        /// <summary>How many feat picks were granted by ASI/feat milestones (not racial origin feats).</summary>
+        public static int CountFeatPicksFromAsi(IEnumerable<AsiOrFeatDecision>? decisions) =>
+            decisions?.Count(d => d != null && d.Kind == AsiOrFeatKind.Feat) ?? 0;
+
+        // ═══════════════════════════════════════════════════════════════
+        // Multiclass ability prerequisites (PHB)
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// PHB multiclass minimums. Returns empty list if the class has no special prereq (or unknown).
+        /// Each inner list is an OR group of ability names that must all be ≥ 13 within that option;
+        /// outer list is AND of groups, except Fighter uses OR between Str and Dex (encoded specially).
+        /// Simpler API: <see cref="MeetsMulticlassPrerequisites"/>.
+        /// </summary>
+        public static bool MeetsMulticlassPrerequisites(
+            string className,
+            Func<string, int> getAbilityScore,
+            out string requirementText)
+        {
+            requirementText = GetMulticlassPrerequisiteText(className);
+            if (string.IsNullOrWhiteSpace(className) || getAbilityScore == null)
+                return true;
+
+            int Score(string ab) => getAbilityScore(ab);
+
+            return (className ?? "").Trim() switch
+            {
+                "Barbarian" => Score("Strength") >= 13,
+                "Bard" => Score("Charisma") >= 13,
+                "Cleric" => Score("Wisdom") >= 13,
+                "Druid" => Score("Wisdom") >= 13,
+                "Fighter" => Score("Strength") >= 13 || Score("Dexterity") >= 13,
+                "Monk" => Score("Dexterity") >= 13 && Score("Wisdom") >= 13,
+                "Paladin" => Score("Strength") >= 13 && Score("Charisma") >= 13,
+                "Ranger" => Score("Dexterity") >= 13 && Score("Wisdom") >= 13,
+                "Rogue" => Score("Dexterity") >= 13,
+                "Sorcerer" => Score("Charisma") >= 13,
+                "Warlock" => Score("Charisma") >= 13,
+                "Wizard" => Score("Intelligence") >= 13,
+                "Artificer" => Score("Intelligence") >= 13,
+                _ => true
+            };
+        }
+
+        public static string GetMulticlassPrerequisiteText(string className) =>
+            (className ?? "").Trim() switch
+            {
+                "Barbarian" => "Strength 13+",
+                "Bard" => "Charisma 13+",
+                "Cleric" => "Wisdom 13+",
+                "Druid" => "Wisdom 13+",
+                "Fighter" => "Strength 13+ or Dexterity 13+",
+                "Monk" => "Dexterity 13+ and Wisdom 13+",
+                "Paladin" => "Strength 13+ and Charisma 13+",
+                "Ranger" => "Dexterity 13+ and Wisdom 13+",
+                "Rogue" => "Dexterity 13+",
+                "Sorcerer" => "Charisma 13+",
+                "Warlock" => "Charisma 13+",
+                "Wizard" => "Intelligence 13+",
+                "Artificer" => "Intelligence 13+",
+                _ => "—"
+            };
 
         // ═══════════════════════════════════════════════════════════════
         // Class resources
