@@ -2160,6 +2160,14 @@ public class Character
     /// (e.g. Fighter 4, Wizard 4).
     /// </summary>
     public List<Nemo.AsiOrFeatDecision> AsiOrFeatDecisions { get; set; } = new();
+    /// <summary>Fighter/Paladin/Ranger fighting style picks (names from ClassFeatureOptionData).</summary>
+    public List<string> FightingStyles { get; set; } = new();
+    /// <summary>Warlock eldritch invocations known.</summary>
+    public List<string> EldritchInvocations { get; set; } = new();
+    /// <summary>Sorcerer metamagic options known.</summary>
+    public List<string> MetamagicOptions { get; set; } = new();
+    /// <summary>Warlock Pact Boon at 3rd level: Pact of the Chain / Blade / Tome.</summary>
+    public string WarlockPactBoon { get; set; } = "";
     public string SelectedFeat { get; set; } = "";
     public int Speed { get; set; } = 30;
 

@@ -772,6 +772,8 @@ namespace Nemo
             UpdateSavingThrows();
             UpdateFeatsTabVisibility();
             UpdateStatDisplays();
+            // Multiclass / secondary-class subclasses (e.g. Twilight Cleric) grant armor & weapons
+            UpdateEquipmentProficiencySummary();
             if (tabSpells != null && tabSpells.IsVisible)
             {
                 RefreshSpellLevelDropdown();
@@ -792,6 +794,7 @@ namespace Nemo
                 EnsureClassLevelsSeeded();
                 RebuildClassLevelRows();
                 RebuildAsiFeatChoicePanels();
+                RebuildClassFeatureOptionPanels();
                 RebuildHpRollRows();
                 ApplyLevelDerivedState();
                 UpdateLevelSummaryLabels();
@@ -800,6 +803,432 @@ namespace Nemo
             {
                 _suppressLevelTabRebuild = false;
             }
+        }
+
+        /// <summary>
+        /// Fighting Styles, Eldritch Invocations, Metamagic, and Warlock Pact Boon
+        /// based on current class levels.
+        /// </summary>
+        private void RebuildClassFeatureOptionPanels()
+        {
+            if (pnlClassFeatureOptions == null || CurrentCharacter == null) return;
+            pnlClassFeatureOptions.Children.Clear();
+
+            CurrentCharacter.FightingStyles ??= new List<string>();
+            CurrentCharacter.EldritchInvocations ??= new List<string>();
+            CurrentCharacter.MetamagicOptions ??= new List<string>();
+
+            var entries = CurrentCharacter.ClassLevels?
+                .Where(e => e != null && e.Levels > 0 && !string.IsNullOrWhiteSpace(e.ClassName))
+                .ToList() ?? new List<ClassLevelEntry>();
+
+            int fighterLv = 0;
+            string? fighterSub = null;
+            int warlockLv = 0;
+            int sorcererLv = 0;
+            int paladinLv = 0;
+            int rangerLv = 0;
+
+            foreach (var e in entries)
+            {
+                string cn = e.ClassName.Trim();
+                if (cn.Equals("Fighter", StringComparison.OrdinalIgnoreCase))
+                {
+                    fighterLv += e.Levels;
+                    if (!string.IsNullOrWhiteSpace(e.Subclass)) fighterSub = e.Subclass;
+                }
+                else if (cn.Equals("Warlock", StringComparison.OrdinalIgnoreCase))
+                    warlockLv += e.Levels;
+                else if (cn.Equals("Sorcerer", StringComparison.OrdinalIgnoreCase))
+                    sorcererLv += e.Levels;
+                else if (cn.Equals("Paladin", StringComparison.OrdinalIgnoreCase))
+                    paladinLv += e.Levels;
+                else if (cn.Equals("Ranger", StringComparison.OrdinalIgnoreCase))
+                    rangerLv += e.Levels;
+            }
+
+            bool any = false;
+
+            // ── Warlock Pact Boon (level 3+) ──
+            if (warlockLv >= 3)
+            {
+                any = true;
+                BuildPactBoonCard();
+            }
+            else if (warlockLv > 0 && warlockLv < 3)
+            {
+                any = true;
+                pnlClassFeatureOptions.Children.Add(MakeClassDetailText(
+                    "Warlock Pact Boon unlocks at Warlock level 3.",
+                    foreground: ClassDetailMutedBrush,
+                    margin: new Thickness(0, 0, 0, 8)));
+                CurrentCharacter.WarlockPactBoon = "";
+            }
+            else
+            {
+                CurrentCharacter.WarlockPactBoon = "";
+            }
+
+            // ── Fighting styles ──
+            int fsSlots = ClassFeatureOptionData.GetFighterFightingStylesKnown(fighterLv, fighterSub)
+                          + ClassFeatureOptionData.GetPaladinOrRangerFightingStylesKnown(paladinLv)
+                          + ClassFeatureOptionData.GetPaladinOrRangerFightingStylesKnown(rangerLv);
+
+            // Collect which classes contribute for labeling
+            var fsClassLabels = new List<string>();
+            if (fighterLv >= 1)
+            {
+                fsClassLabels.Add(fighterLv >= 10 &&
+                                  fighterSub != null &&
+                                  fighterSub.Contains("Champion", StringComparison.OrdinalIgnoreCase)
+                    ? $"Fighter {fighterLv} (Champion: 2 styles)"
+                    : $"Fighter {fighterLv}");
+            }
+            if (paladinLv >= 2) fsClassLabels.Add($"Paladin {paladinLv}");
+            if (rangerLv >= 2) fsClassLabels.Add($"Ranger {rangerLv}");
+
+            if (fsSlots > 0)
+            {
+                any = true;
+                // Allowed styles = union of classes that grant styles
+                var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (fighterLv >= 1)
+                    foreach (var o in ClassFeatureOptionData.GetFightingStylesForClass("Fighter"))
+                        allowed.Add(o.Name);
+                if (paladinLv >= 2)
+                    foreach (var o in ClassFeatureOptionData.GetFightingStylesForClass("Paladin"))
+                        allowed.Add(o.Name);
+                if (rangerLv >= 2)
+                    foreach (var o in ClassFeatureOptionData.GetFightingStylesForClass("Ranger"))
+                        allowed.Add(o.Name);
+
+                var options = ClassFeatureOptionData.AllFightingStyles
+                    .Where(o => allowed.Contains(o.Name))
+                    .OrderBy(o => o.Name)
+                    .ToList();
+
+                CurrentCharacter.FightingStyles = ClassFeatureOptionData.ReconcilePicks(
+                    CurrentCharacter.FightingStyles, fsSlots,
+                    name => options.Any(o => o.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
+
+                BuildOptionPickCard(
+                    title: $"Fighting Styles ({fsSlots})",
+                    subtitle: string.Join(" · ", fsClassLabels) + " — each style only once",
+                    picks: CurrentCharacter.FightingStyles,
+                    catalog: options,
+                    onChanged: list => CurrentCharacter.FightingStyles = list);
+            }
+            else
+            {
+                CurrentCharacter.FightingStyles = new List<string>();
+            }
+
+            // ── Eldritch Invocations ──
+            int invSlots = ClassFeatureOptionData.GetWarlockInvocationsKnown(warlockLv);
+            if (invSlots > 0)
+            {
+                any = true;
+                string? pact = CurrentCharacter.WarlockPactBoon;
+                var available = ClassFeatureOptionData.GetAvailableInvocations(warlockLv, pact).ToList();
+
+                CurrentCharacter.EldritchInvocations = ClassFeatureOptionData.ReconcilePicks(
+                    CurrentCharacter.EldritchInvocations, invSlots,
+                    name => available.Any(o => o.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
+
+                BuildOptionPickCard(
+                    title: $"Eldritch Invocations ({invSlots} known)",
+                    subtitle: $"Warlock {warlockLv} — some options require a higher warlock level or a Pact Boon",
+                    picks: CurrentCharacter.EldritchInvocations,
+                    catalog: available,
+                    onChanged: list =>
+                    {
+                        CurrentCharacter.EldritchInvocations = list;
+                        // Refresh so prerequisite-gated options update after picks (no circular rebuild)
+                    },
+                    showPrerequisite: true);
+            }
+            else
+            {
+                if (warlockLv == 1)
+                {
+                    any = true;
+                    pnlClassFeatureOptions.Children.Add(MakeClassDetailText(
+                        "Eldritch Invocations unlock at Warlock level 2 (you know 2, then more at 5, 7, 9, …).",
+                        foreground: ClassDetailMutedBrush,
+                        margin: new Thickness(0, 0, 0, 8)));
+                }
+                CurrentCharacter.EldritchInvocations = new List<string>();
+            }
+
+            // ── Metamagic ──
+            int mmSlots = ClassFeatureOptionData.GetSorcererMetamagicKnown(sorcererLv);
+            if (mmSlots > 0)
+            {
+                any = true;
+                var mmOptions = ClassFeatureOptionData.AllMetamagic.ToList();
+                CurrentCharacter.MetamagicOptions = ClassFeatureOptionData.ReconcilePicks(
+                    CurrentCharacter.MetamagicOptions, mmSlots,
+                    name => mmOptions.Any(o => o.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
+
+                BuildOptionPickCard(
+                    title: $"Metamagic ({mmSlots} known)",
+                    subtitle: $"Sorcerer {sorcererLv} — 2 at 3rd level, +1 at 10th, +1 at 17th",
+                    picks: CurrentCharacter.MetamagicOptions,
+                    catalog: mmOptions,
+                    onChanged: list => CurrentCharacter.MetamagicOptions = list);
+            }
+            else
+            {
+                if (sorcererLv > 0 && sorcererLv < 3)
+                {
+                    any = true;
+                    pnlClassFeatureOptions.Children.Add(MakeClassDetailText(
+                        "Metamagic unlocks at Sorcerer level 3 (two options; more at 10th and 17th).",
+                        foreground: ClassDetailMutedBrush,
+                        margin: new Thickness(0, 0, 0, 8)));
+                }
+                CurrentCharacter.MetamagicOptions = new List<string>();
+            }
+
+            if (lblClassOptionHint != null)
+            {
+                lblClassOptionHint.Text = any
+                    ? "Choose options for each open slot. Duplicates of the same option are not allowed within a category."
+                    : "Fighting Styles (Fighter 1+ / Paladin·Ranger 2+), Eldritch Invocations (Warlock 2+), and Metamagic (Sorcerer 3+) appear here as you gain levels.";
+            }
+
+            if (!any)
+            {
+                pnlClassFeatureOptions.Children.Add(MakeClassDetailText(
+                    "No fighting style, invocation, or metamagic picks yet for your current class levels.",
+                    foreground: ClassDetailMutedBrush));
+            }
+        }
+
+        private void BuildPactBoonCard()
+        {
+            var border = new Border
+            {
+                Background = (Brush)new BrushConverter().ConvertFromString("#252525"),
+                BorderBrush = (Brush)new BrushConverter().ConvertFromString("#555"),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 10),
+                CornerRadius = new CornerRadius(3)
+            };
+            var stack = new StackPanel();
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Warlock — Pact Boon (level 3)",
+                FontWeight = FontWeights.SemiBold,
+                Foreground = ClassDetailSectionBrush,
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+
+            var boons = ClassFeatureOptionData.AllPactBoons.ToList();
+            var names = boons.Select(b => b.Name).ToList();
+            var cmb = new ComboBox
+            {
+                ItemsSource = names,
+                Height = 30,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            StyleAppComboBox(cmb);
+
+            string current = CurrentCharacter?.WarlockPactBoon ?? "";
+            if (!string.IsNullOrWhiteSpace(current) &&
+                names.Any(n => n.Equals(current, StringComparison.OrdinalIgnoreCase)))
+                cmb.SelectedItem = names.First(n => n.Equals(current, StringComparison.OrdinalIgnoreCase));
+            else
+            {
+                cmb.SelectedIndex = 0;
+                if (CurrentCharacter != null && names.Count > 0)
+                    CurrentCharacter.WarlockPactBoon = names[0];
+            }
+
+            var desc = new TextBlock
+            {
+                Text = boons.FirstOrDefault(b => b.Name == (cmb.SelectedItem as string))?.Description ?? "",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = ClassDetailBodyBrush,
+                FontSize = 12
+            };
+
+            cmb.SelectionChanged += (s, e) =>
+            {
+                if (_suppressLevelTabRebuild) return;
+                if (cmb.SelectedItem is not string pick || CurrentCharacter == null) return;
+                CurrentCharacter.WarlockPactBoon = pick;
+                var opt = boons.FirstOrDefault(b => b.Name.Equals(pick, StringComparison.OrdinalIgnoreCase));
+                desc.Text = opt?.Description ?? "";
+                // Rebuild so invocation list filters by new pact
+                _suppressLevelTabRebuild = true;
+                try { RebuildClassFeatureOptionPanels(); }
+                finally { _suppressLevelTabRebuild = false; }
+            };
+
+            stack.Children.Add(cmb);
+            stack.Children.Add(desc);
+            border.Child = stack;
+            pnlClassFeatureOptions.Children.Add(border);
+        }
+
+        private void BuildOptionPickCard(
+            string title,
+            string subtitle,
+            List<string> picks,
+            List<ClassFeatureOption> catalog,
+            Action<List<string>> onChanged,
+            bool showPrerequisite = false)
+        {
+            var border = new Border
+            {
+                Background = (Brush)new BrushConverter().ConvertFromString("#252525"),
+                BorderBrush = (Brush)new BrushConverter().ConvertFromString("#555"),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 10),
+                CornerRadius = new CornerRadius(3)
+            };
+            var stack = new StackPanel();
+            stack.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = ClassDetailSectionBrush,
+                Margin = new Thickness(0, 0, 0, 2)
+            });
+            stack.Children.Add(new TextBlock
+            {
+                Text = subtitle,
+                Foreground = ClassDetailMutedBrush,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            var displayNames = catalog.Select(o =>
+            {
+                if (showPrerequisite && !string.IsNullOrWhiteSpace(o.Prerequisite))
+                    return $"{o.Name}  [req: {o.Prerequisite}" +
+                           (o.MinClassLevel > 2 ? $", L{o.MinClassLevel}+" : "") + "]";
+                if (o.MinClassLevel > 2 && showPrerequisite)
+                    return $"{o.Name}  [L{o.MinClassLevel}+]";
+                return o.Name;
+            }).ToList();
+
+            // Map display label → option name
+            var labelToName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < catalog.Count; i++)
+                labelToName[displayNames[i]] = catalog[i].Name;
+
+            var nameToLabel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < catalog.Count; i++)
+                nameToLabel[catalog[i].Name] = displayNames[i];
+
+            var descBlock = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = ClassDetailBodyBrush,
+                FontSize = 12,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+
+            for (int slot = 0; slot < picks.Count; slot++)
+            {
+                int slotIndex = slot;
+                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+                row.Children.Add(new TextBlock
+                {
+                    Text = $"Option {slot + 1}:",
+                    Width = 72,
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                    Foreground = Brushes.White
+                });
+
+                var cmb = new ComboBox
+                {
+                    Height = 30,
+                    ItemsSource = displayNames.ToList()
+                };
+                StyleAppComboBox(cmb);
+                DockPanel.SetDock(cmb, Dock.Right);
+
+                string current = picks[slotIndex] ?? "";
+                if (!string.IsNullOrWhiteSpace(current) && nameToLabel.TryGetValue(current, out var lab))
+                    cmb.SelectedItem = lab;
+                else if (displayNames.Count > 0)
+                {
+                    // Prefer first not already taken
+                    string? free = displayNames.FirstOrDefault(d =>
+                    {
+                        string n = labelToName[d];
+                        return !picks.Where((p, i) => i != slotIndex && !string.IsNullOrWhiteSpace(p))
+                            .Any(p => p.Equals(n, StringComparison.OrdinalIgnoreCase));
+                    });
+                    cmb.SelectedItem = free ?? displayNames[0];
+                    if (cmb.SelectedItem is string sel0 && labelToName.TryGetValue(sel0, out var n0))
+                        picks[slotIndex] = n0;
+                }
+
+                cmb.SelectionChanged += (s, e) =>
+                {
+                    if (_suppressLevelTabRebuild) return;
+                    if (cmb.SelectedItem is not string label) return;
+                    if (!labelToName.TryGetValue(label, out string chosen)) return;
+
+                    // Block duplicates in other slots
+                    for (int i = 0; i < picks.Count; i++)
+                    {
+                        if (i == slotIndex) continue;
+                        if (picks[i].Equals(chosen, StringComparison.OrdinalIgnoreCase))
+                        {
+                            MessageBox.Show(
+                                $"You already selected \"{chosen}\" in another slot. Pick a different option.",
+                                "Duplicate Option",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Information);
+                            // revert
+                            string prev = picks[slotIndex];
+                            if (!string.IsNullOrWhiteSpace(prev) && nameToLabel.TryGetValue(prev, out var prevLab))
+                                cmb.SelectedItem = prevLab;
+                            return;
+                        }
+                    }
+
+                    picks[slotIndex] = chosen;
+                    onChanged(picks.ToList());
+
+                    var opt = catalog.FirstOrDefault(o =>
+                        o.Name.Equals(chosen, StringComparison.OrdinalIgnoreCase));
+                    descBlock.Text = opt == null
+                        ? ""
+                        : (string.IsNullOrWhiteSpace(opt.Prerequisite)
+                            ? opt.Description
+                            : $"Prerequisite: {opt.Prerequisite}\n{opt.Description}");
+                };
+
+                // Initial description for this slot when focused via selection
+                if (cmb.SelectedItem is string initLab &&
+                    labelToName.TryGetValue(initLab, out var initName))
+                {
+                    var opt0 = catalog.FirstOrDefault(o =>
+                        o.Name.Equals(initName, StringComparison.OrdinalIgnoreCase));
+                    if (opt0 != null && slotIndex == 0)
+                    {
+                        descBlock.Text = string.IsNullOrWhiteSpace(opt0.Prerequisite)
+                            ? opt0.Description
+                            : $"Prerequisite: {opt0.Prerequisite}\n{opt0.Description}";
+                    }
+                }
+
+                row.Children.Add(cmb);
+                stack.Children.Add(row);
+            }
+
+            stack.Children.Add(descBlock);
+            border.Child = stack;
+            pnlClassFeatureOptions.Children.Add(border);
         }
 
         /// <summary>
@@ -3240,34 +3669,172 @@ namespace Nemo
             return int.TryParse(cleanText, out int mod) ? mod : 0;
         }
 
+        /// <summary>
+        /// Collect armor/weapon proficiency lines using official 5e multiclass rules:
+        /// <list type="bullet">
+        /// <item><description>Primary class (first ClassLevels row / character start): full starting armor &amp; weapons.</description></item>
+        /// <item><description>Each additional class: only the PHB Multiclassing Proficiencies table (not full 1st-level list).</description></item>
+        /// <item><description>Subclass features (e.g. Twilight Domain) still grant their bonus proficiencies at the usual class level.</description></item>
+        /// </list>
+        /// </summary>
+        private void CollectClassAndSubclassProficiencies(
+            List<string> armor,
+            List<string> weapons,
+            List<string>? subclassGrantNotes = null)
+        {
+            void AddUnique(List<string> list, string item)
+            {
+                if (string.IsNullOrWhiteSpace(item)) return;
+                if (!list.Any(x => x.Equals(item, StringComparison.OrdinalIgnoreCase)))
+                    list.Add(item);
+            }
+
+            var entries = CurrentCharacter?.ClassLevels?
+                .Where(e => e != null && e.Levels > 0 && !string.IsNullOrWhiteSpace(e.ClassName))
+                .ToList();
+
+            // Fall back to Class tab when ClassLevels not seeded yet
+            if (entries == null || entries.Count == 0)
+            {
+                string? cn = cmbClass?.SelectedItem as string;
+                string? sub = GetUiSelectedSubclassName();
+                if (!string.IsNullOrWhiteSpace(cn))
+                    entries = new List<ClassLevelEntry> { new(cn!, 1, sub) };
+            }
+
+            if (entries == null) return;
+
+            // First row = starting class (full proficiencies). Later rows = multiclass dips (table only).
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                string className = entry.ClassName.Trim();
+                bool isPrimaryClass = i == 0;
+
+                if (isPrimaryClass)
+                {
+                    if (GameData.ClassData.TryGetValue(className, out var classData))
+                    {
+                        foreach (var a in classData.ArmorProficiencies ?? new List<string>())
+                            AddUnique(armor, a);
+                        foreach (var w in classData.WeaponProficiencies ?? new List<string>())
+                            AddUnique(weapons, w);
+                    }
+                }
+                else
+                {
+                    // PHB: secondary classes only get the Multiclassing Proficiencies table
+                    var mc = LevelUpCalculator.GetMulticlassProficiencies(className);
+                    foreach (var a in mc.Armor)
+                        AddUnique(armor, $"{a} (multiclass {className})");
+                    foreach (var w in mc.Weapons)
+                        AddUnique(weapons, $"{w} (multiclass {className})");
+                }
+
+                // Subclass bonus proficiencies once the class has reached subclass level
+                // (class features apply on multiclass levels the same as single-class)
+                string? subName = entry.Subclass;
+                if (string.IsNullOrWhiteSpace(subName))
+                    continue;
+                if (subName.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) ||
+                    subName.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                int subLevel = GameData.GetSubclassLevel(className);
+                if (entry.Levels < subLevel)
+                    continue;
+
+                GetSubclassBonusProficiencies(className, subName,
+                    out var subArmor, out var subWeapons, out string sourceLabel);
+
+                foreach (var a in subArmor)
+                {
+                    string line = string.IsNullOrEmpty(sourceLabel) ? a : $"{a} ({sourceLabel})";
+                    AddUnique(armor, line);
+                }
+                foreach (var w in subWeapons)
+                {
+                    string line = string.IsNullOrEmpty(sourceLabel) ? w : $"{w} ({sourceLabel})";
+                    AddUnique(weapons, line);
+                }
+
+                if (subclassGrantNotes != null && (subArmor.Count > 0 || subWeapons.Count > 0))
+                {
+                    var bits = new List<string>();
+                    if (subArmor.Count > 0) bits.Add("armor: " + string.Join(", ", subArmor));
+                    if (subWeapons.Count > 0) bits.Add("weapons: " + string.Join(", ", subWeapons));
+                    subclassGrantNotes.Add($"{className} — {sourceLabel}: {string.Join("; ", bits)}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Armor/weapon grants from a subclass (domain, patron, college, etc.).
+        /// </summary>
+        private static void GetSubclassBonusProficiencies(
+            string className,
+            string subclassName,
+            out List<string> armor,
+            out List<string> weapons,
+            out string sourceLabel)
+        {
+            armor = new List<string>();
+            weapons = new List<string>();
+            sourceLabel = subclassName;
+
+            // Cleric domains (keys: Life, Twilight, War, …)
+            if (className.Equals("Cleric", StringComparison.OrdinalIgnoreCase) &&
+                GameData.ClericSubclasses.TryGetValue(subclassName, out var clericSub))
+            {
+                armor.AddRange(clericSub.ArmorProficiencies ?? new List<string>());
+                weapons.AddRange(clericSub.WeaponProficiencies ?? new List<string>());
+                sourceLabel = string.IsNullOrWhiteSpace(clericSub.Name) ? subclassName : clericSub.Name;
+                return;
+            }
+
+            // Warlock patrons
+            if (className.Equals("Warlock", StringComparison.OrdinalIgnoreCase) &&
+                GameData.WarlockSubclasses.TryGetValue(subclassName, out var warlockSub))
+            {
+                armor.AddRange(warlockSub.ArmorProficiencies ?? new List<string>());
+                weapons.AddRange(warlockSub.WeaponProficiencies ?? new List<string>());
+                sourceLabel = string.IsNullOrWhiteSpace(warlockSub.Name) ? subclassName : warlockSub.Name;
+                return;
+            }
+
+            // Bard colleges that grant medium armor / martial weapons (Valor, Swords)
+            if (className.Equals("Bard", StringComparison.OrdinalIgnoreCase))
+            {
+                if (subclassName.Contains("Valor", StringComparison.OrdinalIgnoreCase) ||
+                    subclassName.Contains("Swords", StringComparison.OrdinalIgnoreCase))
+                {
+                    armor.Add("Medium armor");
+                    armor.Add("Shields");
+                    weapons.Add("Martial weapons");
+                    sourceLabel = subclassName;
+                }
+                return;
+            }
+
+            // Cleric-like heuristics if domain key missing but name contains domain
+            // (already handled by ClericSubclasses for official domains)
+
+            // Hexblade-style already in WarlockSubclasses
+        }
+
         private void UpdateEquipmentProficiencySummary()
         {
+            if (pnlProficiencySummary == null) return;
             pnlProficiencySummary.Children.Clear();
 
             var armor = new List<string>();
             var weapons = new List<string>();
+            var subclassNotes = new List<string>();
 
-            // === CLASS PROFICIENCIES ===
-            string className = cmbClass.SelectedItem as string;
-            if (className != null && GameData.ClassData.TryGetValue(className, out var classData))
-            {
-                armor.AddRange(classData.ArmorProficiencies);
-                weapons.AddRange(classData.WeaponProficiencies);
-            }
+            // === ALL CLASSES + SUBCLASSES (multiclass-aware) ===
+            CollectClassAndSubclassProficiencies(armor, weapons, subclassNotes);
 
-            // === SUBCLASS PROFICIENCIES ===
-            if (className == "Cleric" && cmbSubclass.SelectedItem is string subName && GameData.ClericSubclasses.TryGetValue(subName, out var sub))
-            {
-                armor.AddRange(sub.ArmorProficiencies);
-                weapons.AddRange(sub.WeaponProficiencies);
-            }
-            else if (className == "Warlock" && cmbSubclass.SelectedItem is string patronName && GameData.WarlockSubclasses.TryGetValue(patronName, out var warlockSub))
-            {
-                armor.AddRange(warlockSub.ArmorProficiencies);
-                weapons.AddRange(warlockSub.WeaponProficiencies);
-            }
-
-            // === RACE / SUBRACE PROFICIENCIES (correct categorization) ===
+            // === RACE / SUBRACE PROFICIENCIES ===
             string race = cmbRace.SelectedItem as string;
             string subrace = cmbSubrace.SelectedItem as string;
 
@@ -3284,7 +3851,6 @@ namespace Nemo
                 {
                     weapons.Add("Elf Weapon Training (longsword, shortsword, shortbow, longbow)");
                 }
-
             }
 
             // === DISPLAY ARMOR ===
@@ -3299,7 +3865,7 @@ namespace Nemo
                 });
                 pnlProficiencySummary.Children.Add(new TextBlock
                 {
-                    Text = "• " + string.Join(", ", armor.Distinct()),
+                    Text = "• " + string.Join(", ", armor.Distinct(StringComparer.OrdinalIgnoreCase)),
                     Foreground = Brushes.White,
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 0, 0, 12)
@@ -3318,10 +3884,54 @@ namespace Nemo
                 });
                 pnlProficiencySummary.Children.Add(new TextBlock
                 {
-                    Text = "• " + string.Join(", ", weapons.Distinct()),
+                    Text = "• " + string.Join(", ", weapons.Distinct(StringComparer.OrdinalIgnoreCase)),
                     Foreground = Brushes.White,
-                    TextWrapping = TextWrapping.Wrap
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8)
                 });
+            }
+
+            // === NOTES: multiclass table + subclass feature grants ===
+            bool multi = (CurrentCharacter?.ClassLevels?.Count ?? 0) > 1;
+            if (multi)
+            {
+                pnlProficiencySummary.Children.Add(new TextBlock
+                {
+                    Text = "MULTICLASS NOTE",
+                    FontWeight = FontWeights.Bold,
+                    Foreground = (Brush)new BrushConverter().ConvertFromString("#E8C36A"),
+                    Margin = new Thickness(0, 8, 0, 4)
+                });
+                pnlProficiencySummary.Children.Add(new TextBlock
+                {
+                    Text = "Your first class grants full starting armor/weapons. Each additional class only adds the PHB Multiclassing Proficiencies table (not that class's full 1st-level list). Subclass features (domains, patrons, etc.) still grant their bonus proficiencies at the usual class level.",
+                    Foreground = (Brush)new BrushConverter().ConvertFromString("#AAA"),
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 11,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+            }
+
+            if (subclassNotes.Count > 0)
+            {
+                pnlProficiencySummary.Children.Add(new TextBlock
+                {
+                    Text = "SUBCLASS PROFICIENCY GRANTS",
+                    FontWeight = FontWeights.Bold,
+                    Foreground = (Brush)new BrushConverter().ConvertFromString("#9CDCFE"),
+                    Margin = new Thickness(0, 4, 0, 4)
+                });
+                foreach (var note in subclassNotes)
+                {
+                    pnlProficiencySummary.Children.Add(new TextBlock
+                    {
+                        Text = "• " + note,
+                        Foreground = (Brush)new BrushConverter().ConvertFromString("#CCC"),
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = 12,
+                        Margin = new Thickness(0, 0, 0, 2)
+                    });
+                }
             }
         }
 
@@ -4391,38 +5001,60 @@ namespace Nemo
 
         public bool MeetsPrerequisite(Feat feat)
         {
-            if (string.IsNullOrWhiteSpace(feat.Prerequisites) || feat.Prerequisites == "None")
+            if (string.IsNullOrWhiteSpace(feat.Prerequisites) ||
+                feat.Prerequisites.Equals("None", StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            string prereq = feat.Prerequisites.ToLowerInvariant();
+            string prereq = feat.Prerequisites;
+            string prereqLower = prereq.ToLowerInvariant();
 
-            // === ABILITY SCORE REQUIREMENTS ===
-            if (prereq.Contains(" or higher"))
+            // Compound requirements joined with " + " (e.g. Dex 13 + Stealth proficiency)
+            if (prereq.Contains('+'))
             {
-                var parts = prereq.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length >= 2 && int.TryParse(parts[1], out int required))
+                var parts = prereq.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                return parts.All(MeetsSinglePrerequisiteClause);
+            }
+
+            return MeetsSinglePrerequisiteClause(prereq);
+        }
+
+        /// <summary>Evaluate one prerequisite clause (ability score, proficiency, race, spellcasting, …).</summary>
+        private bool MeetsSinglePrerequisiteClause(string clause)
+        {
+            if (string.IsNullOrWhiteSpace(clause))
+                return true;
+
+            string prereq = clause.Trim();
+            string prereqLower = prereq.ToLowerInvariant();
+
+            // === ABILITY SCORE: "Strength 13 or higher" ===
+            if (prereqLower.Contains("or higher"))
+            {
+                // Match "Charisma 13 or higher" / "Intelligence or Wisdom 13 or higher"
+                if (prereqLower.Contains("intelligence or wisdom"))
                 {
-                    string ability = parts[0];
-                    int score = GetFinalStat(ability);
-                    return score >= required;
+                    int required = ExtractRequiredScore(prereqLower) ?? 13;
+                    return GetFinalStat("Intelligence") >= required || GetFinalStat("Wisdom") >= required;
+                }
+
+                var scoreMatch = System.Text.RegularExpressions.Regex.Match(
+                    prereq, @"(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+(\d+)",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (scoreMatch.Success && int.TryParse(scoreMatch.Groups[2].Value, out int requiredSingle))
+                {
+                    return GetFinalStat(scoreMatch.Groups[1].Value) >= requiredSingle;
                 }
             }
 
             // === SPELLCASTING FEATURE ===
-            if (prereq.Contains("spellcasting"))
-            {
-                if (cmbClass.SelectedItem is string className &&
-                    GameData.ClassData.TryGetValue(className, out var data))
-                {
-                    return data.Spellcasting || raceHasInnateSpellcasting;
-                }
-                return raceHasInnateSpellcasting;
-            }
+            if (prereqLower.Contains("spellcasting"))
+                return CharacterHasSpellcastingFeature();
 
-            // === RACE REQUIREMENTS ===
-            string currentRace = cmbRace.SelectedItem?.ToString() ?? "";
-            if (prereq.Contains("half-elf") || prereq.Contains("half-orc") || prereq.Contains("human"))
+            // === RACE: half-elf / half-orc / human / custom lineage ===
+            if (prereqLower.Contains("half-elf") || prereqLower.Contains("half-orc") ||
+                prereqLower.Contains("human") || prereqLower.Contains("custom lineage"))
             {
+                string currentRace = cmbRace.SelectedItem?.ToString() ?? "";
                 return currentRace.Contains("Half-Elf", StringComparison.OrdinalIgnoreCase) ||
                        currentRace.Contains("Half-Orc", StringComparison.OrdinalIgnoreCase) ||
                        currentRace.Contains("Human", StringComparison.OrdinalIgnoreCase) ||
@@ -4430,29 +5062,315 @@ namespace Nemo
                        currentRace.Contains("Custom Lineage", StringComparison.OrdinalIgnoreCase);
             }
 
-            // === FINESSE WEAPON PROFICIENCY ===
-            if (prereq.Contains("finesse"))
+            // === SKILL PROFICIENCY (e.g. "proficiency in Stealth") ===
+            if (prereqLower.Contains("proficiency in "))
             {
-                var className = cmbClass.SelectedItem?.ToString();
-                return className is "Fighter" or "Rogue" or "Monk" or "Paladin" or "Ranger" or "Bard";
+                // "proficiency in Stealth"
+                var skillMatch = System.Text.RegularExpressions.Regex.Match(
+                    prereq, @"proficiency in\s+([A-Za-z ]+)",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (skillMatch.Success)
+                {
+                    string skillName = skillMatch.Groups[1].Value.Trim();
+                    // strip trailing junk
+                    int cut = skillName.IndexOf(" or ", StringComparison.OrdinalIgnoreCase);
+                    if (cut > 0) skillName = skillName.Substring(0, cut).Trim();
+                    return allSkills?.Any(s =>
+                               s.IsProficient &&
+                               s.SkillName.Equals(skillName, StringComparison.OrdinalIgnoreCase)) == true;
+                }
             }
 
-            // === HEALER FEAT ===
-            if (prereq.Contains("healer's kit"))
+            // === HEALER'S KIT (equipment-gated; allow for now / common casters & medical classes) ===
+            if (prereqLower.Contains("healer") && prereqLower.Contains("kit"))
+                return true;
+
+            // === ARMOR / SHIELD PROFICIENCY ===
+            if (prereqLower.Contains("heavy armor"))
+                return HasArmorProficiencyCategory("heavy");
+            if (prereqLower.Contains("medium armor"))
+                return HasArmorProficiencyCategory("medium") || HasArmorProficiencyCategory("heavy");
+            if (prereqLower.Contains("light armor"))
+                return HasArmorProficiencyCategory("light") ||
+                       HasArmorProficiencyCategory("medium") ||
+                       HasArmorProficiencyCategory("heavy");
+            if (prereqLower.Contains("shield"))
+                return HasShieldProficiency();
+
+            // === WEAPON PROFICIENCIES (specific lists and categories) ===
+            // Fighting Initiate: martial weapon OR unarmed strike (everyone is proficient with unarmed strikes)
+            if (prereqLower.Contains("martial weapon") && prereqLower.Contains("unarmed"))
+                return HasMartialWeaponProficiency() || HasUnarmedStrikeProficiency();
+
+            if (prereqLower.Contains("martial weapon"))
+                return HasMartialWeaponProficiency();
+
+            if (prereqLower.Contains("finesse"))
+                return HasWeaponProficiencyWithProperty("Finesse");
+
+            // Polearm Master: glaive, haldberd, quarterstaff, or spear
+            if (prereqLower.Contains("glaive") || prereqLower.Contains("halberd") ||
+                prereqLower.Contains("quarterstaff") || prereqLower.Contains("spear"))
             {
-                // For now we assume the user has it if they picked a class that gets it (Cleric, Druid, etc.)
-                // You can expand this later with actual equipment tracking
-                return true; // Placeholder — improve later
+                return HasProficiencyWithAnyNamedWeapon("Glaive", "Halberd", "Quarterstaff", "Spear");
             }
 
-            // === GREAT WEAPON MASTER / POLEARM MASTER ===
-            if (prereq.Contains("martial weapon"))
+            // Piercer-style: thrown property OR ranged weapon
+            if (prereqLower.Contains("thrown") ||
+                (prereqLower.Contains("ranged") && prereqLower.Contains("weapon")))
             {
-                var className = cmbClass.SelectedItem?.ToString();
-                return className is "Fighter" or "Paladin" or "Ranger" or "Barbarian" or "Monk";
+                return HasWeaponProficiencyWithProperty("Thrown") ||
+                       HasWeaponProficiencyWithProperty("Ammunition") ||
+                       HasProficientRangedWeapon();
             }
 
-            return true; // Default allow
+            // Slasher: weapon that deals slashing
+            if (prereqLower.Contains("slashing"))
+                return HasWeaponProficiencyWithDamageType("Slashing");
+
+            // Generic "proficiency with a weapon..."
+            if (prereqLower.Contains("proficiency with a weapon") ||
+                prereqLower.Contains("proficiency with weapons"))
+                return GetProficientWeapons().Count > 0 || HasUnarmedStrikeProficiency();
+
+            // Unknown clause: do not block the player
+            return true;
+        }
+
+        private static int? ExtractRequiredScore(string prereqLower)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(prereqLower, @"(\d+)\s+or higher");
+            if (m.Success && int.TryParse(m.Groups[1].Value, out int n))
+                return n;
+            return null;
+        }
+
+        // ───────────────────────── Proficiency inventory for feat prereqs ─────────────────────────
+
+        /// <summary>
+        /// Raw proficiency tags for feat prereqs, using PHB multiclass rules:
+        /// primary class = full starting list; secondary classes = multiclass table only;
+        /// plus subclass feature grants (domain/patron/college).
+        /// </summary>
+        private List<string> GetCharacterProficiencyTags()
+        {
+            var tags = new List<string>();
+
+            void AddRange(IEnumerable<string>? items)
+            {
+                if (items == null) return;
+                foreach (var t in items)
+                {
+                    if (string.IsNullOrWhiteSpace(t)) continue;
+                    // Strip display suffixes like "(Twilight Domain)" / "(multiclass Cleric)"
+                    string clean = t.Trim();
+                    int paren = clean.IndexOf(" (", StringComparison.Ordinal);
+                    if (paren > 0) clean = clean.Substring(0, paren).Trim();
+                    if (!tags.Any(x => x.Equals(clean, StringComparison.OrdinalIgnoreCase)))
+                        tags.Add(clean);
+                }
+            }
+
+            // Reuse the same collection logic as the Skills tab summary
+            var armor = new List<string>();
+            var weapons = new List<string>();
+            CollectClassAndSubclassProficiencies(armor, weapons, subclassGrantNotes: null);
+            AddRange(armor);
+            AddRange(weapons);
+
+            return tags;
+        }
+
+        /// <summary>
+        /// Expand proficiency tags into concrete <see cref="Weapon"/> entries.
+        /// "Martial weapons" / "Simple weapons" expand to full lists; "Rapiers" matches Rapier, etc.
+        /// </summary>
+        private List<Weapon> GetProficientWeapons()
+        {
+            var result = new List<Weapon>();
+            var tags = GetCharacterProficiencyTags();
+            bool allSimple = tags.Any(t =>
+                t.Equals("Simple weapons", StringComparison.OrdinalIgnoreCase) ||
+                t.Equals("Simple weapon", StringComparison.OrdinalIgnoreCase));
+            bool allMartial = tags.Any(t =>
+                t.Equals("Martial weapons", StringComparison.OrdinalIgnoreCase) ||
+                t.Equals("Martial weapon", StringComparison.OrdinalIgnoreCase));
+
+            if (allSimple)
+                result.AddRange(GameData.SimpleWeapons);
+            if (allMartial)
+                result.AddRange(GameData.MartialWeapons);
+
+            foreach (var tag in tags)
+            {
+                // Skip category tags already expanded
+                if (tag.Contains("Simple weapon", StringComparison.OrdinalIgnoreCase) ||
+                    tag.Contains("Martial weapon", StringComparison.OrdinalIgnoreCase) ||
+                    tag.Contains("armor", StringComparison.OrdinalIgnoreCase) ||
+                    tag.Contains("Shield", StringComparison.OrdinalIgnoreCase) ||
+                    tag.Equals("None", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Match specific weapons: "Rapiers" / "Longswords" / "Hand crossbows" / "Shortswords"
+                string normalized = NormalizeWeaponProficiencyTag(tag);
+                foreach (var w in GameData.SimpleWeapons.Concat(GameData.MartialWeapons))
+                {
+                    if (WeaponNameMatchesProficiency(w.Name, normalized) &&
+                        !result.Any(r => r.Name.Equals(w.Name, StringComparison.OrdinalIgnoreCase)))
+                        result.Add(w);
+                }
+            }
+
+            return result;
+        }
+
+        private static string NormalizeWeaponProficiencyTag(string tag)
+        {
+            string t = tag.Trim();
+            // Common plurals in class lists
+            if (t.EndsWith("es", StringComparison.OrdinalIgnoreCase) && t.Length > 3)
+            {
+                // crosses → cross? prefer stripping trailing 's' for "swords"/"crossbows"
+            }
+            if (t.EndsWith("s", StringComparison.OrdinalIgnoreCase) &&
+                !t.EndsWith("ss", StringComparison.OrdinalIgnoreCase) &&
+                t.Length > 2)
+            {
+                // Rapiers → Rapier, Longswords → Longsword, Shortswords → Shortsword
+                // Hand crossbows → Hand crossbow, Light crossbows → Light crossbow
+                t = t.Substring(0, t.Length - 1);
+            }
+            return t;
+        }
+
+        private static bool WeaponNameMatchesProficiency(string weaponName, string proficiencyTag)
+        {
+            if (weaponName.Equals(proficiencyTag, StringComparison.OrdinalIgnoreCase))
+                return true;
+            // "Hand crossbow" vs "Hand Crossbows" already singularized
+            if (weaponName.Equals(proficiencyTag + "s", StringComparison.OrdinalIgnoreCase))
+                return true;
+            // Loose contains for "crossbow" style tags
+            string w = weaponName.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
+            string p = proficiencyTag.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
+            return w.Equals(p, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// True if the character has proficiency with any martial weapon —
+        /// full "Martial weapons" grant OR any specific martial (rapier, longsword, …).
+        /// </summary>
+        private bool HasMartialWeaponProficiency()
+        {
+            var tags = GetCharacterProficiencyTags();
+            if (tags.Any(t => t.Contains("Martial weapon", StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            // Specific martial weapons by name (Rogue: rapiers, longswords, shortswords, hand crossbows)
+            var proficient = GetProficientWeapons();
+            var martialNames = new HashSet<string>(
+                GameData.MartialWeapons.Select(w => w.Name),
+                StringComparer.OrdinalIgnoreCase);
+            return proficient.Any(w => martialNames.Contains(w.Name));
+        }
+
+        /// <summary>PHB: every character is proficient with unarmed strikes.</summary>
+        private static bool HasUnarmedStrikeProficiency() => true;
+
+        private bool HasWeaponProficiencyWithProperty(string property)
+        {
+            return GetProficientWeapons().Any(w =>
+                !string.IsNullOrEmpty(w.Properties) &&
+                w.Properties.Contains(property, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool HasWeaponProficiencyWithDamageType(string damageType)
+        {
+            return GetProficientWeapons().Any(w =>
+                !string.IsNullOrEmpty(w.Type) &&
+                w.Type.Contains(damageType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool HasProficiencyWithAnyNamedWeapon(params string[] weaponNames)
+        {
+            var proficient = GetProficientWeapons();
+            // Also treat full martial / simple grants
+            var tags = GetCharacterProficiencyTags();
+            bool allMartial = tags.Any(t => t.Contains("Martial weapon", StringComparison.OrdinalIgnoreCase));
+            bool allSimple = tags.Any(t => t.Contains("Simple weapon", StringComparison.OrdinalIgnoreCase));
+
+            foreach (var name in weaponNames)
+            {
+                if (proficient.Any(w => w.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                    return true;
+
+                bool isMartial = GameData.MartialWeapons.Any(w =>
+                    w.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                bool isSimple = GameData.SimpleWeapons.Any(w =>
+                    w.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                if (allMartial && isMartial) return true;
+                if (allSimple && isSimple) return true;
+            }
+            return false;
+        }
+
+        private bool HasProficientRangedWeapon()
+        {
+            return GetProficientWeapons().Any(w =>
+                (!string.IsNullOrEmpty(w.Range) && w.Range != "-") ||
+                (!string.IsNullOrEmpty(w.Properties) &&
+                 (w.Properties.Contains("Ammunition", StringComparison.OrdinalIgnoreCase) ||
+                  w.Properties.Contains("Thrown", StringComparison.OrdinalIgnoreCase))));
+        }
+
+        private bool HasArmorProficiencyCategory(string category)
+        {
+            // category: light | medium | heavy
+            var tags = GetCharacterProficiencyTags();
+            if (tags.Any(t => t.Contains("All armor", StringComparison.OrdinalIgnoreCase)))
+                return true;
+            return tags.Any(t => t.Contains(category, StringComparison.OrdinalIgnoreCase) &&
+                                 t.Contains("armor", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool HasShieldProficiency()
+        {
+            var tags = GetCharacterProficiencyTags();
+            return tags.Any(t => t.Contains("Shield", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool CharacterHasSpellcastingFeature()
+        {
+            if (raceHasInnateSpellcasting)
+                return true;
+
+            var entries = CurrentCharacter?.ClassLevels?
+                .Where(e => e != null && e.Levels > 0 && !string.IsNullOrWhiteSpace(e.ClassName))
+                .ToList();
+
+            if (entries != null && entries.Count > 0)
+            {
+                foreach (var e in entries)
+                {
+                    if (GameData.ClassData.TryGetValue(e.ClassName, out var data) && data.Spellcasting)
+                        return true;
+                    // Third-casters
+                    if (SpellProgressionCalculator.IsThirdCasterSubclass(e.ClassName, e.Subclass))
+                        return true;
+                }
+                return false;
+            }
+
+            if (cmbClass?.SelectedItem is string className &&
+                GameData.ClassData.TryGetValue(className, out var cd))
+            {
+                if (cd.Spellcasting) return true;
+                string? sub = GetUiSelectedSubclassName();
+                if (SpellProgressionCalculator.IsThirdCasterSubclass(className, sub))
+                    return true;
+            }
+
+            return false;
         }
 
         private void ShowFeatSpellChoice(Feat feat)

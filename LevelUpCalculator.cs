@@ -765,6 +765,91 @@ namespace Nemo
             decisions?.Count(d => d != null && d.Kind == AsiOrFeatKind.Feat) ?? 0;
 
         // ═══════════════════════════════════════════════════════════════
+        // Multiclass proficiencies (PHB table — armor/weapons only for Nemo UI)
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// When you gain your <em>first</em> level in a class other than your initial class,
+        /// you gain only these starting proficiencies (PHB Multiclassing Proficiencies table).
+        /// You do <strong>not</strong> gain the class's full 1st-level armor/weapon/skill/save list.
+        /// Class features at that level (e.g. Divine Domain bonus proficiencies) still apply normally.
+        /// </summary>
+        public sealed class MulticlassProficiencyGrant
+        {
+            public IReadOnlyList<string> Armor { get; init; } = Array.Empty<string>();
+            public IReadOnlyList<string> Weapons { get; init; } = Array.Empty<string>();
+            /// <summary>Tools / skills called out by the table (for display; skills not auto-picked).</summary>
+            public IReadOnlyList<string> Other { get; init; } = Array.Empty<string>();
+        }
+
+        /// <summary>
+        /// PHB ( + Artificer from Tasha's/ERftLW) Multiclassing Proficiencies table.
+        /// </summary>
+        public static MulticlassProficiencyGrant GetMulticlassProficiencies(string className)
+        {
+            return (className ?? "").Trim() switch
+            {
+                "Barbarian" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Shields" },
+                    Weapons = new[] { "Simple weapons", "Martial weapons" }
+                },
+                "Bard" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Light armor" },
+                    Other = new[] { "One skill of your choice", "One musical instrument of your choice" }
+                },
+                "Cleric" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Light armor", "Medium armor", "Shields" }
+                    // No weapons on multiclass table (not simple weapons)
+                },
+                "Druid" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Light armor", "Medium armor", "Shields (non-metal)" }
+                },
+                "Fighter" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Light armor", "Medium armor", "Shields" },
+                    Weapons = new[] { "Simple weapons", "Martial weapons" }
+                },
+                "Monk" => new MulticlassProficiencyGrant
+                {
+                    Weapons = new[] { "Simple weapons", "Shortswords" }
+                },
+                "Paladin" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Light armor", "Medium armor", "Shields" },
+                    Weapons = new[] { "Simple weapons", "Martial weapons" }
+                },
+                "Ranger" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Light armor", "Medium armor", "Shields" },
+                    Weapons = new[] { "Simple weapons", "Martial weapons" },
+                    Other = new[] { "One skill from the class's skill list" }
+                },
+                "Rogue" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Light armor" },
+                    Other = new[] { "One skill from the class's skill list", "Thieves' tools" }
+                },
+                "Sorcerer" => new MulticlassProficiencyGrant(), // none
+                "Warlock" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Light armor" },
+                    Weapons = new[] { "Simple weapons" }
+                },
+                "Wizard" => new MulticlassProficiencyGrant(), // none
+                "Artificer" => new MulticlassProficiencyGrant
+                {
+                    Armor = new[] { "Light armor", "Medium armor", "Shields" },
+                    Other = new[] { "Thieves' tools", "Tinker's tools" }
+                },
+                _ => new MulticlassProficiencyGrant()
+            };
+        }
+
+        // ═══════════════════════════════════════════════════════════════
         // Multiclass ability prerequisites (PHB)
         // ═══════════════════════════════════════════════════════════════
 

@@ -35,6 +35,7 @@
     <Compile Include="SubclassProgression_ClericDruidSorcererWarlock.cs" />
     <Compile Include="SpellProgressionCalculator.cs" />
     <Compile Include="RacialSpellData.cs" />
+    <Compile Include="ClassFeatureOptionData.cs" />
     <Page Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
   </ItemGroup>
