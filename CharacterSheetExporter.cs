@@ -410,10 +410,8 @@ namespace Nemo
 
             // ── Combat stats ──
             T("ProfBonus", FmtMod(prof));
-            string ac = !string.IsNullOrWhiteSpace(c.EquippedACDisplay)
-                ? c.EquippedACDisplay
-                : (c.ArmorClass > 0 ? c.ArmorClass.ToString() : "10");
-            T("AC", ac);
+            // Small AC field: "17" or with shield "17(15)" = max (without shield)
+            T("AC", FormatAcForSheet(c));
             T("Initiative", FmtMod(c.Initiative != 0 ? c.Initiative : dexMod));
             T("Speed", c.Speed > 0 ? $"{c.Speed} ft." : "30 ft.");
             T("HPMax", c.HitPoints > 0 ? c.HitPoints.ToString() : "");
@@ -544,16 +542,54 @@ namespace Nemo
             string profLang = extras.ProficienciesAndLanguages ?? DeriveProficienciesAndLanguages(c);
             T("ProficienciesLang", profLang);
 
-            string features = extras.FeaturesAndTraits ?? DeriveFeaturesAndTraits(c);
-            T("Features and Traits", features);
-            // Page 2 additional features area
-            if (features.Length > 1200)
-                T("Feat+Traits", features.Substring(Math.Max(0, features.Length - 800)));
+            // Page 1: feats / race / class features (filtered). Page 2: subclass features only.
+            var featureSplit = BuildFeaturesAndTraitsSplit(c);
+            string page1Features = !string.IsNullOrWhiteSpace(extras.FeaturesAndTraits)
+                ? extras.FeaturesAndTraits
+                : featureSplit.Page1;
+            T("Features and Traits", page1Features);
+            // Page 2 field — subclass features (not a truncated duplicate of page 1)
+            if (!string.IsNullOrWhiteSpace(featureSplit.Page2))
+                T("Feat+Traits", featureSplit.Page2);
 
             // ── Spellcasting (page 3) ──
             FillSpellcastingPage(c, extras, payload, T, C);
 
             return payload;
+        }
+
+        /// <summary>
+        /// Compact AC for the small sheet field.
+        /// With a shield: <c>17(15)</c> = AC with shield (AC if shield is stowed).
+        /// Without a shield: just the number.
+        /// </summary>
+        private static string FormatAcForSheet(Character c)
+        {
+            int total = 10;
+            if (c.ArmorClass > 0)
+                total = c.ArmorClass;
+
+            if (!string.IsNullOrWhiteSpace(c.EquippedACDisplay))
+            {
+                var m = Regex.Match(c.EquippedACDisplay, @"^\((\d+)\)");
+                if (m.Success && int.TryParse(m.Groups[1].Value, out int parsed) && parsed > 0)
+                    total = parsed;
+            }
+
+            bool hasShield =
+                (!string.IsNullOrWhiteSpace(c.EquippedACDisplay) &&
+                 c.EquippedACDisplay.Contains("[Shield]", StringComparison.OrdinalIgnoreCase)) ||
+                (c.Equipment != null &&
+                 c.Equipment.Any(e => e != null &&
+                                      e.Contains("shield", StringComparison.OrdinalIgnoreCase)));
+
+            if (hasShield)
+            {
+                int withoutShield = Math.Max(1, total - 2);
+                return $"{total}({withoutShield})";
+            }
+
+            return total.ToString();
         }
 
         /// <summary>
@@ -602,15 +638,15 @@ namespace Nemo
                 T("SpellAtkBonus 2", atk);
             }
 
-            // Spell slots (1st–9th)
+            // Spell slots TOTAL only (1st–9th). Leave "Slots Expended" / Remaining blank for play.
             int[] slotsByLevel = extras.SpellSlotsByLevel ?? DeriveSpellSlotsByLevel(c, extras);
             for (int lvl = 1; lvl <= 9; lvl++)
             {
                 int n = lvl < slotsByLevel.Length ? Math.Max(0, slotsByLevel[lvl]) : 0;
                 if (n <= 0) continue;
-                var (totalField, remainField) = SlotFieldsByLevel[lvl];
+                var (totalField, _) = SlotFieldsByLevel[lvl];
                 T(totalField, n.ToString());
-                T(remainField, n.ToString());
+                // Do not fill SlotsRemaining / expended — player tracks those in play
             }
 
             // Cantrips (no subclass auto-list; player + racial picks already on character)
@@ -716,13 +752,15 @@ namespace Nemo
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // 1) Subclass grants (always prepared / always known) — not expanded list
+            //    Only when the class has reached its subclass unlock level.
             foreach (var entry in classLevels)
             {
-                if (string.IsNullOrWhiteSpace(entry.Subclass) || entry.Levels < 1)
+                string? effectiveSub = GameData.GetEffectiveSubclass(entry);
+                if (string.IsNullOrWhiteSpace(effectiveSub) || entry.Levels < 1)
                     continue;
 
-                string tag = ShortSubclassLabel(entry.Subclass);
-                var grants = SubclassSpellCalculator.GetGrantsUpToLevel(entry.Subclass, entry.Levels)
+                string tag = ShortSubclassLabel(effectiveSub);
+                var grants = SubclassSpellCalculator.GetGrantsUpToLevel(effectiveSub, entry.Levels)
                     .Where(g =>
                         g.SpellLevel >= 1 &&
                         (g.Kind == SubclassSpellGrantKind.AlwaysPrepared ||
@@ -827,16 +865,23 @@ namespace Nemo
                     .Select(e =>
                     {
                         string name = e.ClassName;
-                        if (!string.IsNullOrWhiteSpace(e.Subclass))
-                            name += $" ({ShortSubclassLabel(e.Subclass)})";
+                        string? sub = GameData.GetEffectiveSubclass(e);
+                        if (!string.IsNullOrWhiteSpace(sub))
+                            name += $" ({ShortSubclassLabel(sub)})";
                         return $"{name} {e.Levels}";
                     });
                 return string.Join(" / ", parts);
             }
 
             string spellClass = c.Class ?? "";
-            if (!string.IsNullOrWhiteSpace(c.Subclass))
-                spellClass += $" ({c.Subclass})";
+            int lvl = classLevels != null && classLevels.Count == 1
+                ? classLevels[0].Levels
+                : Math.Max(1, c.Level);
+            string? effectiveSub = classLevels != null && classLevels.Count == 1
+                ? GameData.GetEffectiveSubclass(classLevels[0])
+                : GameData.GetEffectiveSubclass(c.Class, lvl, c.Subclass);
+            if (!string.IsNullOrWhiteSpace(effectiveSub))
+                spellClass += $" ({effectiveSub})";
             return spellClass;
         }
 
@@ -981,8 +1026,9 @@ namespace Nemo
                 return string.Join(" / ", levels.Select(e =>
                 {
                     string label = e.ClassName;
-                    if (!string.IsNullOrWhiteSpace(e.Subclass))
-                        label = $"{ShortSubclassLabel(e.Subclass)} {label}";
+                    string? sub = GameData.GetEffectiveSubclass(e);
+                    if (!string.IsNullOrWhiteSpace(sub))
+                        label = $"{ShortSubclassLabel(sub)} {label}";
                     return $"{label} {e.Levels}";
                 }));
             }
@@ -990,26 +1036,38 @@ namespace Nemo
             if (string.IsNullOrWhiteSpace(c.Class)) return "Level 1";
 
             int lvl = c.Level > 0 ? c.Level : (levels.Count == 1 ? levels[0].Levels : 1);
-            if (!string.IsNullOrWhiteSpace(c.Subclass))
-                return $"{c.Subclass} {c.Class} {lvl}";
+            if (levels.Count == 1)
+                lvl = levels[0].Levels;
+
+            string? effectiveSub = levels.Count == 1
+                ? GameData.GetEffectiveSubclass(levels[0])
+                : GameData.GetEffectiveSubclass(c.Class, lvl, c.Subclass);
+
+            if (!string.IsNullOrWhiteSpace(effectiveSub))
+                return $"{effectiveSub} {c.Class} {lvl}";
             return $"{c.Class} {lvl}";
         }
 
+        /// <summary>
+        /// Total hit dice for the sheet, e.g. <c>5d10</c> or <c>5d10/3d8</c>.
+        /// </summary>
         private static string DeriveHitDice(Character c)
         {
-            if (!string.IsNullOrWhiteSpace(c.Class) &&
-                GameData.ClassData.TryGetValue(c.Class, out var data) &&
-                !string.IsNullOrWhiteSpace(data.HitDie))
+            var levels = LevelUpCalculator.GetClassLevelsFromCharacter(c);
+            if (levels.Count == 0 && !string.IsNullOrWhiteSpace(c.Class))
             {
-                // ClassData stores values like "1d8" or "d8"
-                string hd = data.HitDie.Trim();
-                if (hd.StartsWith("d", StringComparison.OrdinalIgnoreCase))
-                    return "1" + hd;
-                if (hd.StartsWith("1d", StringComparison.OrdinalIgnoreCase))
-                    return hd;
-                return "1" + (hd.StartsWith("d", StringComparison.OrdinalIgnoreCase) ? hd : "d8");
+                levels = new List<ClassLevelEntry>
+                {
+                    new(c.Class, Math.Max(1, c.Level), c.Subclass)
+                };
             }
-            return "1d8";
+
+            if (levels.Count == 0)
+                return "1d8";
+
+            string formatted = LevelUpCalculator.FormatHitDicePool(
+                LevelUpCalculator.GetHitDicePool(levels));
+            return formatted == "—" ? "1d8" : formatted;
         }
 
         private static int DeriveLevel1Slots(string? className)
@@ -1204,20 +1262,51 @@ namespace Nemo
             return sb.ToString().Trim();
         }
 
-        private static string DeriveFeaturesAndTraits(Character c)
+        private sealed class FeaturesSplit
         {
-            var sb = new StringBuilder();
+            public string Page1 { get; init; } = "";
+            public string Page2 { get; init; } = "";
+        }
 
+        /// <summary>
+        /// Page 1 (Features and Traits): feats, race/subrace, class features
+        /// (omitting Spellcasting, ASI, and subclass-choice / placeholder rows).
+        /// Page 2 (Feat+Traits): subclass features only.
+        /// </summary>
+        private static FeaturesSplit BuildFeaturesAndTraitsSplit(Character c)
+        {
+            var page1 = new StringBuilder();
+            var page2 = new StringBuilder();
+            bool hadRaceSection = false;
+
+            void BlankLine(StringBuilder sb)
+            {
+                if (sb.Length > 0 && !sb.ToString().EndsWith("\n\n", StringComparison.Ordinal))
+                {
+                    // Ensure a blank line between sections
+                    if (!sb.ToString().EndsWith("\n", StringComparison.Ordinal))
+                        sb.AppendLine();
+                    sb.AppendLine();
+                }
+            }
+
+            // ── Feats ──
             if (!string.IsNullOrWhiteSpace(c.SelectedFeat))
-                sb.AppendLine("Feat: " + c.SelectedFeat);
+            {
+                page1.AppendLine("— Feats —");
+                page1.AppendLine("• " + c.SelectedFeat);
+            }
 
+            // ── Race / subrace ──
             if (!string.IsNullOrEmpty(c.Race) &&
                 GameData.RaceData.TryGetValue(c.Race, out var raceData) &&
                 raceData.Traits?.Count > 0)
             {
-                sb.AppendLine($"— {c.Race} Traits —");
+                BlankLine(page1);
+                page1.AppendLine($"— {c.Race} Traits —");
                 foreach (var t in raceData.Traits)
-                    sb.AppendLine("• " + t);
+                    page1.AppendLine("• " + t);
+                hadRaceSection = true;
             }
 
             if (!string.IsNullOrEmpty(c.Subrace) &&
@@ -1228,51 +1317,153 @@ namespace Nemo
                     s.Name.Equals(c.Subrace, StringComparison.OrdinalIgnoreCase));
                 if (sub?.Traits?.Count > 0)
                 {
-                    sb.AppendLine($"— {c.Subrace} —");
+                    BlankLine(page1);
+                    page1.AppendLine($"— {c.Subrace} —");
                     foreach (var t in sub.Traits)
-                        sb.AppendLine("• " + t);
+                        page1.AppendLine("• " + t);
+                    hadRaceSection = true;
                 }
             }
 
-            if (!string.IsNullOrEmpty(c.Class))
+            // Visual separator between racial traits and class features
+            if (hadRaceSection)
             {
-                var classFeats = GameData.GetClassFeaturesUpToLevel(c.Class, 1, includeOptional: true);
-                if (classFeats.Count == 0 && GameData.ClassLevel1Features.TryGetValue(c.Class, out var legacy))
+                page1.AppendLine();
+                page1.AppendLine("────────────────────────");
+                page1.AppendLine();
+            }
+            else
+            {
+                BlankLine(page1);
+            }
+
+            // ── Class features (level-gated, filtered) ──
+            var classLevels = LevelUpCalculator.GetClassLevelsFromCharacter(c);
+            if (classLevels.Count == 0 && !string.IsNullOrWhiteSpace(c.Class))
+            {
+                classLevels = new List<ClassLevelEntry>
+                {
+                    new(c.Class, Math.Max(1, c.Level), c.Subclass)
+                };
+            }
+
+            bool firstClassSection = true;
+            foreach (var entry in classLevels)
+            {
+                int classLv = Math.Max(1, entry.Levels);
+                var classFeats = GameData.GetClassFeaturesUpToLevel(
+                    entry.ClassName, classLv, includeOptional: true);
+                if (classFeats.Count == 0 && classLv <= 1 &&
+                    GameData.ClassLevel1Features.TryGetValue(entry.ClassName, out var legacy))
                     classFeats = legacy;
-                if (classFeats.Count > 0)
+
+                var kept = classFeats.Where(f => !ShouldOmitFromFeaturesExport(f)).ToList();
+                if (kept.Count > 0)
                 {
-                    sb.AppendLine($"— {c.Class} Features —");
-                    foreach (var f in classFeats)
+                    if (!firstClassSection || page1.Length > 0)
+                        BlankLine(page1);
+                    firstClassSection = false;
+
+                    page1.AppendLine($"— {entry.ClassName} {classLv} Features —");
+                    foreach (var f in kept)
                     {
-                        sb.AppendLine("• " + f.Name);
+                        string label = f.Level > 1 ? $"(Lv {f.Level}) {f.Name}" : f.Name;
+                        page1.AppendLine("• " + label);
                         if (!string.IsNullOrWhiteSpace(f.Description))
-                            sb.AppendLine("  " + f.Description);
+                            page1.AppendLine("  " + f.Description);
                     }
                 }
-            }
 
-            if (!string.IsNullOrEmpty(c.Subclass))
-            {
-                // Prefer full progression; fall back to legacy level-1-only table
-                var subFeats = GameData.GetSubclassProgression(c.Subclass);
+                // ── Subclass features → page 2 only ──
+                string? effectiveSub = GameData.GetEffectiveSubclass(entry);
+                if (string.IsNullOrWhiteSpace(effectiveSub))
+                    continue;
+
+                var subFeats = GameData.GetSubclassFeaturesUpToLevel(effectiveSub, classLv);
                 if (subFeats.Count == 0 &&
-                    GameData.SubclassLevel1Features.TryGetValue(c.Subclass, out var legacy))
-                    subFeats = legacy;
+                    GameData.SubclassLevel1Features.TryGetValue(effectiveSub, out var legacySub))
+                    subFeats = legacySub.Where(f => f.Level <= classLv || f.Level <= 0).ToList();
 
-                if (subFeats.Count > 0)
+                if (subFeats.Count == 0)
+                    continue;
+
+                if (page2.Length > 0)
+                    BlankLine(page2);
+
+                page2.AppendLine($"— {effectiveSub} ({entry.ClassName} {classLv}) —");
+                foreach (var f in subFeats)
                 {
-                    sb.AppendLine($"— {c.Subclass} —");
-                    foreach (var f in subFeats)
-                    {
-                        string label = f.Level > 0 ? $"(Lv {f.Level}) {f.Name}" : f.Name;
-                        sb.AppendLine("• " + label);
-                        if (!string.IsNullOrWhiteSpace(f.Description))
-                            sb.AppendLine("  " + f.Description);
-                    }
+                    string label = f.Level > 0 ? $"(Lv {f.Level}) {f.Name}" : f.Name;
+                    page2.AppendLine("• " + label);
+                    if (!string.IsNullOrWhiteSpace(f.Description))
+                        page2.AppendLine("  " + f.Description);
                 }
             }
 
-            return sb.ToString().Trim();
+            return new FeaturesSplit
+            {
+                Page1 = page1.ToString().Trim(),
+                Page2 = page2.ToString().Trim()
+            };
+        }
+
+        /// <summary>
+        /// Features we omit from the sheet features box:
+        /// Spellcasting (page 3 already has spells/slots), Ability Score Improvement
+        /// (scores/feats applied elsewhere), and subclass-choice / "gain the Nth-level feature"
+        /// placeholder rows (actual subclass features go on page 2).
+        /// </summary>
+        private static bool ShouldOmitFromFeaturesExport(ClassFeature? f)
+        {
+            if (f == null) return true;
+            string name = (f.Name ?? "").Trim();
+            if (name.Length == 0) return true;
+
+            // Explicit subclass-choice / archetype placeholder markers in data
+            if (f.IsSubclassFeature)
+                return true;
+
+            if (name.Equals("Spellcasting", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (name.Equals("Pact Magic", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (name.Contains("Ability Score Improvement", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // e.g. "Ranger Conclave Feature" — "You gain the 7th-level feature of your Ranger Conclave."
+            string desc = f.Description ?? "";
+            if (name.EndsWith(" Feature", StringComparison.OrdinalIgnoreCase) &&
+                desc.Contains("You gain the", StringComparison.OrdinalIgnoreCase) &&
+                desc.Contains("feature of your", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Choice rows that may not have IsSubclassFeature set on legacy data
+            if (desc.StartsWith("Choose a ", StringComparison.OrdinalIgnoreCase) &&
+                (name.Contains("Domain", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Archetype", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Conclave", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Path", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("College", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Circle", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Oath", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Tradition", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Origin", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Patron", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Specialist", StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            return false;
+        }
+
+        /// <summary>Legacy single-string builder (page 1 + page 2 concatenated).</summary>
+        private static string DeriveFeaturesAndTraits(Character c)
+        {
+            var split = BuildFeaturesAndTraitsSplit(c);
+            if (string.IsNullOrWhiteSpace(split.Page2))
+                return split.Page1;
+            if (string.IsNullOrWhiteSpace(split.Page1))
+                return split.Page2;
+            return split.Page1 + "\n\n" + split.Page2;
         }
     }
 }

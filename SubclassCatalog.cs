@@ -27,6 +27,37 @@ namespace Nemo
                 _ => 3 // Artificer, Barbarian, Bard, Fighter, Monk, Paladin, Ranger, Rogue
             };
 
+        /// <summary>
+        /// True when this class has enough levels to choose/apply a subclass.
+        /// </summary>
+        public static bool HasUnlockedSubclass(string? className, int classLevels) =>
+            classLevels >= GetSubclassLevel(className ?? "");
+
+        /// <summary>
+        /// Returns the subclass name only if the class has reached its subclass unlock level
+        /// and the name is a real pick (not a UI placeholder). Otherwise null — do not apply
+        /// subclass features, spells, export labels, or proficiencies.
+        /// </summary>
+        public static string? GetEffectiveSubclass(string? className, int classLevels, string? subclass)
+        {
+            if (string.IsNullOrWhiteSpace(className) || string.IsNullOrWhiteSpace(subclass))
+                return null;
+
+            string sub = subclass.Trim();
+            if (sub.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) ||
+                sub.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            if (!HasUnlockedSubclass(className, classLevels))
+                return null;
+
+            return sub;
+        }
+
+        /// <summary>Effective subclass for a class-level entry (null if not yet unlocked).</summary>
+        public static string? GetEffectiveSubclass(ClassLevelEntry? entry) =>
+            entry == null ? null : GetEffectiveSubclass(entry.ClassName, entry.Levels, entry.Subclass);
+
         /// <summary>Ordered subclass display names for a class (from ClassData or AllSubclasses).</summary>
         public static List<string> GetSubclassNames(string className)
         {

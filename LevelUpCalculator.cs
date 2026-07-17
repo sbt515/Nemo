@@ -255,8 +255,9 @@ namespace Nemo
                 {
                     var list = new List<ClassFeature>();
                     list.AddRange(GameData.GetClassFeaturesUpToLevel(e.ClassName, e.Levels, includeOptional: true));
-                    if (!string.IsNullOrWhiteSpace(e.Subclass))
-                        list.AddRange(GameData.GetSubclassFeaturesUpToLevel(e.Subclass!, e.Levels));
+                    string? effectiveSub = GameData.GetEffectiveSubclass(e);
+                    if (!string.IsNullOrWhiteSpace(effectiveSub))
+                        list.AddRange(GameData.GetSubclassFeaturesUpToLevel(effectiveSub, e.Levels));
                     features[e.ClassName] = list;
                 }
             }
@@ -394,23 +395,27 @@ namespace Nemo
                 : new List<ClassResourceValue>();
             var resourcesAfter = GetClassResources(className, newClassLevel, 0, subclass);
 
+            string? effectiveSub = GameData.GetEffectiveSubclass(className, newClassLevel, subclass);
+            string? effectiveSubBefore = GameData.GetEffectiveSubclass(className, prevClassLevel, subclass);
+
             var featuresAtLevel = GameData.GetClassFeaturesAtLevel(className, newClassLevel, includeOptional: true);
-            if (!string.IsNullOrWhiteSpace(subclass))
-                featuresAtLevel.AddRange(GameData.GetSubclassFeaturesAtLevel(subclass!, newClassLevel));
+            if (!string.IsNullOrWhiteSpace(effectiveSub))
+                featuresAtLevel.AddRange(GameData.GetSubclassFeaturesAtLevel(effectiveSub!, newClassLevel));
 
             // Subclass always-prepared / always-known spells gained at this level
-            string? variant = (!string.IsNullOrWhiteSpace(subclass) &&
-                               subclass!.Contains("Land", StringComparison.OrdinalIgnoreCase))
+            string? variant = (!string.IsNullOrWhiteSpace(effectiveSub) &&
+                               effectiveSub!.Contains("Land", StringComparison.OrdinalIgnoreCase))
                 ? landCircleVariant
                 : null;
 
             var spellsGained = SubclassSpellCalculator.GetGrantsGainedAtLevel(
-                subclass, newClassLevel, kindFilter: null, variant);
-            var preparedBefore = prevClassLevel > 0
-                ? SubclassSpellCalculator.GetAlwaysPreparedSpells(subclass, prevClassLevel, variant)
+                effectiveSub, newClassLevel, kindFilter: null, variant);
+            var preparedBefore = prevClassLevel > 0 && !string.IsNullOrWhiteSpace(effectiveSubBefore)
+                ? SubclassSpellCalculator.GetAlwaysPreparedSpells(effectiveSubBefore, prevClassLevel, variant)
                 : Array.Empty<SubclassSpellGrant>();
-            var preparedAfter = SubclassSpellCalculator.GetAlwaysPreparedSpells(
-                subclass, newClassLevel, variant);
+            var preparedAfter = !string.IsNullOrWhiteSpace(effectiveSub)
+                ? SubclassSpellCalculator.GetAlwaysPreparedSpells(effectiveSub, newClassLevel, variant)
+                : Array.Empty<SubclassSpellGrant>();
 
             int? prepCapBefore = null;
             int? prepCapAfter = null;
@@ -544,10 +549,13 @@ namespace Nemo
                 .ToList();
         }
 
+        /// <summary>
+        /// Character-sheet style hit dice total, e.g. <c>5d10</c> or <c>5d10/3d8</c>.
+        /// </summary>
         public static string FormatHitDicePool(IEnumerable<HitDicePoolEntry> pool)
         {
             var parts = pool.Where(p => p.Count > 0).Select(p => p.ToString()).Where(s => s.Length > 0);
-            string s = string.Join(" + ", parts);
+            string s = string.Join("/", parts);
             return string.IsNullOrEmpty(s) ? "—" : s;
         }
 

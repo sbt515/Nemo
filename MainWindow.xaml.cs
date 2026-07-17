@@ -667,14 +667,15 @@ namespace Nemo
                 cmbClass?.SelectedItem is string className &&
                 !string.IsNullOrWhiteSpace(className))
             {
-                CurrentCharacter.ClassLevels.Add(new ClassLevelEntry(className, 1, uiSub));
+                // Only apply subclass if unlocked at level 1 (Cleric/Sorcerer/Warlock)
+                string? seedSub = GameData.HasUnlockedSubclass(className, 1) ? uiSub : null;
+                CurrentCharacter.ClassLevels.Add(new ClassLevelEntry(className, 1, seedSub));
                 CurrentCharacter.Class = className;
-                CurrentCharacter.Subclass = uiSub ?? "";
+                CurrentCharacter.Subclass = seedSub ?? "";
                 CurrentCharacter.Level = 1;
             }
 
-            // Always carry Class-tab subclass onto the primary row when it matches the selected class
-            // (so Level & Multiclass shows the same subclass the player already picked).
+            // Carry Class-tab subclass onto the primary row only when that class has unlocked subclasses.
             if (CurrentCharacter.ClassLevels.Count >= 1 &&
                 cmbClass?.SelectedItem is string primaryClass &&
                 !string.IsNullOrWhiteSpace(primaryClass))
@@ -689,14 +690,23 @@ namespace Nemo
                     if (CurrentCharacter.ClassLevels.Count == 1)
                         primary.ClassName = primaryClass;
 
-                    if (!string.IsNullOrWhiteSpace(uiSub))
+                    if (GameData.HasUnlockedSubclass(primary.ClassName, primary.Levels))
                     {
-                        primary.Subclass = uiSub;
-                        CurrentCharacter.Subclass = uiSub;
+                        if (!string.IsNullOrWhiteSpace(uiSub))
+                        {
+                            primary.Subclass = uiSub;
+                            CurrentCharacter.Subclass = uiSub;
+                        }
+                        else if (!string.IsNullOrWhiteSpace(primary.Subclass))
+                        {
+                            CurrentCharacter.Subclass = primary.Subclass ?? "";
+                        }
                     }
-                    else if (!string.IsNullOrWhiteSpace(primary.Subclass))
+                    else
                     {
-                        CurrentCharacter.Subclass = primary.Subclass ?? "";
+                        // Planned picks are ignored until unlock level
+                        primary.Subclass = null;
+                        CurrentCharacter.Subclass = "";
                     }
                 }
             }
@@ -782,31 +792,37 @@ namespace Nemo
             UpdateEquipmentProficiencySummary();
 
             // Always refresh spell level unlocks when levels change (Ranger 5 → 2nd-level slots, etc.)
-            // even if the Spells tab is not currently open.
-            if (cmbClass?.SelectedItem is string casterClass &&
-                GameData.ClassData.TryGetValue(casterClass, out var casterData) &&
-                casterData.Spellcasting)
+            // even if the Spells tab is not currently open. Isolated so failures don't break +/− levels.
+            try
             {
-                if (cantripOptions.Count == 0 || spell1Options.Count == 0)
+                if (cmbClass?.SelectedItem is string casterClass &&
+                    GameData.ClassData.TryGetValue(casterClass, out var casterData) &&
+                    casterData.Spellcasting)
                 {
-                    PopulateSpells();
+                    if (cantripOptions.Count == 0 || spell1Options.Count == 0)
+                    {
+                        PopulateSpells();
+                    }
+                    else
+                    {
+                        RebalanceCantripAssignments(BuildPreferredCantripAssignments());
+                        cantripViewSource.View?.Refresh();
+                        RefreshSpellLevelDropdown();
+                        ApplyCantripSelectableState();
+                        ApplyLeveledSpellSelectableState();
+                        UpdateSpellStats();
+                        UpdateCantripCounter();
+                        UpdateSpellCounter();
+                    }
                 }
                 else
                 {
-                    RebalanceCantripAssignments(BuildPreferredCantripAssignments());
-                    cantripViewSource.View?.Refresh();
                     RefreshSpellLevelDropdown();
-                    ApplyCantripSelectableState();
-                    ApplyLeveledSpellSelectableState();
-                    UpdateSpellStats();
-                    UpdateCantripCounter();
-                    UpdateSpellCounter();
                 }
             }
-            else
+            catch (Exception ex)
             {
-                // Still update the combo if it exists (e.g. racial casters later)
-                RefreshSpellLevelDropdown();
+                System.Diagnostics.Debug.WriteLine("ApplyLevelDerivedState spell refresh: " + ex);
             }
         }
 
@@ -836,10 +852,96 @@ namespace Nemo
                 ApplyLevelDerivedState();
                 UpdateLevelSummaryLabels();
             }
+            catch (Exception ex)
+            {
+                // Keep the tab usable; swallow UI-derived failures so +/−/Remove still stick.
+                System.Diagnostics.Debug.WriteLine("RefreshLevelMulticlassTab: " + ex);
+            }
             finally
             {
                 _suppressLevelTabRebuild = false;
             }
+        }
+
+        private static Button MakeLevelStepperButton(string content) => new Button
+        {
+            Content = content,
+            Width = 32,
+            Height = 28,
+            Margin = content == "+" ? new Thickness(4, 0, 0, 0) : new Thickness(0, 0, 4, 0),
+            Background = (Brush)new BrushConverter().ConvertFromString("#3A7CA5"),
+            Foreground = Brushes.White,
+            FontWeight = FontWeights.Bold,
+            FontSize = 14,
+            BorderBrush = (Brush)new BrushConverter().ConvertFromString("#555"),
+            BorderThickness = new Thickness(1),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            IsHitTestVisible = true,
+            Focusable = true
+        };
+
+        /// <summary>
+        /// +1 / −1 a class row's levels (or remove the row when multiclass hits 0).
+        /// </summary>
+        private void AdjustClassLevel(int index, int delta)
+        {
+            if (CurrentCharacter?.ClassLevels == null) return;
+            if (index < 0 || index >= CurrentCharacter.ClassLevels.Count) return;
+
+            var row = CurrentCharacter.ClassLevels[index];
+            if (delta > 0)
+            {
+                int sum = CurrentCharacter.ClassLevels.Sum(x => x.Levels);
+                if (sum >= 20)
+                {
+                    MessageBox.Show("Character level cannot exceed 20.", "Max Level",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                row.Levels++;
+            }
+            else if (delta < 0)
+            {
+                if (row.Levels <= 1)
+                {
+                    // Drop the class entirely only when multiclassing
+                    if (CurrentCharacter.ClassLevels.Count > 1)
+                        CurrentCharacter.ClassLevels.RemoveAt(index);
+                    else
+                        return; // can't go below 1 for single-class
+                }
+                else
+                {
+                    row.Levels--;
+                }
+            }
+            else return;
+
+            // Force suppress off so a stuck flag can't block rebuild after a prior error
+            _suppressLevelTabRebuild = false;
+            RefreshLevelMulticlassTab();
+            SyncClassTabFromLevels();
+        }
+
+        private void RemoveClassLevelRow(int index)
+        {
+            if (CurrentCharacter?.ClassLevels == null) return;
+            if (CurrentCharacter.ClassLevels.Count <= 1)
+            {
+                MessageBox.Show(
+                    "Remove is only available for multiclass builds (2+ classes).\n" +
+                    "Use + Add class first, or use − to lower this class's levels.",
+                    "Remove Class",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+            if (index < 0 || index >= CurrentCharacter.ClassLevels.Count) return;
+
+            CurrentCharacter.ClassLevels.RemoveAt(index);
+            _suppressLevelTabRebuild = false;
+            RefreshLevelMulticlassTab();
+            SyncClassTabFromLevels();
         }
 
         /// <summary>
@@ -1690,8 +1792,13 @@ namespace Nemo
                 Grid.SetColumn(cmbClassRow, 0);
 
                 // Level steppers
-                var levelPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = System.Windows.VerticalAlignment.Center };
-                var btnMinus = new Button { Content = "−", Width = 32, Height = 28, Margin = new Thickness(0, 0, 4, 0) };
+                var levelPanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                    IsHitTestVisible = true
+                };
+                var btnMinus = MakeLevelStepperButton("−");
                 var txtLvl = new TextBlock
                 {
                     Text = entry.Levels.ToString(),
@@ -1699,9 +1806,10 @@ namespace Nemo
                     TextAlignment = System.Windows.TextAlignment.Center,
                     VerticalAlignment = System.Windows.VerticalAlignment.Center,
                     FontWeight = FontWeights.Bold,
-                    FontSize = 14
+                    FontSize = 14,
+                    Foreground = Brushes.White
                 };
-                var btnPlus = new Button { Content = "+", Width = 32, Height = 28, Margin = new Thickness(4, 0, 0, 0) };
+                var btnPlus = MakeLevelStepperButton("+");
                 levelPanel.Children.Add(btnMinus);
                 levelPanel.Children.Add(txtLvl);
                 levelPanel.Children.Add(btnPlus);
@@ -1726,37 +1834,51 @@ namespace Nemo
                 };
                 StyleAppComboBox(cmbSub);
 
-                // Prefer ClassLevels subclass; for primary row also fall back to Class-tab selection
+                // Subclass only applies at unlock level (Cleric/Sorc/Warlock 1, Druid/Wizard 2, else 3).
+                // Below unlock: leave empty / show placeholder — do not apply Gloom Stalker etc.
+                bool subclassUnlocked = entry.Levels >= subReq;
                 string? desiredSub = entry.Subclass;
-                if (string.IsNullOrWhiteSpace(desiredSub) && index == 0)
+                if (string.IsNullOrWhiteSpace(desiredSub) && index == 0 && subclassUnlocked)
                     desiredSub = GetUiSelectedSubclassName();
 
-                if (!string.IsNullOrWhiteSpace(desiredSub))
+                if (!subclassUnlocked)
+                {
+                    // Clear any premature application so exports / features stay clean
+                    entry.Subclass = null;
+                    if (index == 0 && CurrentCharacter != null)
+                        CurrentCharacter.Subclass = "";
+
+                    cmbSub.ItemsSource = new List<string>
+                    {
+                        $"(Unlocks at {entry.ClassName} level {subReq})"
+                    };
+                    cmbSub.SelectedIndex = 0;
+                    cmbSub.IsEnabled = false;
+                    cmbSub.ToolTip =
+                        $"{entry.ClassName} chooses a subclass at level {subReq}. " +
+                        "Subclass features, spells, and sheet labels apply only once unlocked.";
+                }
+                else if (!string.IsNullOrWhiteSpace(desiredSub))
                 {
                     var match = subNames.FirstOrDefault(s =>
                         s.Equals(desiredSub, StringComparison.OrdinalIgnoreCase));
                     if (match != null)
                     {
                         cmbSub.SelectedItem = match;
-                        // Keep ClassLevels in sync if we resolved from UI
-                        if (string.IsNullOrWhiteSpace(entry.Subclass))
-                            entry.Subclass = match;
+                        entry.Subclass = match;
                     }
                     else if (subNames.Count > 0)
+                    {
                         cmbSub.SelectedIndex = 0;
+                        if (cmbSub.SelectedItem is string autoSub)
+                            entry.Subclass = autoSub;
+                    }
                 }
                 else if (subNames.Count > 0)
                 {
                     cmbSub.SelectedIndex = 0;
-                    // Persist auto-selected first subclass onto the entry so it sticks
-                    if (cmbSub.SelectedItem is string autoSub && string.IsNullOrWhiteSpace(entry.Subclass))
+                    if (cmbSub.SelectedItem is string autoSub)
                         entry.Subclass = autoSub;
-                }
-
-                if (entry.Levels < subReq && subNames.Count > 0)
-                {
-                    cmbSub.ToolTip =
-                        $"Normally chosen at {entry.ClassName} level {subReq}. You can plan ahead; it unlocks at that level.";
                 }
 
                 subPanel.Children.Add(lblSub);
@@ -1769,10 +1891,9 @@ namespace Nemo
                     Content = "Remove",
                     Padding = new Thickness(10, 4, 10, 4),
                     VerticalAlignment = System.Windows.VerticalAlignment.Center,
-                    // Keep enabled for color control; block clicks when single-class
-                    IsEnabled = true,
-                    IsHitTestVisible = canRemove,
-                    Focusable = canRemove,
+                    IsEnabled = canRemove,
+                    IsHitTestVisible = true,
+                    Focusable = true,
                     Cursor = canRemove ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
                     Background = canRemove
                         ? (Brush)new BrushConverter().ConvertFromString("#8B3A3A")
@@ -1789,6 +1910,7 @@ namespace Nemo
                         ? "Remove this class from your multiclass build"
                         : "Remove is available after you add a second class (multiclass)"
                 };
+                Panel.SetZIndex(btnRemove, 10);
                 Grid.SetColumn(btnRemove, 3);
 
                 // Events
@@ -1796,6 +1918,7 @@ namespace Nemo
                 {
                     if (_suppressLevelTabRebuild) return;
                     if (cmbClassRow.SelectedItem is not string newClass) return;
+                    if (CurrentCharacter?.ClassLevels == null) return;
                     if (index < 0 || index >= CurrentCharacter.ClassLevels.Count) return;
 
                     string previousClass = CurrentCharacter.ClassLevels[index].ClassName;
@@ -1837,41 +1960,20 @@ namespace Nemo
 
                 btnPlus.Click += (s, e) =>
                 {
-                    if (index >= CurrentCharacter.ClassLevels.Count) return;
-                    int sum = CurrentCharacter.ClassLevels.Sum(x => x.Levels);
-                    if (sum >= 20)
-                    {
-                        MessageBox.Show("Character level cannot exceed 20.", "Max Level",
-                            MessageBoxButton.OK, MessageBoxImage.Information);
-                        return;
-                    }
-                    CurrentCharacter.ClassLevels[index].Levels++;
-                    RefreshLevelMulticlassTab();
-                    SyncClassTabFromLevels();
+                    e.Handled = true;
+                    AdjustClassLevel(index, delta: +1);
                 };
 
                 btnMinus.Click += (s, e) =>
                 {
-                    if (index >= CurrentCharacter.ClassLevels.Count) return;
-                    var rowEntry = CurrentCharacter.ClassLevels[index];
-                    if (rowEntry.Levels <= 1)
-                    {
-                        if (CurrentCharacter.ClassLevels.Count > 1)
-                        {
-                            CurrentCharacter.ClassLevels.RemoveAt(index);
-                            RefreshLevelMulticlassTab();
-                            SyncClassTabFromLevels();
-                        }
-                        return;
-                    }
-                    rowEntry.Levels--;
-                    RefreshLevelMulticlassTab();
-                    SyncClassTabFromLevels();
+                    e.Handled = true;
+                    AdjustClassLevel(index, delta: -1);
                 };
 
                 cmbSub.SelectionChanged += (s, e) =>
                 {
                     if (_suppressLevelTabRebuild) return;
+                    if (CurrentCharacter?.ClassLevels == null) return;
                     if (index >= CurrentCharacter.ClassLevels.Count) return;
                     if (cmbSub.SelectedItem is string subName)
                     {
@@ -1898,13 +2000,8 @@ namespace Nemo
 
                 btnRemove.Click += (s, e) =>
                 {
-                    if (CurrentCharacter.ClassLevels.Count <= 1) return;
-                    if (index < CurrentCharacter.ClassLevels.Count)
-                    {
-                        CurrentCharacter.ClassLevels.RemoveAt(index);
-                        RefreshLevelMulticlassTab();
-                        SyncClassTabFromLevels();
-                    }
+                    e.Handled = true;
+                    RemoveClassLevelRow(index);
                 };
 
                 grid.Children.Add(cmbClassRow);
@@ -3777,17 +3874,9 @@ namespace Nemo
                         AddUnique(weapons, $"{w} (multiclass {className})");
                 }
 
-                // Subclass bonus proficiencies once the class has reached subclass level
-                // (class features apply on multiclass levels the same as single-class)
-                string? subName = entry.Subclass;
+                // Subclass bonus proficiencies only once the class has unlocked its subclass
+                string? subName = GameData.GetEffectiveSubclass(entry);
                 if (string.IsNullOrWhiteSpace(subName))
-                    continue;
-                if (subName.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) ||
-                    subName.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                int subLevel = GameData.GetSubclassLevel(className);
-                if (entry.Levels < subLevel)
                     continue;
 
                 GetSubclassBonusProficiencies(className, subName,
@@ -5732,12 +5821,8 @@ namespace Nemo
 
             foreach (var entry in classLevels)
             {
-                if (string.IsNullOrWhiteSpace(entry.Subclass))
-                    continue;
-
-                string subName = entry.Subclass.Trim();
-                if (subName.StartsWith("Requires", StringComparison.OrdinalIgnoreCase) ||
-                    subName.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
+                string? subName = GameData.GetEffectiveSubclass(entry);
+                if (string.IsNullOrWhiteSpace(subName))
                     continue;
 
                 var grants = SubclassSpellCalculator.GetGrantsUpToLevel(subName, entry.Levels);
@@ -5793,6 +5878,11 @@ namespace Nemo
 
         private void MainTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // ComboBox/ListBox SelectionChanged bubbles to TabControl. Only react when the
+            // tab itself changed — otherwise level-row rebuilds re-enter and cancel +/−/Remove.
+            if (!ReferenceEquals(e.OriginalSource, MainTabControl))
+                return;
+
             if (MainTabControl.SelectedItem is TabItem tab)
             {
                 // === SKILLS TAB ===
@@ -6800,15 +6890,18 @@ namespace Nemo
 
         private int GetFinalStat(string ability)
         {
-            // Build current final stats from UI once
+            // Build current final stats from UI once (null-safe during early load / rebuild)
+            static int ParseOr(string? text, int fallback) =>
+                !string.IsNullOrWhiteSpace(text) && int.TryParse(text, out int v) ? v : fallback;
+
             var finalStats = new Dictionary<string, int>
             {
-                ["Strength"] = int.TryParse(txtStrFinal.Text, out int s) ? s : 10,
-                ["Dexterity"] = int.TryParse(txtDexFinal.Text, out int d) ? d : 10,
-                ["Constitution"] = int.TryParse(txtConFinal.Text, out int c) ? c : 10,
-                ["Intelligence"] = int.TryParse(txtIntFinal.Text, out int i) ? i : 10,
-                ["Wisdom"] = int.TryParse(txtWisFinal.Text, out int w) ? w : 10,
-                ["Charisma"] = int.TryParse(txtChaFinal.Text, out int h) ? h : 10
+                ["Strength"] = ParseOr(txtStrFinal?.Text, 10),
+                ["Dexterity"] = ParseOr(txtDexFinal?.Text, 10),
+                ["Constitution"] = ParseOr(txtConFinal?.Text, 10),
+                ["Intelligence"] = ParseOr(txtIntFinal?.Text, 10),
+                ["Wisdom"] = ParseOr(txtWisFinal?.Text, 10),
+                ["Charisma"] = ParseOr(txtChaFinal?.Text, 10)
             };
 
             return GameData.GetAbilityScore(ability, finalStats);
@@ -7260,65 +7353,29 @@ namespace Nemo
                     y += 10;
                 }
 
-                // ========== CLASS FEATURES (NEW - between Weapons and Saving Throws) ==========
-                string classKey = CurrentCharacter.Class;
-                var classFeatures = GameData.GetClassFeaturesUpToLevel(classKey, 1, includeOptional: true);
-                if (classFeatures.Count == 0 && GameData.ClassLevel1Features.TryGetValue(classKey, out var legacyClassFeatures))
-                    classFeatures = legacyClassFeatures;
-                if (classFeatures.Count > 0)
+                // ========== CLASS FEATURES (up to each class's actual levels only) ==========
+                var featureClassLevels = GetActiveClassLevels();
+                if (featureClassLevels.Count == 0 && !string.IsNullOrWhiteSpace(CurrentCharacter.Class))
+                {
+                    featureClassLevels = new List<ClassLevelEntry>
+                    {
+                        new(CurrentCharacter.Class, Math.Max(1, CurrentCharacter.Level), CurrentCharacter.Subclass)
+                    };
+                }
+
+                if (featureClassLevels.Count > 0)
                 {
                     DrawSectionHeader(gfx, "CLASS FEATURES", left, ref y, pageWidth);
-
                     double pageHeight = page.Height;
 
-                    // Clean display name (strip any parenthetical notes)
-                    string displayClassName = classKey;
-                    if (displayClassName.Contains("("))
-                        displayClassName = displayClassName.Substring(0, displayClassName.IndexOf("(")).Trim();
-
-                    // Hyperlink to class on wikidot (like spells)
-                    string classSlug = Slugify(displayClassName);
-                    string classUrl = $"https://dnd5e.wikidot.com/{classSlug}";
-
-                    gfx.DrawString(displayClassName, linkFont, linkBrush, new XPoint(left + 10, y));
-                    double classNameWidth = gfx.MeasureString(displayClassName, linkFont).Width;
-                    var classLinkRect = new PdfRectangle(new XRect(left + 10, pageHeight - (y + 4), classNameWidth + 4, 16));
-                    page.AddWebLink(classLinkRect, classUrl);
-
-                    // === Subclass hyperlink (only for Cleric, Sorcerer, Warlock) ===
-                    string subclassKey = CurrentCharacter.Subclass ?? "";
-                    if (!string.IsNullOrWhiteSpace(subclassKey) &&
-                        !subclassKey.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) &&
-                        (classKey == "Cleric" || classKey == "Sorcerer" || classKey == "Warlock"))
+                    foreach (var classEntry in featureClassLevels)
                     {
-                        double xAfterClass = left + 10 + classNameWidth + 6;
-                        gfx.DrawString(" / ", normalFont, XBrushes.Black, new XPoint(xAfterClass, y));
+                        string classKey = classEntry.ClassName;
+                        int classLv = Math.Max(1, classEntry.Levels);
+                        string displayClassName = classKey;
+                        if (displayClassName.Contains("("))
+                            displayClassName = displayClassName.Substring(0, displayClassName.IndexOf("(")).Trim();
 
-                        double slashWidth = gfx.MeasureString(" / ", normalFont).Width;
-                        double subX = xAfterClass + slashWidth;
-
-                        // Build the special subclass URL format
-                        string subSlug = Slugify(subclassKey);
-                        string subUrl = classKey.ToLowerInvariant() switch
-                        {
-                            "cleric" => $"https://dnd5e.wikidot.com/cleric:{subSlug}",
-                            "sorcerer" => $"https://dnd5e.wikidot.com/sorcerer:{subSlug}",
-                            "warlock" => $"https://dnd5e.wikidot.com/warlock:{subSlug}",
-                            _ => $"https://dnd5e.wikidot.com/{subSlug}"
-                        };
-
-                        string displaySub = subclassKey;
-                        gfx.DrawString(displaySub, linkFont, linkBrush, new XPoint(subX, y));
-                        double subWidth = gfx.MeasureString(displaySub, linkFont).Width;
-                        var subLinkRect = new PdfRectangle(new XRect(subX, pageHeight - (y + 4), subWidth + 4, 16));
-                        page.AddWebLink(subLinkRect, subUrl);
-                    }
-
-                    y += 18;
-
-                    foreach (var feature in classFeatures)
-                    {
-                        // New page safety
                         if (y > page.Height - 95)
                         {
                             page = document.AddPage();
@@ -7328,42 +7385,85 @@ namespace Nemo
                             pageHeight = page.Height;
                         }
 
-                        // Feature name (bold)
-                        gfx.DrawString($"• {feature.Name}", boldFont, XBrushes.Black, new XPoint(left + 10, y));
-                        y += 13;
+                        string classSlug = Slugify(displayClassName);
+                        string classUrl = $"https://dnd5e.wikidot.com/{classSlug}";
+                        string classHeader = $"{displayClassName} {classLv}";
+                        gfx.DrawString(classHeader, linkFont, linkBrush, new XPoint(left + 10, y));
+                        double classNameWidth = gfx.MeasureString(classHeader, linkFont).Width;
+                        var classLinkRect = new PdfRectangle(new XRect(left + 10, pageHeight - (y + 4), classNameWidth + 4, 16));
+                        page.AddWebLink(classLinkRect, classUrl);
 
-                        // Brief description (wrapped, gray, small)
-                        string desc = feature.Description;
-                        if (desc.Length > 220)
-                            desc = desc.Substring(0, 217) + "...";
-                        DrawWrappedText(gfx, desc, smallGray, XBrushes.Gray, left + 18, ref y, maxTextWidth - 10, 10);
-                        y += 3;
-
-                        // Uses / recharge info
-                        if (!string.IsNullOrWhiteSpace(feature.Uses))
+                        string? subclassKey = GameData.GetEffectiveSubclass(classEntry);
+                        if (!string.IsNullOrWhiteSpace(subclassKey) &&
+                            (classKey == "Cleric" || classKey == "Sorcerer" || classKey == "Warlock"))
                         {
-                            gfx.DrawString($"   Uses: {feature.Uses}", normalFont, XBrushes.DarkGreen, new XPoint(left + 18, y));
-                            y += 12;
+                            double xAfterClass = left + 10 + classNameWidth + 6;
+                            gfx.DrawString(" / ", normalFont, XBrushes.Black, new XPoint(xAfterClass, y));
+                            double slashWidth = gfx.MeasureString(" / ", normalFont).Width;
+                            double subX = xAfterClass + slashWidth;
+                            string subSlug = Slugify(subclassKey);
+                            string subUrl = classKey.ToLowerInvariant() switch
+                            {
+                                "cleric" => $"https://dnd5e.wikidot.com/cleric:{subSlug}",
+                                "sorcerer" => $"https://dnd5e.wikidot.com/sorcerer:{subSlug}",
+                                "warlock" => $"https://dnd5e.wikidot.com/warlock:{subSlug}",
+                                _ => $"https://dnd5e.wikidot.com/{subSlug}"
+                            };
+                            gfx.DrawString(subclassKey, linkFont, linkBrush, new XPoint(subX, y));
+                            double subWidth = gfx.MeasureString(subclassKey, linkFont).Width;
+                            page.AddWebLink(new PdfRectangle(new XRect(subX, pageHeight - (y + 4), subWidth + 4, 16)), subUrl);
                         }
 
-                        y += 5;
-                    }
+                        y += 18;
 
-                    y += 8;
+                        var classFeatures = GameData.GetClassFeaturesUpToLevel(classKey, classLv, includeOptional: true);
+                        if (classFeatures.Count == 0 && classLv <= 1 &&
+                            GameData.ClassLevel1Features.TryGetValue(classKey, out var legacyClassFeatures))
+                            classFeatures = legacyClassFeatures;
 
-                    // === Subclass Features (full level-up progression when available) ===
-                    var subFeatures = !string.IsNullOrWhiteSpace(subclassKey) &&
-                        !subclassKey.Contains("Requires Level", StringComparison.OrdinalIgnoreCase)
-                        ? GameData.GetSubclassProgression(subclassKey)
-                        : new List<ClassFeature>();
-                    if (subFeatures.Count == 0 &&
-                        !string.IsNullOrWhiteSpace(subclassKey) &&
-                        GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var legacySubFeatures))
-                        subFeatures = legacySubFeatures;
+                        foreach (var feature in classFeatures)
+                        {
+                            if (y > page.Height - 95)
+                            {
+                                page = document.AddPage();
+                                gfx = XGraphics.FromPdfPage(page);
+                                y = 40;
+                                DrawSectionHeader(gfx, "CLASS FEATURES (continued)", left, ref y, pageWidth);
+                                pageHeight = page.Height;
+                            }
 
-                    if (subFeatures.Count > 0)
-                    {
-                        // Subheader using the subclass name
+                            string featName = feature.Level > 1 ? $"(Lv {feature.Level}) {feature.Name}" : feature.Name;
+                            gfx.DrawString($"• {featName}", boldFont, XBrushes.Black, new XPoint(left + 10, y));
+                            y += 13;
+
+                            string desc = feature.Description ?? "";
+                            if (desc.Length > 220)
+                                desc = desc.Substring(0, 217) + "...";
+                            DrawWrappedText(gfx, desc, smallGray, XBrushes.Gray, left + 18, ref y, maxTextWidth - 10, 10);
+                            y += 3;
+
+                            if (!string.IsNullOrWhiteSpace(feature.Uses))
+                            {
+                                gfx.DrawString($"   Uses: {feature.Uses}", normalFont, XBrushes.DarkGreen, new XPoint(left + 18, y));
+                                y += 12;
+                            }
+
+                            y += 5;
+                        }
+
+                        y += 8;
+
+                        if (string.IsNullOrWhiteSpace(subclassKey))
+                            continue;
+
+                        var subFeatures = GameData.GetSubclassFeaturesUpToLevel(subclassKey, classLv);
+                        if (subFeatures.Count == 0 &&
+                            GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var legacySubFeatures))
+                            subFeatures = legacySubFeatures.Where(f => f.Level <= classLv || f.Level <= 0).ToList();
+
+                        if (subFeatures.Count == 0)
+                            continue;
+
                         if (y > page.Height - 70)
                         {
                             page = document.AddPage();
@@ -7808,12 +7908,14 @@ namespace Nemo
                                     : ""
                             };
                         }).ToList(),
-                    HitDice = GameData.ClassData.TryGetValue(CurrentCharacter.Class ?? "", out var cd)
-                        ? (cd.HitDie.StartsWith("1") ? cd.HitDie : "1" + cd.HitDie.TrimStart())
-                        : "1d8"
+                    // Total hit dice from all class levels, e.g. 5d10 or 5d10/3d8
+                    HitDice = LevelUpCalculator.FormatHitDicePool(
+                        LevelUpCalculator.GetHitDicePool(GetActiveClassLevels()))
                     // Spell slots (1st–9th) and page-3 spell lists are derived inside
                     // CharacterSheetExporter from ClassLevels + selected/subclass spells.
                 };
+                if (string.IsNullOrWhiteSpace(extras.HitDice) || extras.HitDice == "—")
+                    extras.HitDice = "1d8";
 
                 CharacterSheetExporter.ExportToFile(CurrentCharacter, saveDlg.FileName, extras);
 
@@ -8093,37 +8195,47 @@ namespace Nemo
 
                     y -= 70;
 
-                    // ========== CLASS FEATURES (with descriptions + wikidot link) ==========
+                    // ========== CLASS FEATURES (up to each class's actual levels only) ==========
                     CheckForNewPage(pdf, ref currentPage, ref y, 160);
                     DrawSectionHeader(currentPage, "CLASS FEATURES", left, ref y);
 
                     var classFeaturesText = new System.Text.StringBuilder();
-
-                    string classKey = CurrentCharacter.Class;
-                    string displayClassName = classKey;
-                    if (displayClassName.Contains("("))
-                        displayClassName = displayClassName.Substring(0, displayClassName.IndexOf("(")).Trim();
-
-                    // Class wikidot link
-                    string classSlug = Slugify(displayClassName);
-                    string classUrl = $"https://dnd5e.wikidot.com/{classSlug}";
-                    classFeaturesText.AppendLine($"{displayClassName}");
-                    classFeaturesText.AppendLine($"Source: {classUrl}");
-                    classFeaturesText.AppendLine();
-
-                    // Class features with descriptions (progression-aware; currently level 1)
-                    var classFeats = GameData.GetClassFeaturesUpToLevel(classKey, 1, includeOptional: true);
-                    if (classFeats.Count == 0 && GameData.ClassLevel1Features.TryGetValue(classKey, out var legacyClassFeats))
-                        classFeats = legacyClassFeats;
-                    if (classFeats.Count > 0)
+                    var fillClassLevels = GetActiveClassLevels();
+                    if (fillClassLevels.Count == 0 && !string.IsNullOrWhiteSpace(CurrentCharacter.Class))
                     {
+                        fillClassLevels = new List<ClassLevelEntry>
+                        {
+                            new(CurrentCharacter.Class, Math.Max(1, CurrentCharacter.Level), CurrentCharacter.Subclass)
+                        };
+                    }
+
+                    foreach (var classEntry in fillClassLevels)
+                    {
+                        string classKey = classEntry.ClassName;
+                        int classLv = Math.Max(1, classEntry.Levels);
+                        string displayClassName = classKey;
+                        if (displayClassName.Contains("("))
+                            displayClassName = displayClassName.Substring(0, displayClassName.IndexOf("(")).Trim();
+
+                        string classSlug = Slugify(displayClassName);
+                        string classUrl = $"https://dnd5e.wikidot.com/{classSlug}";
+                        classFeaturesText.AppendLine($"{displayClassName} {classLv}");
+                        classFeaturesText.AppendLine($"Source: {classUrl}");
+                        classFeaturesText.AppendLine();
+
+                        var classFeats = GameData.GetClassFeaturesUpToLevel(classKey, classLv, includeOptional: true);
+                        if (classFeats.Count == 0 && classLv <= 1 &&
+                            GameData.ClassLevel1Features.TryGetValue(classKey, out var legacyClassFeats))
+                            classFeats = legacyClassFeats;
+
                         foreach (var f in classFeats)
                         {
-                            classFeaturesText.AppendLine($"• {f.Name}");
-                            
-                            string shortDesc = f.Description.Length > 280 
-                                ? f.Description.Substring(0, 277) + "..." 
-                                : f.Description;
+                            string nameLabel = f.Level > 1 ? $"(Lv {f.Level}) {f.Name}" : f.Name;
+                            classFeaturesText.AppendLine($"• {nameLabel}");
+
+                            string shortDesc = (f.Description ?? "").Length > 280
+                                ? f.Description.Substring(0, 277) + "..."
+                                : (f.Description ?? "");
                             classFeaturesText.AppendLine($"   {shortDesc}");
 
                             if (!string.IsNullOrWhiteSpace(f.Uses))
@@ -8131,24 +8243,22 @@ namespace Nemo
 
                             classFeaturesText.AppendLine();
                         }
-                    }
 
-                    // Subclass features (full progression with descriptions)
-                    string subclassKey = CurrentCharacter.Subclass ?? "";
-                    var subFeats = !string.IsNullOrWhiteSpace(subclassKey) &&
-                        !subclassKey.Contains("Requires Level", StringComparison.OrdinalIgnoreCase)
-                        ? GameData.GetSubclassProgression(subclassKey)
-                        : new List<ClassFeature>();
-                    if (subFeats.Count == 0 &&
-                        !string.IsNullOrWhiteSpace(subclassKey) &&
-                        GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var legacySubFeats))
-                        subFeats = legacySubFeats;
+                        string? subclassKey = GameData.GetEffectiveSubclass(classEntry);
+                        if (string.IsNullOrWhiteSpace(subclassKey))
+                            continue;
 
-                    if (subFeats.Count > 0)
-                    {
+                        var subFeats = GameData.GetSubclassFeaturesUpToLevel(subclassKey, classLv);
+                        if (subFeats.Count == 0 &&
+                            GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var legacySubFeats))
+                            subFeats = legacySubFeats.Where(f => f.Level <= classLv || f.Level <= 0).ToList();
+
+                        if (subFeats.Count == 0)
+                            continue;
+
                         classFeaturesText.AppendLine($"--- {subclassKey} ---");
 
-                        string subSlug = !string.IsNullOrEmpty(subclassKey) ? Slugify(subclassKey) : "";
+                        string subSlug = Slugify(subclassKey);
                         string subUrl = classKey.ToLowerInvariant() switch
                         {
                             "cleric" => $"https://dnd5e.wikidot.com/cleric:{subSlug}",
@@ -8166,9 +8276,9 @@ namespace Nemo
                             string featLabel = f.Level > 0 ? $"(Lv {f.Level}) {f.Name}" : f.Name;
                             classFeaturesText.AppendLine($"• {featLabel}");
 
-                            string shortDesc = f.Description.Length > 280
+                            string shortDesc = (f.Description ?? "").Length > 280
                                 ? f.Description.Substring(0, 277) + "..."
-                                : f.Description;
+                                : (f.Description ?? "");
                             classFeaturesText.AppendLine($"   {shortDesc}");
 
                             if (!string.IsNullOrWhiteSpace(f.Uses))
@@ -8540,20 +8650,40 @@ namespace Nemo
             CurrentCharacter.Class = rawClass.Contains("(")
                 ? rawClass.Substring(0, rawClass.IndexOf("(")).Trim()
                 : rawClass;
-            // Clean Subclass (remove placeholder text like "Requires Level X")
+            // Subclass only when the primary class has unlocked it (level-gated)
             string rawSubclass = cmbSubclass.SelectedItem?.ToString() ?? "";
-            CurrentCharacter.Subclass = (rawSubclass.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) ||
-                                         rawSubclass.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
-                ? ""
-                : rawSubclass;
+            if (rawSubclass.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) ||
+                rawSubclass.StartsWith("(No", StringComparison.OrdinalIgnoreCase) ||
+                rawSubclass.StartsWith("(Unlocks", StringComparison.OrdinalIgnoreCase))
+            {
+                rawSubclass = "";
+            }
 
             // Mirror primary class/subclass onto ClassLevels when single-class
             if (CurrentCharacter.ClassLevels != null && CurrentCharacter.ClassLevels.Count == 1 &&
                 !string.IsNullOrWhiteSpace(CurrentCharacter.Class))
             {
                 CurrentCharacter.ClassLevels[0].ClassName = CurrentCharacter.Class;
-                if (!string.IsNullOrWhiteSpace(CurrentCharacter.Subclass))
-                    CurrentCharacter.ClassLevels[0].Subclass = CurrentCharacter.Subclass;
+                if (!string.IsNullOrWhiteSpace(rawSubclass) &&
+                    GameData.HasUnlockedSubclass(CurrentCharacter.Class, CurrentCharacter.ClassLevels[0].Levels))
+                {
+                    CurrentCharacter.ClassLevels[0].Subclass = rawSubclass;
+                }
+            }
+
+            // Effective subclass for sheet / summary fields
+            if (CurrentCharacter.ClassLevels != null && CurrentCharacter.ClassLevels.Count > 0)
+            {
+                var primary = CurrentCharacter.ClassLevels[0];
+                CurrentCharacter.Subclass =
+                    GameData.GetEffectiveSubclass(primary.ClassName, primary.Levels,
+                        !string.IsNullOrWhiteSpace(rawSubclass) ? rawSubclass : primary.Subclass) ?? "";
+            }
+            else
+            {
+                int lvl = Math.Max(1, CurrentCharacter.Level);
+                CurrentCharacter.Subclass =
+                    GameData.GetEffectiveSubclass(CurrentCharacter.Class, lvl, rawSubclass) ?? "";
             }
 
             // Total character level from class levels (or keep at least 1)

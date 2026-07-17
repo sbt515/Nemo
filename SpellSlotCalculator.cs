@@ -225,9 +225,11 @@ namespace Nemo
                 shared = SpellSlotPool.Empty;
                 reportedCasterLevel = 0;
             }
-            else if (!isMulticlass && nonWarlockCasterClasses == 1)
+            else if (nonWarlockCasterClasses == 1)
             {
-                // Single non-Warlock class: use that class's own progression table
+                // Exactly one non-Warlock spellcasting class (e.g. pure Ranger, or Ranger 5 / Rogue 3).
+                // Use that class's own slot table at its class levels — not floor(levels/2) on the
+                // multiclass table — so Ranger 5 still gets 4×1st + 2×2nd when multiclassed with martials.
                 var sole = entries.First(e =>
                 {
                     var k = GetProgressionKind(e.ClassName, e.Subclass);
@@ -239,7 +241,7 @@ namespace Nemo
             }
             else
             {
-                // Multiclass (or Warlock + another caster): PHB Multiclass Spellcaster table
+                // Two or more non-Warlock casters: PHB Multiclass Spellcaster table
                 int mcLevel = Math.Clamp(multiclassCasterLevelSum, 0, 20);
                 shared = GetMulticlassSpellcasterSlots(mcLevel);
                 reportedCasterLevel = mcLevel;
