@@ -1161,19 +1161,27 @@ namespace Nemo
                 ("Survival", "Wis", ch => ch.AbilityScores?.Wisdom?.Modifier ?? 0),
             };
 
+            var skillList = c.Skills ?? new List<SkillEntry>();
             var proficient = new HashSet<string>(
-                (c.Skills ?? new List<SkillEntry>()).Select(s => s.Name),
+                skillList.Select(s => s.Name),
                 StringComparer.OrdinalIgnoreCase);
+            var expert = new HashSet<string>(
+                skillList.Where(s => s.IsExpertise).Select(s => s.Name),
+                StringComparer.OrdinalIgnoreCase);
+            bool joat = LevelUpCalculator.HasJackOfAllTrades(
+                LevelUpCalculator.GetClassLevelsFromCharacter(c));
 
             return defs.Select(d =>
             {
                 bool isProf = proficient.Contains(d.Name);
-                int bonus = d.Mod(c) + (isProf ? prof : 0);
+                bool isExp = isProf && expert.Contains(d.Name);
+                int bonus = LevelUpCalculator.ComputeSkillBonus(d.Mod(c), prof, isProf, isExp, joat);
                 return new SkillEntry
                 {
                     Name = d.Name,
                     Ability = d.Ability,
                     IsProficient = isProf,
+                    IsExpertise = isExp,
                     Bonus = bonus
                 };
             }).ToList();

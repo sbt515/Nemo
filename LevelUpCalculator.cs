@@ -560,6 +560,60 @@ namespace Nemo
         }
 
         // ═══════════════════════════════════════════════════════════════
+        // Expertise / Jack of All Trades
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// How many skill Expertise picks the character may have (Rogue 2@1 + 2@6; Bard 2@3 + 2@10).
+        /// </summary>
+        public static int GetExpertiseSkillSlots(IEnumerable<ClassLevelEntry>? classLevels)
+        {
+            int n = 0;
+            foreach (var e in Normalize(classLevels))
+            {
+                string cn = e.ClassName.Trim();
+                if (cn.Equals("Rogue", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (e.Levels >= 1) n += 2;
+                    if (e.Levels >= 6) n += 2;
+                }
+                else if (cn.Equals("Bard", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (e.Levels >= 3) n += 2;
+                    if (e.Levels >= 10) n += 2;
+                }
+            }
+            return n;
+        }
+
+        /// <summary>Bard 2+: half proficiency (round down) on ability checks that lack proficiency.</summary>
+        public static bool HasJackOfAllTrades(IEnumerable<ClassLevelEntry>? classLevels) =>
+            Normalize(classLevels).Any(e =>
+                e.ClassName.Equals("Bard", StringComparison.OrdinalIgnoreCase) && e.Levels >= 2);
+
+        /// <summary>
+        /// Skill / ability-check bonus: ability mod + proficiency (×2 if expertise), or half prof if JoAT.
+        /// </summary>
+        public static int ComputeSkillBonus(
+            int abilityModifier,
+            int proficiencyBonus,
+            bool isProficient,
+            bool isExpertise,
+            bool jackOfAllTrades)
+        {
+            if (isProficient)
+            {
+                int mult = isExpertise ? 2 : 1;
+                return abilityModifier + proficiencyBonus * mult;
+            }
+
+            if (jackOfAllTrades)
+                return abilityModifier + proficiencyBonus / 2;
+
+            return abilityModifier;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
         // Hit points
         // ═══════════════════════════════════════════════════════════════
 

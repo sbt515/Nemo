@@ -1149,7 +1149,21 @@
                         <TextBlock x:Name="lblClassSkillCounter"
                                    Foreground="White"
                                    FontSize="13"
-                                   Margin="0,0,0,16"/>
+                                   Margin="0,0,0,4"/>
+
+                        <TextBlock x:Name="lblExpertiseCounter"
+                                   Foreground="White"
+                                   FontSize="13"
+                                   Margin="0,0,0,4"
+                                   Visibility="Collapsed"/>
+
+                        <TextBlock x:Name="lblJackOfAllTradesNote"
+                                   Foreground="#AAA"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,16"
+                                   Visibility="Collapsed"
+                                   Text="Jack of All Trades (Bard 2+): +½ proficiency on non-proficient ability checks (including skills and initiative)."/>
 
                         <!-- RACE PROFICIENCIES -->
                         <TextBlock Text="RACE PROFICIENCIES"
@@ -1331,8 +1345,9 @@
                                                 Width="70"
                                                 IsReadOnly="True"/>
                             <!-- Proficient: single-click toggle; IsSelectable gates class-choice skills -->
-                            <DataGridTemplateColumn Header="Proficient?"
-                                                    Width="100">
+                            <DataGridTemplateColumn x:Name="colSkillProficient"
+                                                    Header="Proficient?"
+                                                    Width="90">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <CheckBox IsChecked="{Binding IsProficient, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1341,6 +1356,21 @@
                                                   VerticalAlignment="Center"
                                                   Focusable="False"
                                                   PreviewMouseLeftButtonDown="SkillProficiencyCheckBox_PreviewMouseLeftButtonDown"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <!-- Expertise: only for proficient skills when Rogue/Bard grants Expertise -->
+                            <DataGridTemplateColumn x:Name="colSkillExpertise"
+                                                    Header="Expertise?"
+                                                    Width="90">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding IsExpertise, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  IsEnabled="{Binding IsExpertiseSelectable, Mode=OneWay}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  Focusable="False"
+                                                  PreviewMouseLeftButtonDown="SkillExpertiseCheckBox_PreviewMouseLeftButtonDown"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>

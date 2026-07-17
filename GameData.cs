@@ -2241,6 +2241,8 @@ public class SkillEntry
     public string Name { get; set; } = "";
     public string Ability { get; set; } = "";
     public bool IsProficient { get; set; }
+    /// <summary>Double proficiency (Rogue/Bard Expertise). Requires <see cref="IsProficient"/>.</summary>
+    public bool IsExpertise { get; set; }
     public int Bonus { get; set; }
 }
 

@@ -785,6 +785,7 @@ namespace Nemo
 
             UpdateHitPoints();
             UpdateSkillBonuses();
+            UpdateExpertiseSelectableState();
             UpdateSavingThrows();
             UpdateFeatsTabVisibility();
             UpdateStatDisplays();
@@ -3548,6 +3549,8 @@ namespace Nemo
 
             // Toggle immediately (prevents the default "select row first, click again to check" behavior)
             skill.IsProficient = willCheck;
+            if (!willCheck)
+                skill.IsExpertise = false;
             e.Handled = true;
 
             if (cmbClass.SelectedItem is string cn)
@@ -3578,11 +3581,38 @@ namespace Nemo
             if (dep is not DataGridCell cell)
                 return;
 
-            // Only the proficient column
-            if (cell.Column is not DataGridTemplateColumn)
+            if (cell.Column is not DataGridTemplateColumn templateCol)
                 return;
 
             if (cell.DataContext is not SkillProficiency skill)
+                return;
+
+            string? header = templateCol.Header?.ToString();
+
+            // Expertise column cell click
+            if (header != null && header.Contains("Expertise", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!skill.IsExpertiseSelectable || !skill.IsProficient)
+                    return;
+
+                bool willExpert = !skill.IsExpertise;
+                if (willExpert)
+                {
+                    int maxSlots = LevelUpCalculator.GetExpertiseSkillSlots(GetActiveClassLevels());
+                    int selected = allSkills.Count(s => s.IsExpertise && s.IsProficient);
+                    if (selected >= maxSlots)
+                        return;
+                }
+
+                skill.IsExpertise = willExpert;
+                e.Handled = true;
+                UpdateExpertiseSelectableState();
+                UpdateSkillBonuses();
+                return;
+            }
+
+            // Proficient column cell click
+            if (header == null || !header.Contains("Proficient", StringComparison.OrdinalIgnoreCase))
                 return;
 
             if (!skill.IsSelectable || IsGrantedSkillProficiency(skill))
@@ -3610,10 +3640,12 @@ namespace Nemo
             }
 
             skill.IsProficient = willCheck;
+            if (!willCheck)
+                skill.IsExpertise = false;
             e.Handled = true;
 
-            if (cmbClass.SelectedItem is string cn)
-                UpdateSkillChoices(cn);
+            if (cmbClass.SelectedItem is string cn2)
+                UpdateSkillChoices(cn2);
 
             UpdateSkillBonuses();
         }
@@ -3720,24 +3752,125 @@ namespace Nemo
 
             RefreshProficiencyBonus();
 
+            bool joat = LevelUpCalculator.HasJackOfAllTrades(GetActiveClassLevels());
+
             foreach (var skill in allSkills)
             {
                 int mod = skill.Ability switch
                 {
-                    "Str" => GetModifierFromText(txtStrMod.Text),
-                    "Dex" => GetModifierFromText(txtDexMod.Text),
-                    "Con" => GetModifierFromText(txtConMod.Text),
-                    "Int" => GetModifierFromText(txtIntMod.Text),
-                    "Wis" => GetModifierFromText(txtWisMod.Text),
-                    "Cha" => GetModifierFromText(txtChaMod.Text),
+                    "Str" => GetModifierFromText(txtStrMod?.Text),
+                    "Dex" => GetModifierFromText(txtDexMod?.Text),
+                    "Con" => GetModifierFromText(txtConMod?.Text),
+                    "Int" => GetModifierFromText(txtIntMod?.Text),
+                    "Wis" => GetModifierFromText(txtWisMod?.Text),
+                    "Cha" => GetModifierFromText(txtChaMod?.Text),
                     _ => 0
                 };
 
-                int totalBonus = mod + (skill.IsProficient ? proficiencyBonus : 0);
+                int totalBonus = LevelUpCalculator.ComputeSkillBonus(
+                    mod, proficiencyBonus, skill.IsProficient, skill.IsExpertise, joat);
                 skill.Bonus = totalBonus >= 0 ? $"+{totalBonus}" : totalBonus.ToString();
             }
 
-            //dgSkills.Items.Refresh();
+            UpdateExpertiseSelectableState();
+            UpdateJackOfAllTradesNote();
+        }
+
+        /// <summary>
+        /// Expertise checkboxes: only on proficient skills, limited by Rogue/Bard Expertise slots.
+        /// </summary>
+        public void UpdateExpertiseSelectableState()
+        {
+            if (allSkills == null) return;
+
+            int maxSlots = LevelUpCalculator.GetExpertiseSkillSlots(GetActiveClassLevels());
+            int selected = allSkills.Count(s => s.IsExpertise && s.IsProficient);
+
+            // Drop excess expertise if slots shrank (e.g. level down)
+            if (selected > maxSlots)
+            {
+                foreach (var s in allSkills.Where(x => x.IsExpertise).Reverse().ToList())
+                {
+                    if (selected <= maxSlots) break;
+                    s.SetExpertiseQuiet(false);
+                    selected--;
+                }
+            }
+
+            // Clear expertise without proficiency
+            foreach (var s in allSkills.Where(x => x.IsExpertise && !x.IsProficient))
+                s.SetExpertiseQuiet(false);
+
+            selected = allSkills.Count(s => s.IsExpertise && s.IsProficient);
+
+            foreach (var skill in allSkills)
+            {
+                if (maxSlots <= 0 || !skill.IsProficient)
+                {
+                    skill.IsExpertiseSelectable = false;
+                    if (skill.IsExpertise)
+                        skill.SetExpertiseQuiet(false);
+                    continue;
+                }
+
+                // Can toggle on if under cap, or toggle off if already expert
+                skill.IsExpertiseSelectable = selected < maxSlots || skill.IsExpertise;
+            }
+
+            if (lblExpertiseCounter != null)
+            {
+                if (maxSlots > 0)
+                {
+                    lblExpertiseCounter.Visibility = Visibility.Visible;
+                    lblExpertiseCounter.Text = $"Expertise: {selected} / {maxSlots} (Rogue 1+/6+, Bard 3+/10+)";
+                    lblExpertiseCounter.Foreground = selected > maxSlots ? Brushes.Red : Brushes.White;
+                }
+                else
+                {
+                    lblExpertiseCounter.Visibility = Visibility.Collapsed;
+                    lblExpertiseCounter.Text = "";
+                }
+            }
+        }
+
+        private void UpdateJackOfAllTradesNote()
+        {
+            if (lblJackOfAllTradesNote == null) return;
+            bool joat = LevelUpCalculator.HasJackOfAllTrades(GetActiveClassLevels());
+            lblJackOfAllTradesNote.Visibility = joat ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void SkillExpertiseCheckBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not CheckBox cb)
+                return;
+            if (!cb.IsEnabled)
+                return;
+            if (cb.DataContext is not SkillProficiency skill)
+                return;
+            if (!skill.IsProficient)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            int maxSlots = LevelUpCalculator.GetExpertiseSkillSlots(GetActiveClassLevels());
+            bool willCheck = cb.IsChecked != true;
+
+            if (willCheck)
+            {
+                int selected = allSkills.Count(s => s.IsExpertise && s.IsProficient);
+                if (selected >= maxSlots)
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            skill.IsExpertise = willCheck;
+            e.Handled = true;
+            UpdateExpertiseSelectableState();
+            UpdateSkillBonuses();
         }
 
         /// <summary>True if the character has save proficiency from class and/or Resilient (etc.).</summary>
@@ -5787,8 +5920,11 @@ namespace Nemo
 
         public void UpdateInitiative()
         {
-            int dexMod = GetModifierFromText(txtDexMod.Text);
-            int total = dexMod + featInitiativeBonus;
+            int dexMod = GetModifierFromText(txtDexMod?.Text);
+            // Initiative is a Dexterity ability check — Jack of All Trades applies
+            bool joat = LevelUpCalculator.HasJackOfAllTrades(GetActiveClassLevels());
+            int joatBonus = joat ? proficiencyBonus / 2 : 0;
+            int total = dexMod + featInitiativeBonus + joatBonus;
             txtInitiative.Text = total >= 0 ? $"+{total}" : total.ToString();
         }
 
@@ -7044,7 +7180,18 @@ namespace Nemo
         ("Sleight of Hand", "Dex"), ("Stealth", "Dex"), ("Survival", "Wis")
     };
 
-            int prof = CurrentCharacter.ProficiencyBonus;
+            int prof = CurrentCharacter.ProficiencyBonus > 0
+                ? CurrentCharacter.ProficiencyBonus
+                : proficiencyBonus;
+            bool joat = LevelUpCalculator.HasJackOfAllTrades(GetActiveClassLevels());
+            var expert = new HashSet<string>(
+                (CurrentCharacter.Skills ?? new List<SkillEntry>())
+                    .Where(s => s.IsExpertise)
+                    .Select(s => s.Name),
+                StringComparer.OrdinalIgnoreCase);
+            var proficient = new HashSet<string>(
+                (CurrentCharacter.Skills ?? new List<SkillEntry>()).Select(s => s.Name),
+                StringComparer.OrdinalIgnoreCase);
 
             foreach (var (name, ability) in skillDefinitions)
             {
@@ -7059,14 +7206,16 @@ namespace Nemo
                     _ => 0
                 };
 
-                bool isProficient = CurrentCharacter.Skills.Any(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                bool isProficient = proficient.Contains(name);
+                bool isExpertise = isProficient && expert.Contains(name);
 
                 skills.Add(new SkillEntry
                 {
                     Name = name,
                     Ability = ability,
                     IsProficient = isProficient,
-                    Bonus = mod + (isProficient ? prof : 0)
+                    IsExpertise = isExpertise,
+                    Bonus = LevelUpCalculator.ComputeSkillBonus(mod, prof, isProficient, isExpertise, joat)
                 });
             }
 
@@ -8703,17 +8852,24 @@ namespace Nemo
             // Calculate and store final speed (including Mobile feat)
             CurrentCharacter.Speed = GetFinalSpeed();
 
-            // Skills (rebuild from UI)
+            // Skills (rebuild from UI — include expertise)
             CurrentCharacter.Skills ??= new List<SkillEntry>();
             CurrentCharacter.Skills.Clear();
             foreach (var skill in allSkills.Where(s => s.IsProficient))
             {
+                int bonusVal = 0;
+                if (!string.IsNullOrEmpty(skill.Bonus))
+                {
+                    string raw = skill.Bonus.Replace("+", "").Trim();
+                    int.TryParse(raw, out bonusVal);
+                }
                 CurrentCharacter.Skills.Add(new SkillEntry
                 {
                     Name = skill.SkillName,
                     Ability = skill.Ability,
                     IsProficient = true,
-                    Bonus = int.TryParse(skill.Bonus.Replace("+", ""), out int b) ? b : 0
+                    IsExpertise = skill.IsExpertise,
+                    Bonus = bonusVal
                 });
             }
 
@@ -8833,14 +8989,15 @@ namespace Nemo
         {
             if (CurrentCharacter.Skills == null || allSkills == null) return;
 
-            // First clear all proficiencies
+            // First clear all proficiencies / expertise
             foreach (var skill in allSkills)
             {
                 skill.IsProficient = false;
+                skill.SetExpertiseQuiet(false);
                 skill.IsBackgroundProficiency = false;
             }
 
-            // Apply saved proficiencies
+            // Apply saved proficiencies + expertise
             foreach (var savedSkill in CurrentCharacter.Skills)
             {
                 var skill = allSkills.FirstOrDefault(s =>
@@ -8849,11 +9006,13 @@ namespace Nemo
                 if (skill != null)
                 {
                     skill.IsProficient = true;
+                    skill.SetExpertiseQuiet(savedSkill.IsExpertise);
                     skill.IsBackgroundProficiency = true; // Treat loaded skills as granted
                 }
             }
 
             dgSkills.Items.Refresh();
+            UpdateSkillBonuses();
         }
 
         private void RestoreSelectedFeat()
@@ -9316,6 +9475,21 @@ namespace Nemo
             }
         }
 
+        private bool _isExpertiseSelectable;
+        /// <summary>Expertise checkbox enabled only when proficient and Expertise slots remain (or already expert).</summary>
+        public bool IsExpertiseSelectable
+        {
+            get => _isExpertiseSelectable;
+            set
+            {
+                if (_isExpertiseSelectable != value)
+                {
+                    _isExpertiseSelectable = value;
+                    OnPropertyChanged(nameof(IsExpertiseSelectable));
+                }
+            }
+        }
+
         private bool _isProficient;
         public bool IsProficient
         {
@@ -9327,13 +9501,50 @@ namespace Nemo
                     _isProficient = value;
                     OnPropertyChanged(nameof(IsProficient));
 
-                    // === KEY FIX: Recalculate bonus immediately ===
+                    // Expertise requires proficiency
+                    if (!_isProficient && _isExpertise)
+                    {
+                        _isExpertise = false;
+                        OnPropertyChanged(nameof(IsExpertise));
+                    }
+
                     if (Application.Current.MainWindow is MainWindow main)
                     {
                         main.UpdateSkillBonuses();
+                        main.UpdateExpertiseSelectableState();
                     }
                 }
             }
+        }
+
+        private bool _isExpertise;
+        public bool IsExpertise
+        {
+            get => _isExpertise;
+            set
+            {
+                bool next = value && _isProficient;
+                if (_isExpertise != next)
+                {
+                    _isExpertise = next;
+                    OnPropertyChanged(nameof(IsExpertise));
+
+                    if (Application.Current.MainWindow is MainWindow main)
+                    {
+                        main.UpdateSkillBonuses();
+                        main.UpdateExpertiseSelectableState();
+                    }
+                }
+            }
+        }
+
+        /// <summary>Set expertise without re-entering bonus/slot refresh (for reconcile loops).</summary>
+        public void SetExpertiseQuiet(bool value)
+        {
+            bool next = value && _isProficient;
+            if (_isExpertise == next) return;
+            _isExpertise = next;
+            OnPropertyChanged(nameof(IsExpertise));
         }
 
         private string _bonus = "+0";
