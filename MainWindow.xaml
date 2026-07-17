@@ -1897,16 +1897,19 @@
 
                                     <DataGridTextColumn Header="Cantrip"
                                                         Binding="{Binding Name}"
-                                                        Width="160"/>
+                                                        Width="140"/>
+                                    <DataGridTextColumn Header="Class"
+                                                        Binding="{Binding AssignedClassDisplay}"
+                                                        Width="90"/>
                                     <DataGridTextColumn Header="Dice"
                                                         Binding="{Binding DamageDice}"
-                                                        Width="80"/>
+                                                        Width="70"/>
                                     <DataGridTextColumn Header="Roll"
                                                         Binding="{Binding RollType}"
-                                                        Width="90"/>
+                                                        Width="80"/>
                                     <DataGridTextColumn Header="Type"
                                                         Binding="{Binding DamageType}"
-                                                        Width="90"/>
+                                                        Width="80"/>
                                     <DataGridTextColumn Header="Range"
                                                         Binding="{Binding FullSpell.Range}"
                                                         Width="90"/>

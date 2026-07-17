@@ -776,11 +776,26 @@ namespace Nemo
             UpdateEquipmentProficiencySummary();
             if (tabSpells != null && tabSpells.IsVisible)
             {
+                // Multiclass level changes can shrink a class's cantrip budget
+                RebalanceCantripAssignments(BuildPreferredCantripAssignments());
+                cantripViewSource.View?.Refresh();
                 RefreshSpellLevelDropdown();
+                ApplyCantripSelectableState();
+                ApplyLeveledSpellSelectableState();
                 UpdateSpellStats();
                 UpdateCantripCounter();
                 UpdateSpellCounter();
             }
+        }
+
+        /// <summary>Snapshot of current UI cantrip → class assignments (for rebalance).</summary>
+        private Dictionary<string, string> BuildPreferredCantripAssignments()
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (cantripOptions == null) return map;
+            foreach (var c in cantripOptions.Where(x => x.IsChecked && !string.IsNullOrWhiteSpace(x.AssignedClassKey)))
+                map[c.Name] = c.AssignedClassKey;
+            return map;
         }
 
         private void RefreshLevelMulticlassTab()
@@ -5786,6 +5801,7 @@ namespace Nemo
                                 PopulateSpells();
                             else
                             {
+                                RebalanceCantripAssignments(BuildPreferredCantripAssignments());
                                 RefreshSpellLevelDropdown();
                                 ApplyCantripSelectableState();
                                 ApplyLeveledSpellSelectableState();
@@ -5862,7 +5878,11 @@ namespace Nemo
 
             // Uncheck everything when changing classes
             foreach (var item in cantripOptions)
+            {
                 item.IsChecked = false;
+                item.AssignedClassKey = "";
+                item.AssignedClassDisplay = "";
+            }
 
             cantripViewSource.Filter -= CantripFilter;
             cantripViewSource.Filter += CantripFilter;
@@ -5872,6 +5892,7 @@ namespace Nemo
             if (pnlCantripPreview != null)
                 pnlCantripPreview.Visibility = Visibility.Collapsed;
 
+            UpdateCantripHeader();
             UpdateCantripCounter();
         }
 
@@ -6179,17 +6200,180 @@ namespace Nemo
             }
         }
 
+        /// <summary>
+        /// Eligible per-class cantrip budgets for a spell (spell must be on that class's list).
+        /// </summary>
+        private static List<CantripClassBudget> GetEligibleCantripBudgets(
+            Spell? spell,
+            IReadOnlyList<CantripClassBudget> budgets)
+        {
+            var result = new List<CantripClassBudget>();
+            if (spell?.Classes == null || budgets == null || budgets.Count == 0)
+                return result;
+
+            foreach (var b in budgets)
+            {
+                if (b.Max <= 0) continue;
+                if (spell.Classes.Any(c =>
+                        c.Equals(b.SpellListClass, StringComparison.OrdinalIgnoreCase)))
+                    result.Add(b);
+            }
+            return result;
+        }
+
+        /// <summary>Count currently assigned cantrips per class key (checked items only).</summary>
+        private Dictionary<string, int> CountCantripAssignmentsByClass()
+        {
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (cantripOptions == null) return counts;
+
+            foreach (var item in cantripOptions.Where(c => c.IsChecked))
+            {
+                if (string.IsNullOrWhiteSpace(item.AssignedClassKey))
+                    continue;
+                if (!counts.ContainsKey(item.AssignedClassKey))
+                    counts[item.AssignedClassKey] = 0;
+                counts[item.AssignedClassKey]++;
+            }
+            return counts;
+        }
+
+        private static int GetAssignedCount(Dictionary<string, int> counts, string key) =>
+            counts.TryGetValue(key, out int n) ? n : 0;
+
+        /// <summary>
+        /// Pick a class budget with remaining room for this cantrip.
+        /// Prefers <paramref name="preferredKey"/> when still valid, else the pool with the most room.
+        /// </summary>
+        private static CantripClassBudget? PickCantripBudget(
+            SelectableSpell spell,
+            IReadOnlyList<CantripClassBudget> budgets,
+            Dictionary<string, int> counts,
+            string? preferredKey = null)
+        {
+            var eligible = GetEligibleCantripBudgets(spell.FullSpell, budgets);
+            if (eligible.Count == 0) return null;
+
+            bool HasRoom(CantripClassBudget b) => GetAssignedCount(counts, b.Key) < b.Max;
+
+            if (!string.IsNullOrWhiteSpace(preferredKey))
+            {
+                var preferred = eligible.FirstOrDefault(b =>
+                    b.Key.Equals(preferredKey, StringComparison.OrdinalIgnoreCase) && HasRoom(b));
+                if (preferred != null)
+                    return preferred;
+            }
+
+            return eligible
+                .Where(HasRoom)
+                .OrderByDescending(b => b.Max - GetAssignedCount(counts, b.Key))
+                .ThenBy(b => b.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+        }
+
+        private void ApplyCantripAssignment(SelectableSpell spell, CantripClassBudget budget)
+        {
+            spell.AssignedClassKey = budget.Key;
+            spell.AssignedClassDisplay = budget.DisplayName;
+        }
+
+        private void ClearCantripAssignment(SelectableSpell spell)
+        {
+            spell.AssignedClassKey = "";
+            spell.AssignedClassDisplay = "";
+        }
+
+        /// <summary>
+        /// Re-assign checked cantrips to class budgets (load / multiclass level changes).
+        /// Single-list cantrips are placed first so dual-list ones fill remaining slots.
+        /// </summary>
+        private void RebalanceCantripAssignments(
+            IReadOnlyDictionary<string, string>? preferredAssignments = null)
+        {
+            if (cantripOptions == null) return;
+
+            var budget = GetSpellBudget();
+            var budgets = budget.CantripBudgets ?? Array.Empty<CantripClassBudget>();
+            if (budgets.Count == 0)
+            {
+                foreach (var item in cantripOptions.Where(c => c.IsChecked))
+                {
+                    item.IsChecked = false;
+                    ClearCantripAssignment(item);
+                }
+                return;
+            }
+
+            var checkedItems = cantripOptions.Where(c => c.IsChecked).ToList();
+            // Clear counts via temporary wipe of assignments (keep IsChecked)
+            foreach (var item in checkedItems)
+                ClearCantripAssignment(item);
+
+            var counts = budgets.ToDictionary(b => b.Key, _ => 0, StringComparer.OrdinalIgnoreCase);
+
+            // Prefer fewer eligible lists first (must-place), then prefer saved assignment
+            var ordered = checkedItems
+                .OrderBy(c => GetEligibleCantripBudgets(c.FullSpell, budgets).Count)
+                .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var item in ordered)
+            {
+                string? preferred = null;
+                if (preferredAssignments != null &&
+                    preferredAssignments.TryGetValue(item.Name, out var saved) &&
+                    !string.IsNullOrWhiteSpace(saved))
+                {
+                    preferred = saved;
+                }
+
+                var pick = PickCantripBudget(item, budgets, counts, preferred);
+                if (pick == null)
+                {
+                    item.IsChecked = false;
+                    ClearCantripAssignment(item);
+                    continue;
+                }
+
+                ApplyCantripAssignment(item, pick);
+                counts[pick.Key] = GetAssignedCount(counts, pick.Key) + 1;
+            }
+        }
+
         private void ApplyCantripSelectableState()
         {
-            var budget = GetSpellBudget();
-            int max = budget.CantripsKnownMax;
-            int selected = cantripOptions?.Count(s => s.IsChecked) ?? 0;
-
             if (cantripOptions == null) return;
+
+            var budget = GetSpellBudget();
+            var budgets = budget.CantripBudgets ?? Array.Empty<CantripClassBudget>();
+            var counts = CountCantripAssignmentsByClass();
+
+            // Single-class / empty budget: fall back to total max
+            bool usePerClass = budgets.Count > 0;
+
             foreach (var item in cantripOptions)
             {
-                bool onList = SpellOnActiveClassList(item.FullSpell);
-                item.IsSelectable = onList && ((selected < max) || item.IsChecked);
+                if (item.IsChecked)
+                {
+                    item.IsSelectable = true;
+                    continue;
+                }
+
+                if (!SpellOnActiveClassList(item.FullSpell))
+                {
+                    item.IsSelectable = false;
+                    continue;
+                }
+
+                if (!usePerClass)
+                {
+                    int selected = cantripOptions.Count(s => s.IsChecked);
+                    item.IsSelectable = selected < budget.CantripsKnownMax;
+                    continue;
+                }
+
+                // Selectable if any eligible class still has room
+                item.IsSelectable = PickCantripBudget(item, budgets, counts) != null;
             }
         }
 
@@ -6296,15 +6480,14 @@ namespace Nemo
             UpdateSubclassSpellsLabel();
             UpdateRacialSpellsLabel();
 
-            var budget = GetSpellBudget();
-            if (lblCantripHeader != null)
-                lblCantripHeader.Text = $"CANTRIPS ({budget.CantripsKnownMax} known)";
+            UpdateCantripHeader();
 
             if (lblSpellHeader != null)
                 lblSpellHeader.Text = $"{FormatSpellLevelLabel(currentSpellLevelFilter).ToUpperInvariant()} SPELLS";
 
             if (lblSpellBudget != null)
             {
+                var budget = GetSpellBudget();
                 var bits = new List<string>();
                 if (budget.HasPreparedCaster)
                     bits.Add($"Prepared: {budget.PreparedMax} max ({string.Join(", ", budget.PreparedClassNames)})");
@@ -6317,6 +6500,57 @@ namespace Nemo
             }
 
             UpdateSpellCounter();
+        }
+
+        private void UpdateCantripHeader()
+        {
+            if (lblCantripHeader == null) return;
+
+            var budget = GetSpellBudget();
+            var budgets = budget.CantripBudgets ?? Array.Empty<CantripClassBudget>();
+            if (budgets.Count == 0)
+            {
+                lblCantripHeader.Text = "CANTRIPS (0 known)";
+                return;
+            }
+
+            if (budgets.Count == 1)
+            {
+                lblCantripHeader.Text = $"CANTRIPS ({budgets[0].Max} known)";
+                return;
+            }
+
+            // Multiclass: show each class's max
+            lblCantripHeader.Text = "CANTRIPS (" +
+                string.Join(" · ", budgets.Select(b => $"{b.DisplayName} {b.Max}")) +
+                $"; {budget.CantripsKnownMax} total)";
+        }
+
+        /// <summary>Per-class selected/max breakdown for the cantrip counter label.</summary>
+        private string FormatCantripSelectionStatus()
+        {
+            var budget = GetSpellBudget();
+            var budgets = budget.CantripBudgets ?? Array.Empty<CantripClassBudget>();
+            var counts = CountCantripAssignmentsByClass();
+            int selected = cantripOptions?.Count(s => s.IsChecked) ?? 0;
+
+            if (budgets.Count == 0)
+                return $"Selected: {selected} / {budget.CantripsKnownMax}";
+
+            if (budgets.Count == 1)
+            {
+                int n = GetAssignedCount(counts, budgets[0].Key);
+                // Include unassigned checked (legacy) in the count
+                if (selected > n) n = selected;
+                return $"Selected: {n} / {budgets[0].Max}";
+            }
+
+            var parts = budgets.Select(b =>
+            {
+                int n = GetAssignedCount(counts, b.Key);
+                return $"{b.DisplayName} {n}/{b.Max}";
+            });
+            return $"Selected: {string.Join(" · ", parts)}  (total {selected}/{budget.CantripsKnownMax})";
         }
 
         private static string FormatSlotSummary(MulticlassSpellSlotResult slots)
@@ -6346,28 +6580,62 @@ namespace Nemo
         public void UpdateCantripCounter()
         {
             if (lblCantripCount == null) return;
-
-            var budget = GetSpellBudget();
-            int selected = cantripOptions?.Count(s => s.IsChecked) ?? 0;
-            lblCantripCount.Text = $"Selected: {selected} / {budget.CantripsKnownMax}";
+            lblCantripCount.Text = FormatCantripSelectionStatus();
         }
 
         private void CantripCheckBox_Changed(object sender, RoutedEventArgs e)
         {
-            var budget = GetSpellBudget();
-            int max = budget.CantripsKnownMax;
-            int currentSelected = cantripOptions?.Count(s => s.IsChecked) ?? 0;
-
-            if (currentSelected > max)
+            if (sender is not CheckBox cb || cb.DataContext is not SelectableSpell spell)
             {
-                if (sender is CheckBox cb && cb.DataContext is SelectableSpell spell)
-                {
-                    spell.IsChecked = false;
-                    return;
-                }
+                ApplyCantripSelectableState();
+                UpdateCantripCounter();
+                return;
             }
 
+            var budget = GetSpellBudget();
+            var budgets = budget.CantripBudgets ?? Array.Empty<CantripClassBudget>();
+
+            if (!spell.IsChecked)
+            {
+                ClearCantripAssignment(spell);
+                ApplyCantripSelectableState();
+                UpdateCantripHeader();
+                UpdateCantripCounter();
+                return;
+            }
+
+            // Checking: must assign to a class that still has room
+            var counts = CountCantripAssignmentsByClass();
+            // Exclude this spell if it was already counted (re-check edge case)
+            if (!string.IsNullOrWhiteSpace(spell.AssignedClassKey) &&
+                counts.ContainsKey(spell.AssignedClassKey))
+            {
+                counts[spell.AssignedClassKey] = Math.Max(0, counts[spell.AssignedClassKey] - 1);
+            }
+
+            if (budgets.Count == 0)
+            {
+                // No cantrip-granting classes
+                spell.IsChecked = false;
+                ClearCantripAssignment(spell);
+                ApplyCantripSelectableState();
+                UpdateCantripCounter();
+                return;
+            }
+
+            var pick = PickCantripBudget(spell, budgets, counts, spell.AssignedClassKey);
+            if (pick == null)
+            {
+                spell.IsChecked = false;
+                ClearCantripAssignment(spell);
+                ApplyCantripSelectableState();
+                UpdateCantripCounter();
+                return;
+            }
+
+            ApplyCantripAssignment(spell, pick);
             ApplyCantripSelectableState();
+            UpdateCantripHeader();
             UpdateCantripCounter();
         }
 
@@ -8202,6 +8470,10 @@ namespace Nemo
 
             // Spells
             CurrentCharacter.Cantrips = cantripOptions.Where(c => c.IsChecked).Select(c => c.Name).ToList();
+            CurrentCharacter.CantripClassAssignments = cantripOptions
+                .Where(c => c.IsChecked && !string.IsNullOrWhiteSpace(c.AssignedClassKey))
+                .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().AssignedClassKey, StringComparer.OrdinalIgnoreCase);
             CurrentCharacter.Level1Spells = spell1Options.Where(s => s.IsChecked).Select(s => s.Name).ToList();
 
             // Derived values
@@ -8324,10 +8596,29 @@ namespace Nemo
         {
             if (CurrentCharacter.Cantrips == null || cantripOptions == null) return;
 
+            var preferred = CurrentCharacter.CantripClassAssignments ??
+                            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var option in cantripOptions)
             {
-                option.IsChecked = CurrentCharacter.Cantrips.Contains(option.Name, StringComparer.OrdinalIgnoreCase);
+                bool selected = CurrentCharacter.Cantrips.Contains(option.Name, StringComparer.OrdinalIgnoreCase);
+                option.IsChecked = selected;
+                if (selected && preferred.TryGetValue(option.Name, out var classKey) &&
+                    !string.IsNullOrWhiteSpace(classKey))
+                {
+                    option.AssignedClassKey = classKey;
+                    // Display filled during rebalance
+                }
+                else if (!selected)
+                {
+                    ClearCantripAssignment(option);
+                }
             }
+
+            // Enforce per-class budgets and fill missing / invalid assignments
+            RebalanceCantripAssignments(preferred);
+            ApplyCantripSelectableState();
+            UpdateCantripHeader();
 
             dgCantrips.Items.Refresh();
             UpdateCantripCounter();
@@ -8813,6 +9104,12 @@ namespace Nemo
                     _isChecked = value;
                     OnPropertyChanged(nameof(IsChecked));
 
+                    if (!_isChecked)
+                    {
+                        AssignedClassKey = "";
+                        AssignedClassDisplay = "";
+                    }
+
                     if (Application.Current.MainWindow is MainWindow mainWindow)
                     {
                         mainWindow.UpdateCantripCounter();
@@ -8833,6 +9130,36 @@ namespace Nemo
                 {
                     _isSelectable = value;
                     OnPropertyChanged(nameof(IsSelectable));
+                }
+            }
+        }
+
+        /// <summary>Class key this cantrip counts against (multiclass budgets).</summary>
+        private string _assignedClassKey = "";
+        public string AssignedClassKey
+        {
+            get => _assignedClassKey;
+            set
+            {
+                if (_assignedClassKey != value)
+                {
+                    _assignedClassKey = value ?? "";
+                    OnPropertyChanged(nameof(AssignedClassKey));
+                }
+            }
+        }
+
+        /// <summary>UI label for the class that owns this selection.</summary>
+        private string _assignedClassDisplay = "";
+        public string AssignedClassDisplay
+        {
+            get => _assignedClassDisplay;
+            set
+            {
+                if (_assignedClassDisplay != value)
+                {
+                    _assignedClassDisplay = value ?? "";
+                    OnPropertyChanged(nameof(AssignedClassDisplay));
                 }
             }
         }

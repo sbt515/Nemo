@@ -161,6 +161,7 @@ namespace Nemo
             bool hasKnown = false;
             var preparedClasses = new List<string>();
             var knownClasses = new List<string>();
+            var cantripBudgets = new List<CantripClassBudget>();
 
             foreach (var e in entries)
             {
@@ -168,7 +169,18 @@ namespace Nemo
                 int lvl = e.Levels;
                 string? sub = e.Subclass;
 
-                cantrips += GetCantripsKnown(cls, lvl, sub);
+                int classCantrips = GetCantripsKnown(cls, lvl, sub);
+                cantrips += classCantrips;
+                if (classCantrips > 0)
+                {
+                    cantripBudgets.Add(new CantripClassBudget
+                    {
+                        Key = cls,
+                        DisplayName = FormatCasterDisplayName(cls, sub),
+                        SpellListClass = GetCantripSpellListClass(cls, sub),
+                        Max = classCantrips
+                    });
+                }
 
                 if (IsPreparedCaster(cls))
                 {
@@ -191,6 +203,7 @@ namespace Nemo
             return new SpellBudgetSnapshot
             {
                 CantripsKnownMax = cantrips,
+                CantripBudgets = cantripBudgets,
                 PreparedMax = prepared,
                 KnownMax = known,
                 HasPreparedCaster = hasPrepared,
@@ -199,6 +212,29 @@ namespace Nemo
                 PreparedClassNames = preparedClasses,
                 KnownClassNames = knownClasses
             };
+        }
+
+        /// <summary>
+        /// Spell list used for cantrip list membership (third casters use Wizard).
+        /// </summary>
+        public static string GetCantripSpellListClass(string className, string? subclass)
+        {
+            if (string.IsNullOrWhiteSpace(className))
+                return "";
+            if (IsThirdCasterSubclass(className, subclass))
+                return "Wizard";
+            return className.Trim();
+        }
+
+        /// <summary>Display label for a caster entry (includes subclass for third casters).</summary>
+        public static string FormatCasterDisplayName(string className, string? subclass)
+        {
+            if (string.IsNullOrWhiteSpace(className))
+                return "";
+            string cls = className.Trim();
+            if (IsThirdCasterSubclass(cls, subclass) && !string.IsNullOrWhiteSpace(subclass))
+                return $"{cls} ({subclass.Trim()})";
+            return cls;
         }
 
         /// <summary>
@@ -249,10 +285,26 @@ namespace Nemo
         }
     }
 
+    /// <summary>
+    /// Per-class cantrip known budget (multiclass: each class keeps its own limit).
+    /// </summary>
+    public sealed class CantripClassBudget
+    {
+        /// <summary>Stable key — the class name (e.g. "Wizard", "Fighter").</summary>
+        public string Key { get; init; } = "";
+        /// <summary>UI label (e.g. "Fighter (Eldritch Knight)").</summary>
+        public string DisplayName { get; init; } = "";
+        /// <summary>Spell list for membership checks (Wizard for EK/AT).</summary>
+        public string SpellListClass { get; init; } = "";
+        public int Max { get; init; }
+    }
+
     /// <summary>Aggregate spell selection budgets for the Spells tab.</summary>
     public sealed class SpellBudgetSnapshot
     {
         public int CantripsKnownMax { get; init; }
+        /// <summary>Per-class cantrip limits (empty when no cantrip-granting classes).</summary>
+        public IReadOnlyList<CantripClassBudget> CantripBudgets { get; init; } = Array.Empty<CantripClassBudget>();
         public int PreparedMax { get; init; }
         public int KnownMax { get; init; }
         public bool HasPreparedCaster { get; init; }

@@ -2192,6 +2192,11 @@ public class Character
 
     // === Spells ===
     public List<string> Cantrips { get; set; } = new();
+    /// <summary>
+    /// Multiclass cantrip ownership: cantrip name → class key (e.g. "Fire Bolt" → "Wizard").
+    /// Used so dual-list cantrips count against the correct class budget.
+    /// </summary>
+    public Dictionary<string, string> CantripClassAssignments { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> Level1Spells { get; set; } = new();
 
     // === Derived / Calculated Values (Important for PDF & other apps) ===
