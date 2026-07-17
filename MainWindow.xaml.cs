@@ -7696,14 +7696,9 @@ namespace Nemo
                         }).ToList(),
                     HitDice = GameData.ClassData.TryGetValue(CurrentCharacter.Class ?? "", out var cd)
                         ? (cd.HitDie.StartsWith("1") ? cd.HitDie : "1" + cd.HitDie.TrimStart())
-                        : "1d8",
-                    Level1SpellSlots = (CurrentCharacter.Class ?? "") switch
-                    {
-                        "Paladin" or "Ranger" or "Fighter" or "Rogue" or "Monk" or "Barbarian" => 0,
-                        "Warlock" => 1,
-                        _ when cd?.Spellcasting == true => 2,
-                        _ => 0
-                    }
+                        : "1d8"
+                    // Spell slots (1st–9th) and page-3 spell lists are derived inside
+                    // CharacterSheetExporter from ClassLevels + selected/subclass spells.
                 };
 
                 CharacterSheetExporter.ExportToFile(CurrentCharacter, saveDlg.FileName, extras);

@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using iText.Forms;
 using iText.Forms.Fields;
 using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Action;
+using iText.Kernel.Pdf.Annot;
+using iTextRectangle = iText.Kernel.Geom.Rectangle;
 
 namespace Nemo
 {
@@ -20,6 +24,188 @@ namespace Nemo
         public const string TemplateFileName = "5E_CharacterSheet_Fillable.pdf";
 
         /// <summary>
+        /// Page 3 spell-list field names, in visual top-to-bottom order for the official sheet.
+        /// Geometry on the template places <c>Spells 1015</c> under 1st-level (not cantrips).
+        /// </summary>
+        private static readonly string[] CantripFields =
+        {
+            "Spells 1014", "Spells 1016", "Spells 1017", "Spells 1018",
+            "Spells 1019", "Spells 1020", "Spells 1021", "Spells 1022"
+        };
+
+        private static readonly string[] Level1SpellFields =
+        {
+            "Spells 1015",
+            "Spells 1023", "Spells 1024", "Spells 1025", "Spells 1026", "Spells 1027",
+            "Spells 1028", "Spells 1029", "Spells 1030", "Spells 1031", "Spells 1032", "Spells 1033"
+        };
+
+        /// <summary>Prepared checkboxes aligned with <see cref="Level1SpellFields"/> (null = no box on that row).</summary>
+        private static readonly string?[] Level1PreparedChecks =
+        {
+            null, // Spells 1015 has no prep checkbox on this template
+            "Check Box 309", "Check Box 3010", "Check Box 3011", "Check Box 3012", "Check Box 3013",
+            "Check Box 3014", "Check Box 3015", "Check Box 3016", "Check Box 3017", "Check Box 3018", "Check Box 3019"
+        };
+
+        private static readonly string[] Level2SpellFields =
+        {
+            "Spells 1046",
+            "Spells 1034", "Spells 1035", "Spells 1036", "Spells 1037", "Spells 1038",
+            "Spells 1039", "Spells 1040", "Spells 1041", "Spells 1042", "Spells 1043",
+            "Spells 1044", "Spells 1045"
+        };
+
+        private static readonly string?[] Level2PreparedChecks =
+        {
+            "Check Box 313", "Check Box 310", "Check Box 3020", "Check Box 3021", "Check Box 3022",
+            "Check Box 3023", "Check Box 3024", "Check Box 3025", "Check Box 3026", "Check Box 3027",
+            "Check Box 3028", "Check Box 3029", "Check Box 3030"
+        };
+
+        // ── Levels 3–9 (middle + right columns on page 3; visual top→bottom order) ──
+
+        private static readonly string[] Level3SpellFields =
+        {
+            "Spells 1048", "Spells 1047", "Spells 1049", "Spells 1050", "Spells 1051",
+            "Spells 1052", "Spells 1053", "Spells 1054", "Spells 1055", "Spells 1056",
+            "Spells 1057", "Spells 1058", "Spells 1059"
+        };
+
+        private static readonly string?[] Level3PreparedChecks =
+        {
+            "Check Box 315", "Check Box 314", "Check Box 3031", "Check Box 3032", "Check Box 3033",
+            "Check Box 3034", "Check Box 3035", "Check Box 3036", "Check Box 3037", "Check Box 3038",
+            "Check Box 3039", "Check Box 3040", "Check Box 3041"
+        };
+
+        private static readonly string[] Level4SpellFields =
+        {
+            "Spells 1061", "Spells 1060", "Spells 1062", "Spells 1063", "Spells 1064",
+            "Spells 1065", "Spells 1066", "Spells 1067", "Spells 1068", "Spells 1069",
+            "Spells 1070", "Spells 1071", "Spells 1072"
+        };
+
+        private static readonly string?[] Level4PreparedChecks =
+        {
+            "Check Box 317", "Check Box 316", "Check Box 3042", "Check Box 3043", "Check Box 3044",
+            "Check Box 3045", "Check Box 3046", "Check Box 3047", "Check Box 3048", "Check Box 3049",
+            "Check Box 3050", "Check Box 3051", "Check Box 3052"
+        };
+
+        private static readonly string[] Level5SpellFields =
+        {
+            "Spells 1074", "Spells 1073", "Spells 1075", "Spells 1076", "Spells 1077",
+            "Spells 1078", "Spells 1079", "Spells 1080", "Spells 1081"
+        };
+
+        private static readonly string?[] Level5PreparedChecks =
+        {
+            "Check Box 319", "Check Box 318", "Check Box 3053", "Check Box 3054", "Check Box 3055",
+            "Check Box 3056", "Check Box 3057", "Check Box 3058", "Check Box 3059"
+        };
+
+        private static readonly string[] Level6SpellFields =
+        {
+            "Spells 1083", "Spells 1082", "Spells 1084", "Spells 1085", "Spells 1086",
+            "Spells 1087", "Spells 1088", "Spells 1089", "Spells 1090"
+        };
+
+        private static readonly string?[] Level6PreparedChecks =
+        {
+            "Check Box 321", "Check Box 320", "Check Box 3060", "Check Box 3061", "Check Box 3062",
+            "Check Box 3063", "Check Box 3064", "Check Box 3065", "Check Box 3066"
+        };
+
+        private static readonly string[] Level7SpellFields =
+        {
+            "Spells 1092", "Spells 1091", "Spells 1093", "Spells 1094", "Spells 1095",
+            "Spells 1096", "Spells 1097", "Spells 1098", "Spells 1099"
+        };
+
+        private static readonly string?[] Level7PreparedChecks =
+        {
+            "Check Box 323", "Check Box 322", "Check Box 3067", "Check Box 3068", "Check Box 3069",
+            "Check Box 3070", "Check Box 3071", "Check Box 3072", "Check Box 3073"
+        };
+
+        private static readonly string[] Level8SpellFields =
+        {
+            "Spells 10101", "Spells 10100", "Spells 10102", "Spells 10103",
+            "Spells 10104", "Spells 10105", "Spells 10106"
+        };
+
+        private static readonly string?[] Level8PreparedChecks =
+        {
+            "Check Box 325", "Check Box 324", "Check Box 3074", "Check Box 3075",
+            "Check Box 3076", "Check Box 3077", "Check Box 3078"
+        };
+
+        private static readonly string[] Level9SpellFields =
+        {
+            "Spells 10108", "Spells 10107", "Spells 10109", "Spells 101010",
+            "Spells 101011", "Spells 101012", "Spells 101013"
+        };
+
+        private static readonly string?[] Level9PreparedChecks =
+        {
+            "Check Box 327", "Check Box 326", "Check Box 3079", "Check Box 3080",
+            "Check Box 3081", "Check Box 3082", "Check Box 3083"
+        };
+
+        /// <summary>
+        /// Spell name fields per spell level (index 1–9). Top-to-bottom visual order on page 3.
+        /// </summary>
+        private static readonly string[][] SpellFieldsByLevel =
+        {
+            Array.Empty<string>(), // 0 = cantrips handled separately
+            Level1SpellFields,
+            Level2SpellFields,
+            Level3SpellFields,
+            Level4SpellFields,
+            Level5SpellFields,
+            Level6SpellFields,
+            Level7SpellFields,
+            Level8SpellFields,
+            Level9SpellFields
+        };
+
+        /// <summary>
+        /// Prepared checkboxes aligned with <see cref="SpellFieldsByLevel"/> (index 1–9).
+        /// </summary>
+        private static readonly string?[][] PreparedChecksByLevel =
+        {
+            Array.Empty<string?>(),
+            Level1PreparedChecks,
+            Level2PreparedChecks,
+            Level3PreparedChecks,
+            Level4PreparedChecks,
+            Level5PreparedChecks,
+            Level6PreparedChecks,
+            Level7PreparedChecks,
+            Level8PreparedChecks,
+            Level9PreparedChecks
+        };
+
+        /// <summary>
+        /// Spell-slot total/remaining field pairs by spell level (1–9).
+        /// Template names: SlotsTotal/Remaining 19 = 1st … 27 = 9th.
+        /// </summary>
+        private static readonly (string Total, string Remaining)[] SlotFieldsByLevel =
+        {
+            default!, // index 0 unused
+            ("SlotsTotal 19", "SlotsRemaining 19"), // 1st
+            ("SlotsTotal 20", "SlotsRemaining 20"), // 2nd
+            ("SlotsTotal 21", "SlotsRemaining 21"), // 3rd
+            ("SlotsTotal 22", "SlotsRemaining 22"), // 4th
+            ("SlotsTotal 23", "SlotsRemaining 23"), // 5th
+            ("SlotsTotal 24", "SlotsRemaining 24"), // 6th
+            ("SlotsTotal 25", "SlotsRemaining 25"), // 7th
+            ("SlotsTotal 26", "SlotsRemaining 26"), // 8th
+            ("SlotsTotal 27", "SlotsRemaining 27"), // 9th
+        };
+
+        /// <summary>
         /// Optional precomputed values that are easier to assemble from the UI layer.
         /// Everything not supplied is derived from <see cref="Character"/> + <see cref="GameData"/>.
         /// </summary>
@@ -32,7 +218,13 @@ namespace Nemo
             public string? ProficienciesAndLanguages { get; set; }
             public string? EquipmentText { get; set; }
             public string? HitDice { get; set; }
+            /// <summary>Legacy override for 1st-level slots only. Prefer full calculation when null.</summary>
             public int? Level1SpellSlots { get; set; }
+            /// <summary>
+            /// Optional override: slots per spell level (indices 1–9). When null, derived via
+            /// <see cref="SpellSlotCalculator"/> from the character's class levels.
+            /// </summary>
+            public int[]? SpellSlotsByLevel { get; set; }
         }
 
         public sealed class WeaponAttackLine
@@ -146,6 +338,9 @@ namespace Nemo
                 }
             }
 
+            // Overlay clickable wiki links on spell name fields (value stays the short display name).
+            ApplySpellHyperlinks(pdf, fields, values.SpellHyperlinks);
+
             // Keep the form editable for the player
             // form.FlattenFields(); // intentionally NOT flattened
 
@@ -156,6 +351,17 @@ namespace Nemo
         {
             public Dictionary<string, string> TextFields { get; } = new(StringComparer.Ordinal);
             public Dictionary<string, bool> Checkboxes { get; } = new(StringComparer.Ordinal);
+            /// <summary>Form field name → wikidot URL for overlay link annotations.</summary>
+            public Dictionary<string, string> SpellHyperlinks { get; } = new(StringComparer.Ordinal);
+        }
+
+        /// <summary>One spell line to write into a page-3 spell field.</summary>
+        private sealed class SpellExportLine
+        {
+            public string SpellName { get; init; } = "";
+            public string DisplayText { get; init; } = "";
+            public bool IsPrepared { get; init; }
+            public string? SubclassTag { get; init; }
         }
 
         private static FieldPayload BuildFieldValues(Character c, ExportExtras extras)
@@ -345,70 +551,448 @@ namespace Nemo
                 T("Feat+Traits", features.Substring(Math.Max(0, features.Length - 800)));
 
             // ── Spellcasting (page 3) ──
-            if (!string.IsNullOrWhiteSpace(c.SpellcastingAbility) ||
-                (c.Cantrips?.Count > 0) || (c.Level1Spells?.Count > 0))
+            FillSpellcastingPage(c, extras, payload, T, C);
+
+            return payload;
+        }
+
+        /// <summary>
+        /// Populates page-3 spellcasting class header, cantrips, leveled spell lists (subclass-first),
+        /// spell slots, and records wiki URLs for hyperlink overlays.
+        /// </summary>
+        private static void FillSpellcastingPage(
+            Character c,
+            ExportExtras extras,
+            FieldPayload payload,
+            Action<string, string?> T,
+            Action<string, bool> C)
+        {
+            var classLevels = LevelUpCalculator.GetClassLevelsFromCharacter(c);
+            bool hasSpellContent =
+                !string.IsNullOrWhiteSpace(c.SpellcastingAbility) ||
+                (c.Cantrips?.Count > 0) ||
+                (c.Level1Spells?.Count > 0) ||
+                classLevels.Any(e =>
+                    SpellSlotCalculator.GetProgressionKind(e.ClassName, e.Subclass) !=
+                    CasterProgressionKind.None);
+
+            if (!hasSpellContent)
+                return;
+
+            // Header: class (subclass) — multiclass lists all casters briefly
+            string spellClass = BuildSpellcastingClassLabel(c, classLevels);
+            T("Spellcasting Class 2", spellClass);
+
+            string abilityAbbr = (c.SpellcastingAbility ?? "").Trim().ToUpperInvariant() switch
             {
-                string spellClass = c.Class ?? "";
-                if (!string.IsNullOrWhiteSpace(c.Subclass))
-                    spellClass += $" ({c.Subclass})";
-                T("Spellcasting Class 2", spellClass);
+                "INTELLIGENCE" or "INT" => "INT",
+                "WISDOM" or "WIS" => "WIS",
+                "CHARISMA" or "CHA" => "CHA",
+                _ => AbbreviateAbility(c.SpellcastingAbility)
+            };
+            T("SpellcastingAbility 2", abilityAbbr);
 
-                string abilityAbbr = (c.SpellcastingAbility ?? "").Trim().ToUpperInvariant() switch
+            if (c.SpellSaveDC > 0)
+                T("SpellSaveDC  2", c.SpellSaveDC.ToString()); // two spaces in name
+            if (c.SpellAttackBonus != 0 || c.SpellSaveDC > 0)
+            {
+                string atk = c.SpellAttackBonus >= 0
+                    ? $"+{c.SpellAttackBonus}"
+                    : c.SpellAttackBonus.ToString();
+                T("SpellAtkBonus 2", atk);
+            }
+
+            // Spell slots (1st–9th)
+            int[] slotsByLevel = extras.SpellSlotsByLevel ?? DeriveSpellSlotsByLevel(c, extras);
+            for (int lvl = 1; lvl <= 9; lvl++)
+            {
+                int n = lvl < slotsByLevel.Length ? Math.Max(0, slotsByLevel[lvl]) : 0;
+                if (n <= 0) continue;
+                var (totalField, remainField) = SlotFieldsByLevel[lvl];
+                T(totalField, n.ToString());
+                T(remainField, n.ToString());
+            }
+
+            // Cantrips (no subclass auto-list; player + racial picks already on character)
+            var cantrips = BuildCantripExportLines(c);
+            WriteSpellLines(payload, T, C, cantrips, CantripFields, preparedChecks: null);
+
+            // Leveled spells 1–9: subclass always-prepared/known first (tagged), then selected spells
+            var byLevel = BuildLeveledSpellExportLines(c, classLevels);
+            for (int lvl = 1; lvl <= 9; lvl++)
+            {
+                if (!byLevel.TryGetValue(lvl, out var lines) || lines.Count == 0)
+                    continue;
+                if (lvl >= SpellFieldsByLevel.Length)
+                    continue;
+                WriteSpellLines(
+                    payload, T, C, lines,
+                    SpellFieldsByLevel[lvl],
+                    PreparedChecksByLevel[lvl]);
+            }
+        }
+
+        private static void WriteSpellLines(
+            FieldPayload payload,
+            Action<string, string?> T,
+            Action<string, bool> C,
+            IReadOnlyList<SpellExportLine> lines,
+            string[] fieldNames,
+            string?[]? preparedChecks)
+        {
+            for (int i = 0; i < fieldNames.Length && i < lines.Count; i++)
+            {
+                var line = lines[i];
+                string field = fieldNames[i];
+                T(field, line.DisplayText);
+
+                if (preparedChecks != null &&
+                    i < preparedChecks.Length &&
+                    !string.IsNullOrEmpty(preparedChecks[i]) &&
+                    line.IsPrepared)
                 {
-                    "INTELLIGENCE" or "INT" => "INT",
-                    "WISDOM" or "WIS" => "WIS",
-                    "CHARISMA" or "CHA" => "CHA",
-                    _ => AbbreviateAbility(c.SpellcastingAbility)
-                };
-                T("SpellcastingAbility 2", abilityAbbr);
+                    C(preparedChecks[i]!, true);
+                }
 
-                if (c.SpellSaveDC > 0)
-                    T("SpellSaveDC  2", c.SpellSaveDC.ToString()); // two spaces in name
-                if (c.SpellAttackBonus != 0 || c.SpellSaveDC > 0)
-                    T("SpellAtkBonus 2", FmtMod(c.SpellAttackBonus));
+                string? url = BuildSpellWikidotUrl(line.SpellName);
+                if (!string.IsNullOrEmpty(url))
+                    payload.SpellHyperlinks[field] = url!;
+            }
+        }
 
-                int slots = extras.Level1SpellSlots ?? DeriveLevel1Slots(c.Class);
-                if (slots > 0)
+        private static List<SpellExportLine> BuildCantripExportLines(Character c)
+        {
+            var lines = new List<SpellExportLine>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // High Elf / racial cantrip first if present
+            if (!string.IsNullOrWhiteSpace(c.HighElfCantrip) && seen.Add(c.HighElfCantrip.Trim()))
+            {
+                string name = c.HighElfCantrip.Trim();
+                lines.Add(new SpellExportLine
                 {
-                    T("SlotsTotal 19", slots.ToString());
-                    T("SlotsRemaining 19", slots.ToString());
+                    SpellName = name,
+                    DisplayText = name,
+                    IsPrepared = true
+                });
+            }
+
+            foreach (var name in c.Cantrips ?? new List<string>())
+            {
+                if (string.IsNullOrWhiteSpace(name) || !seen.Add(name.Trim()))
+                    continue;
+                string n = name.Trim();
+                lines.Add(new SpellExportLine
+                {
+                    SpellName = n,
+                    DisplayText = n,
+                    IsPrepared = true
+                });
+            }
+
+            return lines;
+        }
+
+        /// <summary>
+        /// Builds per-level spell lines: subclass always-prepared/known first with
+        /// <c>Faerie Fire (Twilight)</c>-style tags, then remaining selected spells from
+        /// <see cref="Character.Level1Spells"/> (which holds all selected leveled spells 1–9).
+        /// </summary>
+        private static Dictionary<int, List<SpellExportLine>> BuildLeveledSpellExportLines(
+            Character c,
+            IReadOnlyList<ClassLevelEntry> classLevels)
+        {
+            var byLevel = new Dictionary<int, List<SpellExportLine>>();
+            List<SpellExportLine> ListFor(int level)
+            {
+                if (!byLevel.TryGetValue(level, out var list))
+                {
+                    list = new List<SpellExportLine>();
+                    byLevel[level] = list;
+                }
+                return list;
+            }
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 1) Subclass grants (always prepared / always known) — not expanded list
+            foreach (var entry in classLevels)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Subclass) || entry.Levels < 1)
+                    continue;
+
+                string tag = ShortSubclassLabel(entry.Subclass);
+                var grants = SubclassSpellCalculator.GetGrantsUpToLevel(entry.Subclass, entry.Levels)
+                    .Where(g =>
+                        g.SpellLevel >= 1 &&
+                        (g.Kind == SubclassSpellGrantKind.AlwaysPrepared ||
+                         g.Kind == SubclassSpellGrantKind.AlwaysKnown))
+                    .OrderBy(g => g.SpellLevel)
+                    .ThenBy(g => g.SpellName, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var g in grants)
+                {
+                    if (string.IsNullOrWhiteSpace(g.SpellName) || !seen.Add(g.SpellName))
+                        continue;
+
+                    string display = string.IsNullOrEmpty(tag)
+                        ? g.SpellName
+                        : $"{g.SpellName} ({tag})";
+
+                    ListFor(g.SpellLevel).Add(new SpellExportLine
+                    {
+                        SpellName = g.SpellName,
+                        DisplayText = display,
+                        IsPrepared = g.Kind == SubclassSpellGrantKind.AlwaysPrepared ||
+                                     g.Kind == SubclassSpellGrantKind.AlwaysKnown,
+                        SubclassTag = tag
+                    });
                 }
             }
 
-            // Cantrips → Spells 1014–1022
-            var cantripSlots = new[]
+            // 2) Player-selected leveled spells (stored on Level1Spells regardless of level)
+            foreach (var raw in c.Level1Spells ?? new List<string>())
             {
-                "Spells 1014", "Spells 1015", "Spells 1016", "Spells 1017", "Spells 1018",
-                "Spells 1019", "Spells 1020", "Spells 1021", "Spells 1022"
-            };
-            var cantrips = c.Cantrips ?? new List<string>();
-            for (int i = 0; i < cantripSlots.Length && i < cantrips.Count; i++)
-                T(cantripSlots[i], cantrips[i]);
+                if (string.IsNullOrWhiteSpace(raw))
+                    continue;
 
-            // 1st-level spells → Spells 1023 + 1024–1033
-            var level1Slots = new[]
+                // Strip any existing "(Tag)" so we resolve the real spell name
+                string spellName = StripSubclassTag(raw.Trim());
+                if (!seen.Add(spellName))
+                    continue;
+
+                int level = ResolveSpellLevel(spellName);
+                if (level < 1)
+                    continue; // cantrips belong in the cantrip list
+
+                ListFor(level).Add(new SpellExportLine
+                {
+                    SpellName = spellName,
+                    DisplayText = spellName,
+                    IsPrepared = true
+                });
+            }
+
+            return byLevel;
+        }
+
+        private static int ResolveSpellLevel(string spellName)
+        {
+            var spell = SpellCatalog.Find(spellName);
+            if (spell != null)
+                return spell.Level;
+
+            // Fallback: treat unknown names as 1st-level so they still appear somewhere useful
+            return 1;
+        }
+
+        private static string StripSubclassTag(string display)
+        {
+            // "Faerie Fire (Twilight)" → "Faerie Fire"
+            int open = display.LastIndexOf(" (", StringComparison.Ordinal);
+            if (open > 0 && display.EndsWith(")", StringComparison.Ordinal))
+                return display.Substring(0, open).Trim();
+            return display;
+        }
+
+        /// <summary>
+        /// Short label for sheet notation, e.g. "Twilight Domain" → "Twilight",
+        /// "College of Lore" → "Lore", "The Archfey" → "Archfey".
+        /// </summary>
+        public static string ShortSubclassLabel(string? subclass)
+        {
+            if (string.IsNullOrWhiteSpace(subclass))
+                return "";
+
+            string s = subclass.Trim();
+            s = Regex.Replace(s, @"\s+Domain$", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"^College of (the\s+)?", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"^Circle of (the\s+)?", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"^Oath of (the\s+)?", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"^Path of (the\s+)?", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"^School of (the\s+)?", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"^The\s+", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"\s+Sorcery$", "", RegexOptions.IgnoreCase);
+            return s.Trim();
+        }
+
+        private static string BuildSpellcastingClassLabel(
+            Character c,
+            IReadOnlyList<ClassLevelEntry> classLevels)
+        {
+            if (classLevels != null && classLevels.Count > 1)
             {
-                "Spells 1023",
-                "Spells 1024", "Spells 1025", "Spells 1026", "Spells 1027", "Spells 1028",
-                "Spells 1029", "Spells 1030", "Spells 1031", "Spells 1032", "Spells 1033"
-            };
-            var level1 = c.Level1Spells ?? new List<string>();
-            for (int i = 0; i < level1Slots.Length && i < level1.Count; i++)
-                T(level1Slots[i], level1[i]);
+                var parts = classLevels
+                    .Where(e => e.Levels > 0)
+                    .Select(e =>
+                    {
+                        string name = e.ClassName;
+                        if (!string.IsNullOrWhiteSpace(e.Subclass))
+                            name += $" ({ShortSubclassLabel(e.Subclass)})";
+                        return $"{name} {e.Levels}";
+                    });
+                return string.Join(" / ", parts);
+            }
 
-            return payload;
+            string spellClass = c.Class ?? "";
+            if (!string.IsNullOrWhiteSpace(c.Subclass))
+                spellClass += $" ({c.Subclass})";
+            return spellClass;
+        }
+
+        private static int[] DeriveSpellSlotsByLevel(Character c, ExportExtras extras)
+        {
+            var slots = new int[10];
+            var classLevels = LevelUpCalculator.GetClassLevelsFromCharacter(c);
+            if (classLevels.Count == 0 && !string.IsNullOrWhiteSpace(c.Class))
+            {
+                classLevels = new List<ClassLevelEntry>
+                {
+                    new(c.Class, Math.Max(1, c.Level), c.Subclass)
+                };
+            }
+
+            if (classLevels.Count > 0)
+            {
+                var result = SpellSlotCalculator.Calculate(classLevels);
+                bool useShared = result.SharedSlots.HighestSlotLevel > 0;
+                for (int lvl = 1; lvl <= 9; lvl++)
+                {
+                    if (useShared)
+                        slots[lvl] = result.SharedSlots.GetSlots(lvl);
+                    else
+                        slots[lvl] = result.PactMagicSlots.GetSlots(lvl);
+                }
+            }
+
+            // Legacy single-field override for level-1 only when nothing else was computed
+            if (extras.Level1SpellSlots.HasValue && slots[1] == 0 &&
+                classLevels.Count == 0)
+            {
+                slots[1] = extras.Level1SpellSlots.Value;
+            }
+            else if (extras.Level1SpellSlots.HasValue && slots.All(s => s == 0))
+            {
+                slots[1] = extras.Level1SpellSlots.Value;
+            }
+
+            // Last-resort single-class level-1 table for pure level-1 exports
+            if (slots.All(s => s == 0))
+            {
+                int l1 = DeriveLevel1Slots(c.Class);
+                if (l1 > 0) slots[1] = l1;
+            }
+
+            return slots;
+        }
+
+        private static string? BuildSpellWikidotUrl(string spellName)
+        {
+            if (string.IsNullOrWhiteSpace(spellName))
+                return null;
+            string slug = SlugifySpellName(spellName);
+            if (string.IsNullOrEmpty(slug))
+                return null;
+            return $"https://dnd5e.wikidot.com/spell:{slug}";
+        }
+
+        private static string SlugifySpellName(string spellName)
+        {
+            return spellName
+                .Trim()
+                .ToLowerInvariant()
+                .Replace(" ", "-")
+                .Replace("'", "")
+                .Replace(",", "")
+                .Replace("(", "")
+                .Replace(")", "");
+        }
+
+        /// <summary>
+        /// Adds invisible URI link annotations over each spell text field so the displayed
+        /// name (not the URL) remains in the field while clicks open the wiki page.
+        /// </summary>
+        private static void ApplySpellHyperlinks(
+            PdfDocument pdf,
+            IDictionary<string, iText.Forms.Fields.PdfFormField> fields,
+            Dictionary<string, string> fieldToUrl)
+        {
+            if (fieldToUrl == null || fieldToUrl.Count == 0)
+                return;
+
+            foreach (var (fieldName, url) in fieldToUrl)
+            {
+                if (string.IsNullOrWhiteSpace(url)) continue;
+                if (!fields.TryGetValue(fieldName, out var field) || field == null) continue;
+
+                IList<PdfWidgetAnnotation>? widgets;
+                try
+                {
+                    widgets = field.GetWidgets();
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (widgets == null || widgets.Count == 0)
+                    continue;
+
+                foreach (var widget in widgets)
+                {
+                    try
+                    {
+                        var pdfArray = widget.GetRectangle();
+                        if (pdfArray == null || pdfArray.Size() < 4)
+                            continue;
+
+                        float llx = pdfArray.GetAsNumber(0).FloatValue();
+                        float lly = pdfArray.GetAsNumber(1).FloatValue();
+                        float urx = pdfArray.GetAsNumber(2).FloatValue();
+                        float ury = pdfArray.GetAsNumber(3).FloatValue();
+                        var rect = new iTextRectangle(llx, lly, urx - llx, ury - lly);
+
+                        var link = new PdfLinkAnnotation(rect);
+                        link.SetAction(PdfAction.CreateURI(url));
+                        link.SetBorder(new PdfArray(new[] { 0, 0, 0 }));
+                        // Highlight mode: invert on click (subtle)
+                        link.SetHighlightMode(PdfAnnotation.HIGHLIGHT_INVERT);
+
+                        PdfPage? page = widget.GetPage();
+                        if (page == null && pdf.GetNumberOfPages() >= 3)
+                            page = pdf.GetPage(3); // spell sheet is page 3 (1-based)
+                        page?.AddAnnotation(link);
+                    }
+                    catch
+                    {
+                        // Best-effort: skip broken widgets
+                    }
+                }
+            }
         }
 
         private static int Mod(int score) => (int)Math.Floor((score - 10) / 2.0);
 
         private static string BuildClassLevel(Character c)
         {
+            var levels = LevelUpCalculator.GetClassLevelsFromCharacter(c);
+            if (levels.Count > 1)
+            {
+                return string.Join(" / ", levels.Select(e =>
+                {
+                    string label = e.ClassName;
+                    if (!string.IsNullOrWhiteSpace(e.Subclass))
+                        label = $"{ShortSubclassLabel(e.Subclass)} {label}";
+                    return $"{label} {e.Levels}";
+                }));
+            }
+
             if (string.IsNullOrWhiteSpace(c.Class)) return "Level 1";
 
-            // Nemo is level-1 focused
+            int lvl = c.Level > 0 ? c.Level : (levels.Count == 1 ? levels[0].Levels : 1);
             if (!string.IsNullOrWhiteSpace(c.Subclass))
-                return $"{c.Subclass} {c.Class} 1";
-            return $"{c.Class} 1";
+                return $"{c.Subclass} {c.Class} {lvl}";
+            return $"{c.Class} {lvl}";
         }
 
         private static string DeriveHitDice(Character c)
