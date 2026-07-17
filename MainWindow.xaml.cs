@@ -72,6 +72,8 @@ namespace Nemo
         private bool _suppressSpellLevelEvent;
         private bool _suppressLevelTabRebuild;
         private bool _suppressHpRollEvents;
+        /// <summary>Backing collection for the spell-level combo (avoids WPF ItemsSource stickiness).</summary>
+        private readonly ObservableCollection<string> spellLevelComboItems = new();
         private readonly Random _rng = new();
         private readonly Brush AccentGreen = (Brush)new BrushConverter().ConvertFromString("#7CFC00");
         private readonly Brush AccentGray = (Brush)new BrushConverter().ConvertFromString("#2A2A2A");
@@ -81,34 +83,30 @@ namespace Nemo
         private static readonly Brush ComboBgBrush =
             (Brush)new BrushConverter().ConvertFromString("#2A2A2A");
         private static readonly Brush ComboFgBrush =
-            (Brush)new BrushConverter().ConvertFromString("#2A2A2A");
+            (Brush)new BrushConverter().ConvertFromString("#F0F0F0");
         private static readonly Brush ComboBorderBrush =
-            (Brush)new BrushConverter().ConvertFromString("#555");
+            (Brush)new BrushConverter().ConvertFromString("#555555");
 
         /// <summary>
-        /// Match XAML ComboBox chrome used elsewhere (e.g. Class tab): dark field + readable text.
+        /// Apply app-level ComboBox theme (dark field, light text, readable dropdown items).
+        /// Styles are defined globally in App.xaml.
         /// </summary>
         private void StyleAppComboBox(ComboBox cmb)
         {
             if (cmb == null) return;
+
+            // Prefer application/window styles (includes ComboBoxItem template for hover/selected)
+            if (TryFindResource(typeof(ComboBox)) is System.Windows.Style comboStyle)
+                cmb.Style = comboStyle;
+            if (TryFindResource(typeof(ComboBoxItem)) is System.Windows.Style itemStyle)
+                cmb.ItemContainerStyle = itemStyle;
+
             cmb.Background = ComboBgBrush;
             cmb.Foreground = ComboFgBrush;
             cmb.BorderBrush = ComboBorderBrush;
             cmb.Padding = new Thickness(8, 4, 8, 4);
             cmb.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
             cmb.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
-
-            // Prefer window-level styles when present
-            if (TryFindResource(typeof(ComboBox)) is System.Windows.Style comboStyle)
-                cmb.Style = comboStyle;
-            if (TryFindResource(typeof(ComboBoxItem)) is System.Windows.Style itemStyle)
-                cmb.ItemContainerStyle = itemStyle;
-
-            // Re-apply after Style so explicit theme colors win (default template often paints white)
-            cmb.Background = ComboBgBrush;
-            cmb.Foreground = ComboFgBrush;
-            cmb.BorderBrush = ComboBorderBrush;
-            cmb.Padding = new Thickness(8, 4, 8, 4);
         }
 
 
@@ -119,6 +117,14 @@ namespace Nemo
             this.Loaded += MainWindow_Loaded;
             LoadAllCombos();
             InitializeSkills();
+            // Bind spell-level combo to an ObservableCollection so level unlocks always refresh
+            if (cmbSpellLevel != null)
+            {
+                spellLevelComboItems.Clear();
+                spellLevelComboItems.Add(FormatSpellLevelLabel(1));
+                cmbSpellLevel.ItemsSource = spellLevelComboItems;
+                cmbSpellLevel.SelectedIndex = 0;
+            }
             rbPointBuy.IsChecked = true;
             StatMethod_Changed(null, null);
         }
@@ -774,17 +780,33 @@ namespace Nemo
             UpdateStatDisplays();
             // Multiclass / secondary-class subclasses (e.g. Twilight Cleric) grant armor & weapons
             UpdateEquipmentProficiencySummary();
-            if (tabSpells != null && tabSpells.IsVisible)
+
+            // Always refresh spell level unlocks when levels change (Ranger 5 → 2nd-level slots, etc.)
+            // even if the Spells tab is not currently open.
+            if (cmbClass?.SelectedItem is string casterClass &&
+                GameData.ClassData.TryGetValue(casterClass, out var casterData) &&
+                casterData.Spellcasting)
             {
-                // Multiclass level changes can shrink a class's cantrip budget
-                RebalanceCantripAssignments(BuildPreferredCantripAssignments());
-                cantripViewSource.View?.Refresh();
+                if (cantripOptions.Count == 0 || spell1Options.Count == 0)
+                {
+                    PopulateSpells();
+                }
+                else
+                {
+                    RebalanceCantripAssignments(BuildPreferredCantripAssignments());
+                    cantripViewSource.View?.Refresh();
+                    RefreshSpellLevelDropdown();
+                    ApplyCantripSelectableState();
+                    ApplyLeveledSpellSelectableState();
+                    UpdateSpellStats();
+                    UpdateCantripCounter();
+                    UpdateSpellCounter();
+                }
+            }
+            else
+            {
+                // Still update the combo if it exists (e.g. racial casters later)
                 RefreshSpellLevelDropdown();
-                ApplyCantripSelectableState();
-                ApplyLeveledSpellSelectableState();
-                UpdateSpellStats();
-                UpdateCantripCounter();
-                UpdateSpellCounter();
             }
         }
 
@@ -931,11 +953,20 @@ namespace Nemo
                     subtitle: string.Join(" · ", fsClassLabels) + " — each style only once",
                     picks: CurrentCharacter.FightingStyles,
                     catalog: options,
-                    onChanged: list => CurrentCharacter.FightingStyles = list);
+                    onChanged: list =>
+                    {
+                        CurrentCharacter.FightingStyles = list;
+                        // Defense style affects equipped AC (+1 while armored)
+                        UpdateEquippedAC();
+                    });
+
+                // Reconcile may drop/keep Defense; keep equipped AC in sync
+                UpdateEquippedAC();
             }
             else
             {
                 CurrentCharacter.FightingStyles = new List<string>();
+                UpdateEquippedAC();
             }
 
             // ── Eldritch Invocations ──
@@ -4751,7 +4782,15 @@ namespace Nemo
             if (hasShield)
                 finalAC += 2;
 
-            // === 5. Update UI ===
+            // === 5. Defense fighting style: +1 AC while wearing armor ===
+            bool wearingArmor = bestArmor != null;
+            bool hasDefenseStyle = CurrentCharacter?.FightingStyles != null &&
+                CurrentCharacter.FightingStyles.Any(fs =>
+                    fs.Equals("Defense", StringComparison.OrdinalIgnoreCase));
+            if (hasDefenseStyle && wearingArmor)
+                finalAC += 1;
+
+            // === 6. Update UI ===
             if (bestArmor != null || hasShield || finalAC > 10)
             {
                 lblEquippedACHeader.Visibility = Visibility.Visible;
@@ -4783,11 +4822,21 @@ namespace Nemo
                         : " +2 [Shield]";
                 }
 
+                if (hasDefenseStyle && wearingArmor)
+                {
+                    breakdown += string.IsNullOrEmpty(breakdown)
+                        ? "+1 [Defense]"
+                        : " +1 [Defense]";
+                }
+
                 string displayText = $"({finalAC}): {breakdown}";
                 txtEquippedAC.Text = displayText;
 
                 if (CurrentCharacter != null)
+                {
                     CurrentCharacter.EquippedACDisplay = displayText;
+                    CurrentCharacter.ArmorClass = finalAC;
+                }
             }
             else
             {
@@ -5791,6 +5840,9 @@ namespace Nemo
                 {
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
+                        // Sync levels first so slot-based highest spell level (e.g. Ranger 5 → 2nd)
+                        // is correct before the level dropdown and grid filter refresh.
+                        SyncCharacterClassFromUi();
                         UpdateFeatSpellsLabel();
                         UpdateRacialSpellsLabel();
                         UpdateSubclassSpellsLabel();
@@ -6017,24 +6069,53 @@ namespace Nemo
         };
 
         /// <summary>
+        /// Highest spell slot level from current class levels (shared pool + pact magic).
+        /// Uses ClassLevels directly so Ranger 5 → 2, etc.
+        /// </summary>
+        private int ComputeHighestSpellSlotLevel(out List<ClassLevelEntry> levels, out string slotSummary)
+        {
+            EnsureClassLevelsSeeded();
+            SyncCharacterClassFromUi();
+            levels = GetActiveClassLevels();
+
+            var result = SpellSlotCalculator.Calculate(levels);
+            int highest = 0;
+            if (result.SharedSlots != null)
+                highest = Math.Max(highest, result.SharedSlots.HighestSlotLevel);
+            if (result.PactMagicSlots != null)
+                highest = Math.Max(highest, result.PactMagicSlots.HighestSlotLevel);
+
+            // Defensive: if multiclass merge produced empty shared pool but a single class
+            // still has its own slots, take the max per-class table as well.
+            foreach (var e in levels)
+            {
+                var single = SpellSlotCalculator.Calculate(e.ClassName, e.Levels, e.Subclass);
+                if (single.SharedSlots != null)
+                    highest = Math.Max(highest, single.SharedSlots.HighestSlotLevel);
+                if (single.PactMagicSlots != null)
+                    highest = Math.Max(highest, single.PactMagicSlots.HighestSlotLevel);
+            }
+
+            slotSummary = FormatSlotSummary(result);
+            return highest;
+        }
+
+        /// <summary>
         /// Fills the spell-level dropdown with levels the character has slots for (at least 1st).
-        /// Defaults to 1st-level when available.
+        /// Example: Ranger 5 → 1st-level and 2nd-level.
         /// </summary>
         private void RefreshSpellLevelDropdown()
         {
             if (cmbSpellLevel == null) return;
 
-            var budget = GetSpellBudget();
-            int highest = Math.Max(1, budget.HighestSpellLevelAvailable);
-            // Always allow browsing at least level 1 for planning; cap at highest slot or 1
-            if (budget.HighestSpellLevelAvailable <= 0)
-                highest = 1;
+            int highestFromSlots = ComputeHighestSpellSlotLevel(out var levels, out string slotSummary);
+            int highest = highestFromSlots > 0 ? highestFromSlots : 1;
 
             var items = new List<string>();
             for (int lvl = 1; lvl <= highest; lvl++)
                 items.Add(FormatSpellLevelLabel(lvl));
 
-            // Also include higher levels already selected (so checked spells remain browsable)
+            // Keep already-selected higher-level spells browsable if slots later shrink
             if (spell1Options != null)
             {
                 foreach (var s in spell1Options.Where(x => x.IsChecked && x.FullSpell != null))
@@ -6049,37 +6130,62 @@ namespace Nemo
                 }
             }
 
-            items = items
-                .OrderBy(ParseSpellLevelLabel)
-                .ToList();
+            items = items.OrderBy(ParseSpellLevelLabel).ToList();
 
             _suppressSpellLevelEvent = true;
             try
             {
-                string? previous = cmbSpellLevel.SelectedItem as string;
-                cmbSpellLevel.ItemsSource = items;
+                // Ensure ItemsSource is our ObservableCollection (never a one-shot List)
+                if (!ReferenceEquals(cmbSpellLevel.ItemsSource, spellLevelComboItems))
+                    cmbSpellLevel.ItemsSource = spellLevelComboItems;
 
                 string prefer = FormatSpellLevelLabel(currentSpellLevelFilter);
-                if (items.Contains(prefer))
+
+                spellLevelComboItems.Clear();
+                foreach (var label in items)
+                    spellLevelComboItems.Add(label);
+
+                if (spellLevelComboItems.Contains(prefer))
+                {
                     cmbSpellLevel.SelectedItem = prefer;
-                else if (items.Contains(FormatSpellLevelLabel(1)))
+                }
+                else if (spellLevelComboItems.Contains(FormatSpellLevelLabel(1)))
                 {
                     cmbSpellLevel.SelectedItem = FormatSpellLevelLabel(1);
                     currentSpellLevelFilter = 1;
                 }
-                else if (items.Count > 0)
+                else if (spellLevelComboItems.Count > 0)
                 {
                     cmbSpellLevel.SelectedIndex = 0;
-                    currentSpellLevelFilter = ParseSpellLevelLabel(items[0]);
-                }
-                else if (!string.IsNullOrEmpty(previous))
-                {
-                    cmbSpellLevel.SelectedItem = previous;
+                    currentSpellLevelFilter = ParseSpellLevelLabel(spellLevelComboItems[0]);
                 }
             }
             finally
             {
                 _suppressSpellLevelEvent = false;
+            }
+
+            // Surface class levels + slots on the budget line so unlocks are obvious
+            if (lblSpellBudget != null)
+            {
+                var budget = GetSpellBudget();
+                var bits = new List<string>();
+                string classInfo = levels.Count == 0
+                    ? "no class levels"
+                    : string.Join(", ", levels.Select(e =>
+                        string.IsNullOrWhiteSpace(e.Subclass)
+                            ? $"{e.ClassName} {e.Levels}"
+                            : $"{e.ClassName} {e.Levels} ({e.Subclass})"));
+                bits.Add($"Classes: {classInfo}");
+                if (budget.HasPreparedCaster)
+                    bits.Add($"Prepared {budget.PreparedMax}");
+                if (budget.HasKnownCaster)
+                    bits.Add($"Known {budget.KnownMax}");
+                bits.Add($"Highest slot: {highestFromSlots}");
+                if (!string.IsNullOrWhiteSpace(slotSummary))
+                    bits.Add(slotSummary);
+                bits.Add("Levels in combo: " + string.Join(", ", spellLevelComboItems));
+                lblSpellBudget.Text = "Spell budget: " + string.Join("  |  ", bits);
             }
 
             spell1ViewSource.View?.Refresh();
@@ -6389,9 +6495,13 @@ namespace Nemo
             // If neither caster type, nothing selectable
             bool anyCaster = budget.HasPreparedCaster || budget.HasKnownCaster;
 
+            // Prefer live slot math over budget snapshot so level-ups unlock immediately
+            int highest = ComputeHighestSpellSlotLevel(out _, out _);
+            if (highest <= 0) highest = 1;
+
             foreach (var item in spell1Options)
             {
-                if (!SpellOnActiveClassList(item.FullSpell))
+                if (item.FullSpell == null || !SpellOnActiveClassList(item.FullSpell))
                 {
                     item.IsSelectable = false;
                     continue;
@@ -6403,16 +6513,10 @@ namespace Nemo
                     continue;
                 }
 
-                if (!anyCaster || budget.HighestSpellLevelAvailable <= 0 && item.FullSpell.Level > 0)
-                {
-                    // Still allow selecting level-1 spells at character level 1 for full casters even if slots exist
-                }
-
                 ClassifyLeveledSpell(item, budget, out bool wouldPrep, out bool wouldKnown);
                 bool allowed = false;
                 if (wouldPrep && canAddPrepared) allowed = true;
                 else if (wouldKnown && canAddKnown) allowed = true;
-                // Spells only on expanded warlock list etc. still on Warlock list as known
 
                 // If spell is on active list but classification failed (e.g. only expanded), treat by caster type of primary class
                 if (!wouldPrep && !wouldKnown && anyCaster)
@@ -6421,8 +6525,7 @@ namespace Nemo
                     else if (budget.HasPreparedCaster && canAddPrepared) allowed = true;
                 }
 
-                // Only allow spell levels the character has slots for (or already browsing)
-                int highest = Math.Max(budget.HighestSpellLevelAvailable, 1);
+                // Only allow spell levels the character has slots for
                 if (item.FullSpell.Level > highest)
                     allowed = false;
 
@@ -6485,17 +6588,28 @@ namespace Nemo
             if (lblSpellHeader != null)
                 lblSpellHeader.Text = $"{FormatSpellLevelLabel(currentSpellLevelFilter).ToUpperInvariant()} SPELLS";
 
+            // Keep budget line aligned with class levels (Ranger 5 → highest slot 2, etc.)
             if (lblSpellBudget != null)
             {
+                int highestFromSlots = ComputeHighestSpellSlotLevel(out var lvlEntries, out string slotSummary);
                 var budget = GetSpellBudget();
                 var bits = new List<string>();
+                string classInfo = lvlEntries.Count == 0
+                    ? "no class levels"
+                    : string.Join(", ", lvlEntries.Select(e =>
+                        string.IsNullOrWhiteSpace(e.Subclass)
+                            ? $"{e.ClassName} {e.Levels}"
+                            : $"{e.ClassName} {e.Levels} ({e.Subclass})"));
+                bits.Add($"Classes: {classInfo}");
                 if (budget.HasPreparedCaster)
-                    bits.Add($"Prepared: {budget.PreparedMax} max ({string.Join(", ", budget.PreparedClassNames)})");
+                    bits.Add($"Prepared: {budget.PreparedMax} max");
                 if (budget.HasKnownCaster)
-                    bits.Add($"Known: {budget.KnownMax} max ({string.Join(", ", budget.KnownClassNames)})");
-                if (bits.Count == 0)
+                    bits.Add($"Known: {budget.KnownMax} max");
+                if (!budget.HasPreparedCaster && !budget.HasKnownCaster)
                     bits.Add("No prepared/known spellcasting at current level");
-                bits.Add($"Highest slot level: {Math.Max(0, budget.HighestSpellLevelAvailable)}");
+                bits.Add($"Highest slot: {highestFromSlots}");
+                if (!string.IsNullOrWhiteSpace(slotSummary))
+                    bits.Add(slotSummary);
                 lblSpellBudget.Text = "Spell budget: " + string.Join("  |  ", bits);
             }
 
@@ -8390,12 +8504,7 @@ namespace Nemo
             }
         }
 
-        // Helper to get total character level (you can improve this)
-        private int GetCharacterLevel()
-        {
-            // Placeholder — improve with your actual level tracking later
-            return 1;
-        }
+        private int GetCharacterLevel() => GetEffectiveCharacterLevel();
 
         private void AutoSaveCharacterToJson()
         {
@@ -8409,8 +8518,15 @@ namespace Nemo
         /// </summary>
         private void SaveCharacterToFixedPath(bool showMessage = false)
         {
-            // Populate CurrentCharacter from the current UI state
-            CurrentCharacter = new Character();
+            // Update the existing character in place.
+            // IMPORTANT: do NOT replace with `new Character()` — that wiped ClassLevels, Level,
+            // fighting styles, ASI decisions, HP rolls, etc., which broke higher-level spell slots
+            // (e.g. Ranger 5 losing 2nd-level spells after save/export).
+            CurrentCharacter ??= new Character();
+
+            // Keep level / multiclass / feature picks current from the Level tab model
+            EnsureClassLevelsSeeded();
+            SyncCharacterClassFromUi();
 
             CurrentCharacter.Name = txtCharacterName.Text.Trim();
             CurrentCharacter.PlayerName = txtPlayerName.Text.Trim();
@@ -8426,9 +8542,26 @@ namespace Nemo
                 : rawClass;
             // Clean Subclass (remove placeholder text like "Requires Level X")
             string rawSubclass = cmbSubclass.SelectedItem?.ToString() ?? "";
-            CurrentCharacter.Subclass = (rawSubclass.Contains("Requires Level", StringComparison.OrdinalIgnoreCase))
+            CurrentCharacter.Subclass = (rawSubclass.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) ||
+                                         rawSubclass.StartsWith("(No", StringComparison.OrdinalIgnoreCase))
                 ? ""
                 : rawSubclass;
+
+            // Mirror primary class/subclass onto ClassLevels when single-class
+            if (CurrentCharacter.ClassLevels != null && CurrentCharacter.ClassLevels.Count == 1 &&
+                !string.IsNullOrWhiteSpace(CurrentCharacter.Class))
+            {
+                CurrentCharacter.ClassLevels[0].ClassName = CurrentCharacter.Class;
+                if (!string.IsNullOrWhiteSpace(CurrentCharacter.Subclass))
+                    CurrentCharacter.ClassLevels[0].Subclass = CurrentCharacter.Subclass;
+            }
+
+            // Total character level from class levels (or keep at least 1)
+            if (CurrentCharacter.ClassLevels != null && CurrentCharacter.ClassLevels.Count > 0)
+                CurrentCharacter.Level = Math.Clamp(
+                    CurrentCharacter.ClassLevels.Sum(e => e.Levels), 1, 20);
+            else if (CurrentCharacter.Level <= 0)
+                CurrentCharacter.Level = 1;
 
             if (dgFeats.SelectedItem is Feat feat)
                 CurrentCharacter.SelectedFeat = feat.Name;
@@ -8440,7 +8573,8 @@ namespace Nemo
             // Calculate and store final speed (including Mobile feat)
             CurrentCharacter.Speed = GetFinalSpeed();
 
-            // Skills
+            // Skills (rebuild from UI)
+            CurrentCharacter.Skills ??= new List<SkillEntry>();
             CurrentCharacter.Skills.Clear();
             foreach (var skill in allSkills.Where(s => s.IsProficient))
             {
@@ -8453,7 +8587,8 @@ namespace Nemo
                 });
             }
 
-            // Equipment
+            // Equipment (rebuild from UI)
+            CurrentCharacter.Equipment ??= new List<string>();
             CurrentCharacter.Equipment.Clear();
             foreach (var child in pnlTotalEquipmentSummary.Children.OfType<TextBlock>())
             {
@@ -8463,7 +8598,7 @@ namespace Nemo
             }
             CurrentCharacter.BackgroundEquipment = txtBackgroundEquipment?.Text ?? "";
 
-            // Spells
+            // Spells (rebuild from UI; Level1Spells stores all selected leveled spells 1–9)
             CurrentCharacter.Cantrips = cantripOptions.Where(c => c.IsChecked).Select(c => c.Name).ToList();
             CurrentCharacter.CantripClassAssignments = cantripOptions
                 .Where(c => c.IsChecked && !string.IsNullOrWhiteSpace(c.AssignedClassKey))
@@ -8475,15 +8610,26 @@ namespace Nemo
             CurrentCharacter.Initiative = GetModifierFromText(txtInitiative.Text);
             CurrentCharacter.HitPoints = int.TryParse(txtHitPoints.Text, out int hp) ? hp : 0;
 
-            // === Armor Class (Base + Equipped) ===
-            CurrentCharacter.ArmorClass = int.TryParse(txtBaseAC.Text, out int ac) ? ac : 10;
-
-            // Capture the nice formatted Equipped AC string shown in the UI
+            // === Armor Class (Base + Equipped, including Defense style when armored) ===
+            // Prefer the equipped total (includes armor, shield, Defense fighting style).
+            // Refresh first so Defense / equipment changes are reflected before export/save.
+            UpdateEquippedAC();
             if (txtEquippedAC != null &&
                 txtEquippedAC.Visibility == Visibility.Visible &&
                 !string.IsNullOrWhiteSpace(txtEquippedAC.Text))
             {
                 CurrentCharacter.EquippedACDisplay = txtEquippedAC.Text;
+                var acMatch = System.Text.RegularExpressions.Regex.Match(
+                    txtEquippedAC.Text, @"^\((\d+)\)");
+                if (acMatch.Success && int.TryParse(acMatch.Groups[1].Value, out int equippedTotal))
+                    CurrentCharacter.ArmorClass = equippedTotal;
+                else
+                    CurrentCharacter.ArmorClass = int.TryParse(txtBaseAC?.Text, out int fallbackAc) ? fallbackAc : 10;
+            }
+            else
+            {
+                CurrentCharacter.ArmorClass = int.TryParse(txtBaseAC?.Text, out int ac) ? ac : 10;
+                CurrentCharacter.EquippedACDisplay = "";
             }
 
             if (cmbClass.SelectedItem is string className &&
@@ -8503,6 +8649,15 @@ namespace Nemo
 
             CurrentCharacter.HighElfCantrip = highElfCantrip;
             CurrentCharacter.RaceGrantedSkill = raceGrantedSkill;
+
+            // Ensure list fields used by level-up / class features are non-null for serialization
+            CurrentCharacter.ClassLevels ??= new List<ClassLevelEntry>();
+            CurrentCharacter.AsiOrFeatDecisions ??= new List<AsiOrFeatDecision>();
+            CurrentCharacter.FightingStyles ??= new List<string>();
+            CurrentCharacter.EldritchInvocations ??= new List<string>();
+            CurrentCharacter.MetamagicOptions ??= new List<string>();
+            CurrentCharacter.HitPointRolls ??= new List<int>();
+            CurrentCharacter.BackgroundLanguages ??= new List<string>();
 
             // === Save to fixed path next to the .exe ===
             try

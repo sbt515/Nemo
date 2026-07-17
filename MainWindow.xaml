@@ -36,48 +36,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- ComboBox styling (matches explicit #2A2A2A combos used on Class/Race tabs).
-             WPF's default template often paints a light selection face, so Foreground is
-             dark gray for readable closed-state text; dropdown items stay light-on-dark. -->
-        <Style TargetType="ComboBox">
-            <Setter Property="Foreground"
-                    Value="#2A2A2A"/>
-            <Setter Property="Background"
-                    Value="#2A2A2A"/>
-            <Setter Property="BorderBrush"
-                    Value="#555"/>
-            <Setter Property="Padding"
-                    Value="8,4"/>
-            <Setter Property="HorizontalContentAlignment"
-                    Value="Left"/>
-            <Setter Property="VerticalContentAlignment"
-                    Value="Center"/>
-        </Style>
-
-        <Style TargetType="ComboBoxItem">
-            <Setter Property="Foreground"
-                    Value="White"/>
-            <Setter Property="Background"
-                    Value="#1E1E1E"/>
-            <Setter Property="Padding"
-                    Value="8,4"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver"
-                         Value="True">
-                    <Setter Property="Background"
-                            Value="#3A7CA5"/>
-                    <Setter Property="Foreground"
-                            Value="White"/>
-                </Trigger>
-                <Trigger Property="IsSelected"
-                         Value="True">
-                    <Setter Property="Background"
-                            Value="#4A7C59"/>
-                    <Setter Property="Foreground"
-                            Value="White"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
+        <!-- ComboBox / ComboBoxItem global styles live in App.xaml (full item template). -->
         <Style TargetType="RadioButton">
             <Setter Property="Foreground"
                     Value="White"/>
@@ -210,7 +169,7 @@
                                   Height="34"
                                   FontSize="15"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   BorderBrush="#555"
                                   Padding="8,4"
                                   SelectionChanged="cmbRace_SelectionChanged"/>
@@ -224,7 +183,7 @@
                                   Height="34"
                                   FontSize="15"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   BorderBrush="#555"
                                   Padding="8,4"
                                   SelectionChanged="cmbSubrace_SelectionChanged"
@@ -247,12 +206,12 @@
                                           Height="32"
                                           Margin="0,0,6,0"
                                           Background="#2A2A2A"
-                                          Foreground="#2A2A2A"/>
+                                          Foreground="#F0F0F0"/>
                                 <ComboBox x:Name="cmbFlexibleBonus2"
                                           Height="32"
                                           Grid.Column="1"
                                           Background="#2A2A2A"
-                                          Foreground="#2A2A2A"/>
+                                          Foreground="#F0F0F0"/>
                             </Grid>
                         </StackPanel>
 
@@ -284,7 +243,7 @@
                                       Visibility="Collapsed"
                                       SelectionChanged="RaceGrantedSkill_Changed"
                                       Background="#2A2A2A"
-                                      Foreground="#2A2A2A"
+                                      Foreground="#F0F0F0"
                                       BorderBrush="#555"/>
                         </StackPanel>
 
@@ -299,7 +258,7 @@
                             <ComboBox x:Name="cmbHighElfCantrip"
                                       Height="34"
                                       Background="#2A2A2A"
-                                      Foreground="#2A2A2A"
+                                      Foreground="#F0F0F0"
                                       BorderBrush="#555"
                                       SelectionChanged="HighElfCantrip_SelectionChanged"/>
                         </StackPanel>
@@ -365,7 +324,7 @@
                                   Height="34"
                                   FontSize="15"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   BorderBrush="#555"
                                   Padding="8,4"
                                   SelectionChanged="cmbBackground_SelectionChanged"/>
@@ -384,7 +343,7 @@
                                       Height="32"
                                       FontSize="14"
                                       Background="#2A2A2A"
-                                      Foreground="#2A2A2A"
+                                      Foreground="#F0F0F0"
                                       BorderBrush="#555"
                                       Margin="0,0,0,8"
                                       Visibility="Collapsed"/>
@@ -393,7 +352,7 @@
                                       Height="32"
                                       FontSize="14"
                                       Background="#2A2A2A"
-                                      Foreground="#2A2A2A"
+                                      Foreground="#F0F0F0"
                                       BorderBrush="#555"
                                       Visibility="Collapsed"/>
                         </StackPanel>
@@ -429,7 +388,7 @@
                                   Height="34"
                                   FontSize="15"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   BorderBrush="#555"
                                   Padding="8,4"
                                   SelectionChanged="cmbClass_SelectionChanged"/>
@@ -442,7 +401,7 @@
                                   Height="34"
                                   FontSize="15"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   BorderBrush="#555"
                                   Padding="8,4"
                                   IsEnabled="False"/>
@@ -1488,37 +1447,37 @@
                                   Height="32"
                                   Margin="0,4"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   Visibility="Collapsed"/>
                         <ComboBox x:Name="cmbWeaponChoice2"
                                   Height="32"
                                   Margin="0,4"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   Visibility="Collapsed"/>
                         <ComboBox x:Name="cmbWeaponChoice3"
                                   Height="32"
                                   Margin="0,4"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   Visibility="Collapsed"/>
                         <ComboBox x:Name="cmbWeaponChoice4"
                                   Height="32"
                                   Margin="0,4"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   Visibility="Collapsed"/>
                         <ComboBox x:Name="cmbWeaponChoice5"
                                   Height="32"
                                   Margin="0,4"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   Visibility="Collapsed"/>
                         <ComboBox x:Name="cmbWeaponChoice6"
                                   Height="32"
                                   Margin="0,4"
                                   Background="#2A2A2A"
-                                  Foreground="#2A2A2A"
+                                  Foreground="#F0F0F0"
                                   Visibility="Collapsed"/>
 
                         <!-- YOUR TOTAL STARTING EQUIPMENT -->
@@ -1565,7 +1524,7 @@
                             <ComboBox x:Name="cmbWeaponType"
                                       Height="32"
                                       Background="#2A2A2A"
-                                      Foreground="#2A2A2A"
+                                      Foreground="#F0F0F0"
                                       BorderBrush="#555"
                                       SelectedIndex="0">
                                 <ComboBoxItem Content="Simple Weapons"/>
@@ -1752,28 +1711,28 @@
                                 <ComboBox x:Name="cmbFeatStatChoice1"
                                           Height="32"
                                           Background="#2A2A2A"
-                                          Foreground="#2A2A2A"
+                                          Foreground="#F0F0F0"
                                           Margin="0,0,0,8"
                                           SelectionChanged="FeatStatChoice_Changed"/>
 
                                 <ComboBox x:Name="cmbFeatStatChoice2"
                                           Height="32"
                                           Background="#2A2A2A"
-                                          Foreground="#2A2A2A"
+                                          Foreground="#F0F0F0"
                                           Visibility="Collapsed"
                                           SelectionChanged="FeatStatChoice_Changed"/>
 
                                 <ComboBox x:Name="cmbFeatStatChoice3"
                                           Height="32"
                                           Background="#2A2A2A"
-                                          Foreground="#2A2A2A"
+                                          Foreground="#F0F0F0"
                                           Visibility="Collapsed"
                                           SelectionChanged="FeatStatChoice_Changed"/>
 
                                 <ComboBox x:Name="cmbFeatStatChoice4"
                                           Height="32"
                                           Background="#2A2A2A"
-                                          Foreground="#2A2A2A"
+                                          Foreground="#F0F0F0"
                                           Visibility="Collapsed"
                                           SelectionChanged="FeatStatChoice_Changed"/>
 
@@ -1942,7 +1901,7 @@
                                               Width="130"
                                               Height="28"
                                               Background="#2A2A2A"
-                                              Foreground="#2A2A2A"
+                                              Foreground="#F0F0F0"
                                               BorderBrush="#555"
                                               SelectionChanged="cmbSpellLevel_SelectionChanged"/>
                                 </StackPanel>

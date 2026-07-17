@@ -3,6 +3,203 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <!--
+            Global dark ComboBox theme.
+            Closed field: dark fill + light text (forced via full template).
+            Dropdown rows: dark fill, readable hover/selected contrast.
+        -->
+        <SolidColorBrush x:Key="Combo.FieldBg" Color="#2A2A2A"/>
+        <SolidColorBrush x:Key="Combo.FieldFg" Color="#F0F0F0"/>
+        <SolidColorBrush x:Key="Combo.Border" Color="#555555"/>
+        <SolidColorBrush x:Key="Combo.BorderHover" Color="#7A9BB0"/>
+        <SolidColorBrush x:Key="Combo.Arrow" Color="#CCCCCC"/>
+        <SolidColorBrush x:Key="Combo.ItemBg" Color="#252525"/>
+        <SolidColorBrush x:Key="Combo.ItemFg" Color="#F0F0F0"/>
+        <SolidColorBrush x:Key="Combo.HoverBg" Color="#2A5A78"/>
+        <SolidColorBrush x:Key="Combo.HoverFg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="Combo.SelectedBg" Color="#3D6B4A"/>
+        <SolidColorBrush x:Key="Combo.SelectedFg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="Combo.SelectedHoverBg" Color="#4A7C59"/>
+        <SolidColorBrush x:Key="Combo.PopupBg" Color="#1E1E1E"/>
+        <SolidColorBrush x:Key="Combo.PopupBorder" Color="#555555"/>
+        <SolidColorBrush x:Key="Combo.DisabledFg" Color="#888888"/>
+        <SolidColorBrush x:Key="Combo.DisabledBg" Color="#222222"/>
+
+        <!-- Dropdown list row -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Background" Value="{StaticResource Combo.ItemBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource Combo.ItemFg}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"
+                                              SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Combo.HoverBg}"/>
+                                <Setter Property="Foreground" Value="{StaticResource Combo.HoverFg}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Combo.SelectedBg}"/>
+                                <Setter Property="Foreground" Value="{StaticResource Combo.SelectedFg}"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSelected" Value="True"/>
+                                    <Condition Property="IsHighlighted" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Combo.SelectedHoverBg}"/>
+                                <Setter Property="Foreground" Value="{StaticResource Combo.SelectedFg}"/>
+                            </MultiTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource Combo.DisabledFg}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+            Closed ComboBox chrome: single overlay layout (not dual-column with MinWidth=full width,
+            which previously collapsed the content column to 0 and hid selected text).
+        -->
+        <ControlTemplate x:Key="ComboToggleButtonTemplate" TargetType="ToggleButton">
+            <Border x:Name="FieldBorder"
+                    Background="{StaticResource Combo.FieldBg}"
+                    BorderBrush="{StaticResource Combo.Border}"
+                    BorderThickness="1"
+                    CornerRadius="2"
+                    SnapsToDevicePixels="True">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="28"/>
+                    </Grid.ColumnDefinitions>
+                    <!-- Arrow only; selected text is drawn by the ComboBox ContentPresenter above this -->
+                    <Path x:Name="Arrow"
+                          Grid.Column="1"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Data="M 0 0 L 4 4 L 8 0 Z"
+                          Fill="{StaticResource Combo.Arrow}"/>
+                </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="FieldBorder" Property="BorderBrush" Value="{StaticResource Combo.BorderHover}"/>
+                </Trigger>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter TargetName="FieldBorder" Property="BorderBrush" Value="{StaticResource Combo.BorderHover}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter TargetName="FieldBorder" Property="Background" Value="{StaticResource Combo.DisabledBg}"/>
+                    <Setter TargetName="Arrow" Property="Fill" Value="{StaticResource Combo.DisabledFg}"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{StaticResource Combo.FieldFg}"/>
+            <Setter Property="Background" Value="{StaticResource Combo.FieldBg}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Combo.Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,5,32,5"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True"/>
+            <Setter Property="Stylus.IsFlicksEnabled" Value="False"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource {x:Type ComboBoxItem}}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <!-- Single cell grid: chrome behind, text in front with right padding for arrow -->
+                        <Grid x:Name="templateRoot" SnapsToDevicePixels="True">
+                            <ToggleButton x:Name="toggleButton"
+                                          Focusable="False"
+                                          ClickMode="Press"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Template="{StaticResource ComboToggleButtonTemplate}"/>
+
+                            <!-- Selected value — full width minus arrow gutter via Padding -->
+                            <ContentPresenter x:Name="contentPresenter"
+                                              Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              IsHitTestVisible="False"
+                                              RecognizesAccessKey="True"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                              TextElement.Foreground="{StaticResource Combo.FieldFg}"
+                                              SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}">
+                                <ContentPresenter.Resources>
+                                    <!-- Ensure generated TextBlocks for string items are light-on-dark -->
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource Combo.FieldFg}"/>
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
+
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   Placement="Bottom"
+                                   PopupAnimation="Slide">
+                                <Border x:Name="dropDownBorder"
+                                        MinWidth="{Binding ActualWidth, ElementName=templateRoot}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Background="{StaticResource Combo.PopupBg}"
+                                        BorderBrush="{StaticResource Combo.PopupBorder}"
+                                        BorderThickness="1"
+                                        CornerRadius="2"
+                                        Margin="0,1,0,0"
+                                        SnapsToDevicePixels="True">
+                                    <ScrollViewer CanContentScroll="{TemplateBinding ScrollViewer.CanContentScroll}">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"
+                                                        SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="dropDownBorder" Property="MinHeight" Value="40"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource Combo.DisabledFg}"/>
+                                <Setter TargetName="contentPresenter" Property="TextElement.Foreground" Value="{StaticResource Combo.DisabledFg}"/>
+                            </Trigger>
+                            <Trigger Property="IsGrouping" Value="True">
+                                <Setter Property="ScrollViewer.CanContentScroll" Value="False"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Application.Resources>
 </Application>

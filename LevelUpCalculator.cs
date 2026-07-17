@@ -317,10 +317,15 @@ namespace Nemo
                 return new List<ClassLevelEntry>();
 
             if (character.ClassLevels != null && character.ClassLevels.Count > 0)
-                return character.ClassLevels
+            {
+                var fromLevels = character.ClassLevels
                     .Where(e => e != null && e.Levels > 0 && !string.IsNullOrWhiteSpace(e.ClassName))
                     .Select(e => new ClassLevelEntry(e.ClassName, e.Levels, e.Subclass))
                     .ToList();
+                // If every row was empty/invalid, fall through to Class + Level
+                if (fromLevels.Count > 0)
+                    return fromLevels;
+            }
 
             if (string.IsNullOrWhiteSpace(character.Class))
                 return new List<ClassLevelEntry>();
