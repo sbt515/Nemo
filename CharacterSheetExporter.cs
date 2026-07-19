@@ -235,6 +235,252 @@ namespace Nemo
         }
 
         /// <summary>
+        /// UI-facing snapshot of the main values written to the official 5e fillable sheet.
+        /// Built with the same derivation path as <see cref="ExportToFile"/>.
+        /// </summary>
+        public sealed class SheetPreview
+        {
+            public string CharacterName { get; set; } = "";
+            public string PlayerName { get; set; } = "";
+            public string Race { get; set; } = "";
+            public string ClassLevel { get; set; } = "";
+            public string Background { get; set; } = "";
+            public string Feat { get; set; } = "";
+
+            public string ProficiencyBonus { get; set; } = "";
+            public string ArmorClass { get; set; } = "";
+            public string Initiative { get; set; } = "";
+            public string Speed { get; set; } = "";
+            public string HitPoints { get; set; } = "";
+            public string HitDice { get; set; } = "";
+            public int PassivePerception { get; set; }
+
+            public List<AbilityPreview> AbilityScores { get; set; } = new();
+            public List<SavePreview> SavingThrows { get; set; } = new();
+            public List<SkillPreview> ProficientSkills { get; set; } = new();
+            public List<WeaponAttackLine> Weapons { get; set; } = new();
+
+            public bool HasSpellcasting { get; set; }
+            public string SpellcastingClass { get; set; } = "";
+            public string SpellcastingAbility { get; set; } = "";
+            public string SpellSaveDC { get; set; } = "";
+            public string SpellAttackBonus { get; set; } = "";
+            public string SpellSlotsSummary { get; set; } = "";
+            public List<string> Cantrips { get; set; } = new();
+            public List<string> LeveledSpells { get; set; } = new();
+
+            /// <summary>Fighting styles, pact boon, invocations, metamagic, etc.</summary>
+            public List<string> ExtraSelections { get; set; } = new();
+            public string ProficienciesAndLanguages { get; set; } = "";
+            public List<string> Equipment { get; set; } = new();
+        }
+
+        public sealed class AbilityPreview
+        {
+            public string Name { get; set; } = "";
+            public string Abbreviation { get; set; } = "";
+            public int Score { get; set; }
+            public string Modifier { get; set; } = "";
+        }
+
+        public sealed class SavePreview
+        {
+            public string Name { get; set; } = "";
+            public string Bonus { get; set; } = "";
+            public bool IsProficient { get; set; }
+        }
+
+        public sealed class SkillPreview
+        {
+            public string Name { get; set; } = "";
+            public string Bonus { get; set; } = "";
+            public bool IsExpertise { get; set; }
+        }
+
+        /// <summary>
+        /// Builds a preview of the main stats/selections that will be written to the
+        /// official 5e fillable sheet. Uses the same calculation paths as export.
+        /// </summary>
+        public static SheetPreview BuildSheetPreview(Character character, ExportExtras? extras = null)
+        {
+            if (character == null) throw new ArgumentNullException(nameof(character));
+            extras ??= new ExportExtras();
+
+            string FmtMod(int m) => m >= 0 ? $"+{m}" : m.ToString();
+
+            var scores = character.AbilityScores ?? new AbilityScoreBlock();
+            int str = scores.Strength?.Final ?? 10;
+            int dex = scores.Dexterity?.Final ?? 10;
+            int con = scores.Constitution?.Final ?? 10;
+            int intel = scores.Intelligence?.Final ?? 10;
+            int wis = scores.Wisdom?.Final ?? 10;
+            int cha = scores.Charisma?.Final ?? 10;
+
+            int strMod = scores.Strength?.Modifier ?? Mod(str);
+            int dexMod = scores.Dexterity?.Modifier ?? Mod(dex);
+            int conMod = scores.Constitution?.Modifier ?? Mod(con);
+            int intMod = scores.Intelligence?.Modifier ?? Mod(intel);
+            int wisMod = scores.Wisdom?.Modifier ?? Mod(wis);
+            int chaMod = scores.Charisma?.Modifier ?? Mod(cha);
+
+            int prof = character.ProficiencyBonus > 0 ? character.ProficiencyBonus : 2;
+
+            string raceDisplay = string.IsNullOrWhiteSpace(character.Subrace)
+                ? (character.Race ?? "")
+                : $"{character.Race} ({character.Subrace})";
+
+            string hitDice = extras.HitDice ?? DeriveHitDice(character);
+            var saves = extras.SavingThrows ?? DeriveSavingThrows(character, prof);
+            var skills = extras.Skills ?? DeriveSkills(character, prof);
+            var weapons = extras.Weapons ?? DeriveWeapons(character, prof);
+
+            var perception = skills.FirstOrDefault(s =>
+                s.Name.Equals("Perception", StringComparison.OrdinalIgnoreCase));
+            int passive = 10 + (perception?.Bonus ?? wisMod);
+
+            var preview = new SheetPreview
+            {
+                CharacterName = character.Name ?? "",
+                PlayerName = character.PlayerName ?? "",
+                Race = raceDisplay,
+                ClassLevel = BuildClassLevel(character),
+                Background = character.Background ?? "",
+                Feat = character.SelectedFeat ?? "",
+                ProficiencyBonus = FmtMod(prof),
+                ArmorClass = FormatAcForSheet(character),
+                Initiative = FmtMod(character.Initiative != 0 ? character.Initiative : dexMod),
+                Speed = character.Speed > 0 ? $"{character.Speed} ft." : "30 ft.",
+                HitPoints = character.HitPoints > 0 ? character.HitPoints.ToString() : "—",
+                HitDice = hitDice,
+                PassivePerception = passive,
+                ProficienciesAndLanguages = extras.ProficienciesAndLanguages
+                    ?? DeriveProficienciesAndLanguages(character),
+            };
+
+            preview.AbilityScores.AddRange(new[]
+            {
+                new AbilityPreview { Name = "Strength", Abbreviation = "STR", Score = str, Modifier = FmtMod(strMod) },
+                new AbilityPreview { Name = "Dexterity", Abbreviation = "DEX", Score = dex, Modifier = FmtMod(dexMod) },
+                new AbilityPreview { Name = "Constitution", Abbreviation = "CON", Score = con, Modifier = FmtMod(conMod) },
+                new AbilityPreview { Name = "Intelligence", Abbreviation = "INT", Score = intel, Modifier = FmtMod(intMod) },
+                new AbilityPreview { Name = "Wisdom", Abbreviation = "WIS", Score = wis, Modifier = FmtMod(wisMod) },
+                new AbilityPreview { Name = "Charisma", Abbreviation = "CHA", Score = cha, Modifier = FmtMod(chaMod) },
+            });
+
+            foreach (var save in saves)
+            {
+                preview.SavingThrows.Add(new SavePreview
+                {
+                    Name = save.Name,
+                    Bonus = FmtMod(save.Bonus),
+                    IsProficient = save.IsProficient
+                });
+            }
+
+            foreach (var skill in skills.Where(s => s.IsProficient).OrderBy(s => s.Name))
+            {
+                preview.ProficientSkills.Add(new SkillPreview
+                {
+                    Name = skill.Name,
+                    Bonus = FmtMod(skill.Bonus),
+                    IsExpertise = skill.IsExpertise
+                });
+            }
+
+            preview.Weapons.AddRange(weapons.Take(6));
+
+            // Spellcasting (same gates / values as page 3 of the sheet)
+            var classLevels = LevelUpCalculator.GetClassLevelsFromCharacter(character);
+            bool hasSpellContent =
+                !string.IsNullOrWhiteSpace(character.SpellcastingAbility) ||
+                (character.Cantrips?.Count > 0) ||
+                (character.Level1Spells?.Count > 0) ||
+                classLevels.Any(e =>
+                    SpellSlotCalculator.GetProgressionKind(e.ClassName, e.Subclass) !=
+                    CasterProgressionKind.None);
+
+            if (hasSpellContent)
+            {
+                preview.HasSpellcasting = true;
+                preview.SpellcastingClass = BuildSpellcastingClassLabel(character, classLevels);
+
+                string abilityAbbr = (character.SpellcastingAbility ?? "").Trim().ToUpperInvariant() switch
+                {
+                    "INTELLIGENCE" or "INT" => "INT",
+                    "WISDOM" or "WIS" => "WIS",
+                    "CHARISMA" or "CHA" => "CHA",
+                    _ => AbbreviateAbility(character.SpellcastingAbility)
+                };
+                preview.SpellcastingAbility = abilityAbbr;
+
+                if (character.SpellSaveDC > 0)
+                    preview.SpellSaveDC = character.SpellSaveDC.ToString();
+                if (character.SpellAttackBonus != 0 || character.SpellSaveDC > 0)
+                {
+                    preview.SpellAttackBonus = character.SpellAttackBonus >= 0
+                        ? $"+{character.SpellAttackBonus}"
+                        : character.SpellAttackBonus.ToString();
+                }
+
+                int[] slotsByLevel = extras.SpellSlotsByLevel ?? DeriveSpellSlotsByLevel(character, extras);
+                var slotParts = new List<string>();
+                string[] ordinals = { "", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th" };
+                for (int lvl = 1; lvl <= 9; lvl++)
+                {
+                    int n = lvl < slotsByLevel.Length ? Math.Max(0, slotsByLevel[lvl]) : 0;
+                    if (n > 0)
+                        slotParts.Add($"{ordinals[lvl]}×{n}");
+                }
+                preview.SpellSlotsSummary = slotParts.Count > 0 ? string.Join(", ", slotParts) : "—";
+
+                foreach (var line in BuildCantripExportLines(character))
+                    preview.Cantrips.Add(line.DisplayText);
+
+                var byLevel = BuildLeveledSpellExportLines(character, classLevels);
+                for (int lvl = 1; lvl <= 9; lvl++)
+                {
+                    if (!byLevel.TryGetValue(lvl, out var lines) || lines.Count == 0)
+                        continue;
+                    foreach (var line in lines)
+                        preview.LeveledSpells.Add($"{ordinals[lvl]}: {line.DisplayText}");
+                }
+            }
+
+            // Class feature selections (same extras the sheet may list under features)
+            if (character.FightingStyles != null && character.FightingStyles.Count > 0)
+                preview.ExtraSelections.Add("Fighting Style: " + string.Join(", ", character.FightingStyles));
+            if (!string.IsNullOrWhiteSpace(character.WarlockPactBoon))
+                preview.ExtraSelections.Add("Pact Boon: " + character.WarlockPactBoon.Trim());
+            if (character.EldritchInvocations != null && character.EldritchInvocations.Count > 0)
+                preview.ExtraSelections.Add("Invocations: " + string.Join(", ", character.EldritchInvocations));
+            if (character.MetamagicOptions != null && character.MetamagicOptions.Count > 0)
+                preview.ExtraSelections.Add("Metamagic: " + string.Join(", ", character.MetamagicOptions));
+            if (!string.IsNullOrWhiteSpace(character.HighElfCantrip))
+                preview.ExtraSelections.Add("High Elf Cantrip: " + character.HighElfCantrip.Trim());
+            if (!string.IsNullOrWhiteSpace(character.RaceGrantedSkill))
+                preview.ExtraSelections.Add("Race Skill: " + character.RaceGrantedSkill.Trim());
+
+            // Equipment list (same merge as sheet Equipment field)
+            if (character.Equipment != null)
+            {
+                foreach (var item in character.Equipment.Where(e => !string.IsNullOrWhiteSpace(e)))
+                    preview.Equipment.Add(item.Trim());
+            }
+            if (!string.IsNullOrWhiteSpace(character.BackgroundEquipment))
+            {
+                foreach (var line in character.BackgroundEquipment.Split(
+                             new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string t = line.Trim();
+                    if (t.Length > 0 && !preview.Equipment.Contains(t, StringComparer.OrdinalIgnoreCase))
+                        preview.Equipment.Add(t);
+                }
+            }
+
+            return preview;
+        }
+
+        /// <summary>
         /// Resolves the bundled template path next to the executable (or in Templates/).
         /// </summary>
         public static string? FindTemplatePath()

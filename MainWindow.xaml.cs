@@ -788,17 +788,17 @@ namespace Nemo
             UpdateExpertiseSelectableState();
             UpdateSavingThrows();
             UpdateFeatsTabVisibility();
+            UpdateSpellTabVisibility();
             UpdateStatDisplays();
             // Multiclass / secondary-class subclasses (e.g. Twilight Cleric) grant armor & weapons
             UpdateEquipmentProficiencySummary();
 
             // Always refresh spell level unlocks when levels change (Ranger 5 → 2nd-level slots, etc.)
             // even if the Spells tab is not currently open. Isolated so failures don't break +/− levels.
+            // Includes third-caster subclasses (Arcane Trickster / Eldritch Knight), not only base casters.
             try
             {
-                if (cmbClass?.SelectedItem is string casterClass &&
-                    GameData.ClassData.TryGetValue(casterClass, out var casterData) &&
-                    casterData.Spellcasting)
+                if (CharacterHasSpellcastingFeature())
                 {
                     if (cantripOptions.Count == 0 || spell1Options.Count == 0)
                     {
@@ -3102,6 +3102,7 @@ namespace Nemo
             }
 
             RefreshClassDetailsPanel();
+            UpdateSpellTabVisibility();
             PopulateSpells();
 
             UpdateEquipmentProficiencySummary();
@@ -5625,34 +5626,56 @@ namespace Nemo
             return tags.Any(t => t.Contains("Shield", StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// True when the character can cast spells from class levels, a spellcasting subclass
+        /// (e.g. Arcane Trickster / Eldritch Knight), or racial innate spells.
+        /// Syncs single-class UI subclass onto <see cref="Character.ClassLevels"/> first.
+        /// </summary>
         private bool CharacterHasSpellcastingFeature()
         {
             if (raceHasInnateSpellcasting)
                 return true;
 
-            var entries = CurrentCharacter?.ClassLevels?
-                .Where(e => e != null && e.Levels > 0 && !string.IsNullOrWhiteSpace(e.ClassName))
-                .ToList();
-
-            if (entries != null && entries.Count > 0)
+            // Prefer live class levels (keeps Level-tab + Class-tab subclass picks in sync)
+            List<ClassLevelEntry> entries;
+            try
             {
-                foreach (var e in entries)
-                {
-                    if (GameData.ClassData.TryGetValue(e.ClassName, out var data) && data.Spellcasting)
-                        return true;
-                    // Third-casters
-                    if (SpellProgressionCalculator.IsThirdCasterSubclass(e.ClassName, e.Subclass))
-                        return true;
-                }
-                return false;
+                entries = GetActiveClassLevels();
+            }
+            catch
+            {
+                entries = CurrentCharacter?.ClassLevels?
+                    .Where(e => e != null && e.Levels > 0 && !string.IsNullOrWhiteSpace(e.ClassName))
+                    .ToList() ?? new List<ClassLevelEntry>();
             }
 
-            if (cmbClass?.SelectedItem is string className &&
+            foreach (var e in entries)
+            {
+                if (e == null || e.Levels <= 0 || string.IsNullOrWhiteSpace(e.ClassName))
+                    continue;
+
+                if (GameData.ClassData.TryGetValue(e.ClassName, out var data) && data.Spellcasting)
+                    return true;
+
+                // Eldritch Knight / Arcane Trickster (and any progression kind with slots)
+                if (SpellProgressionCalculator.IsThirdCasterSubclass(e.ClassName, e.Subclass))
+                    return true;
+
+                if (SpellSlotCalculator.GetProgressionKind(e.ClassName, e.Subclass) !=
+                    CasterProgressionKind.None)
+                    return true;
+            }
+
+            // Fallback when ClassLevels is empty: Class-tab combos only
+            if (entries.Count == 0 &&
+                cmbClass?.SelectedItem is string className &&
                 GameData.ClassData.TryGetValue(className, out var cd))
             {
                 if (cd.Spellcasting) return true;
                 string? sub = GetUiSelectedSubclassName();
                 if (SpellProgressionCalculator.IsThirdCasterSubclass(className, sub))
+                    return true;
+                if (SpellSlotCalculator.GetProgressionKind(className, sub) != CasterProgressionKind.None)
                     return true;
             }
 
@@ -5936,16 +5959,12 @@ namespace Nemo
 
         private void UpdateSpellTabVisibility()
         {
-            if (cmbClass.SelectedItem is string className &&
-                GameData.ClassData.TryGetValue(className, out var classData))
-            {
-                bool hasSpellcasting = classData.Spellcasting || raceHasInnateSpellcasting;
-                tabSpells.Visibility = hasSpellcasting ? Visibility.Visible : Visibility.Collapsed;
-            }
-            else
-            {
-                tabSpells.Visibility = raceHasInnateSpellcasting ? Visibility.Visible : Visibility.Collapsed;
-            }
+            if (tabSpells == null) return;
+
+            // Include full/half casters, third-caster subclasses (Arcane Trickster, Eldritch Knight),
+            // and racial innate spellcasting — not only ClassData.Spellcasting on the base class.
+            bool hasSpellcasting = CharacterHasSpellcastingFeature();
+            tabSpells.Visibility = hasSpellcasting ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void UpdateSubclassSpellsLabel()
@@ -6089,6 +6108,13 @@ namespace Nemo
                             }
                         }
                     }), System.Windows.Threading.DispatcherPriority.Background);
+                }
+
+                // === SUMMARY & EXPORT TAB ===
+                else if (tab == tabSummaryExport)
+                {
+                    Dispatcher.BeginInvoke(new Action(RefreshExportPreview),
+                        System.Windows.Threading.DispatcherPriority.Background);
                 }
             }
         }
@@ -7997,6 +8023,440 @@ namespace Nemo
         }
 
         /// <summary>
+        /// Shared extras passed into the official 5e sheet export (and the summary preview).
+        /// </summary>
+        private CharacterSheetExporter.ExportExtras BuildOfficialSheetExtras()
+        {
+            var extras = new CharacterSheetExporter.ExportExtras
+            {
+                Skills = BuildFullSkillListForPDF(),
+                SavingThrows = GetSavingThrows(),
+                Weapons = GetFormattedEquippedWeapons()
+                    .Select(line =>
+                    {
+                        // "Name | Attack +X | Damage YdZ+N | ..."
+                        var parts = line.Split('|').Select(p => p.Trim()).ToArray();
+                        return new CharacterSheetExporter.WeaponAttackLine
+                        {
+                            Name = parts.Length > 0 ? parts[0] : "",
+                            AttackBonus = parts.Length > 1
+                                ? parts[1].Replace("Attack", "", StringComparison.OrdinalIgnoreCase).Trim()
+                                : "",
+                            Damage = parts.Length > 2
+                                ? parts[2].Replace("Damage", "", StringComparison.OrdinalIgnoreCase).Trim()
+                                : ""
+                        };
+                    }).ToList(),
+                // Total hit dice from all class levels, e.g. 5d10 or 5d10/3d8
+                HitDice = LevelUpCalculator.FormatHitDicePool(
+                    LevelUpCalculator.GetHitDicePool(GetActiveClassLevels()))
+                // Spell slots (1st–9th) and page-3 spell lists are derived inside
+                // CharacterSheetExporter from ClassLevels + selected/subclass spells.
+            };
+            if (string.IsNullOrWhiteSpace(extras.HitDice) || extras.HitDice == "—")
+                extras.HitDice = "1d8";
+            return extras;
+        }
+
+        /// <summary>
+        /// Rebuilds the Summary &amp; Export tab preview using the same values as the 5e fillable PDF.
+        /// </summary>
+        private static SolidColorBrush PreviewBrush(string hex) =>
+            new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(hex));
+
+        private void RefreshExportPreview()
+        {
+            if (pnlExportPreview == null)
+                return;
+
+            try
+            {
+                // Pull latest UI state into CurrentCharacter (same as export)
+                AutoSaveCharacterToJson();
+
+                if (CurrentCharacter == null)
+                {
+                    pnlExportPreview.Children.Clear();
+                    pnlExportPreview.Children.Add(new TextBlock
+                    {
+                        Text = "No character loaded yet.",
+                        Foreground = PreviewBrush("#AAA"),
+                        FontSize = 13,
+                        TextWrapping = TextWrapping.Wrap
+                    });
+                    return;
+                }
+
+                var extras = BuildOfficialSheetExtras();
+                var preview = CharacterSheetExporter.BuildSheetPreview(CurrentCharacter, extras);
+                RenderExportPreview(preview);
+            }
+            catch (Exception ex)
+            {
+                pnlExportPreview.Children.Clear();
+                pnlExportPreview.Children.Add(new TextBlock
+                {
+                    Text = "Could not build preview:\n" + ex.Message,
+                    Foreground = PreviewBrush("#E88"),
+                    FontSize = 13,
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+        }
+
+        private void RenderExportPreview(CharacterSheetExporter.SheetPreview p)
+        {
+            pnlExportPreview.Children.Clear();
+
+            var accent = PreviewBrush("#7CFC00");
+            var muted = PreviewBrush("#AAA");
+            var bright = PreviewBrush("#F0F0F0");
+            var cyan = PreviewBrush("#9CDCFE");
+            var gold = PreviewBrush("#E8C36A");
+
+            // ── Identity header ──
+            string title = string.IsNullOrWhiteSpace(p.CharacterName) ? "(Unnamed Character)" : p.CharacterName;
+            pnlExportPreview.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 22,
+                FontWeight = FontWeights.Bold,
+                Foreground = accent,
+                Margin = new Thickness(0, 0, 0, 2)
+            });
+
+            if (!string.IsNullOrWhiteSpace(p.PlayerName))
+            {
+                pnlExportPreview.Children.Add(new TextBlock
+                {
+                    Text = "Player: " + p.PlayerName,
+                    FontSize = 12,
+                    Foreground = muted,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+            }
+
+            var identityLines = new List<string>();
+            if (!string.IsNullOrWhiteSpace(p.ClassLevel))
+                identityLines.Add(p.ClassLevel);
+            if (!string.IsNullOrWhiteSpace(p.Race))
+                identityLines.Add(p.Race);
+            if (!string.IsNullOrWhiteSpace(p.Background))
+                identityLines.Add(p.Background);
+            if (identityLines.Count > 0)
+            {
+                pnlExportPreview.Children.Add(new TextBlock
+                {
+                    Text = string.Join("  •  ", identityLines),
+                    FontSize = 14,
+                    Foreground = cyan,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+            }
+
+            if (!string.IsNullOrWhiteSpace(p.Feat))
+            {
+                pnlExportPreview.Children.Add(new TextBlock
+                {
+                    Text = "Feat: " + p.Feat,
+                    FontSize = 13,
+                    Foreground = gold,
+                    Margin = new Thickness(0, 0, 0, 10)
+                });
+            }
+            else
+            {
+                pnlExportPreview.Children.Add(new Border { Height = 6 });
+            }
+
+            // ── Combat strip ──
+            AddPreviewSectionHeader(pnlExportPreview, "COMBAT STATS", accent);
+            var combatGrid = new UniformGrid { Columns = 6, Margin = new Thickness(0, 0, 0, 12) };
+            void AddCombatCell(string label, string value)
+            {
+                var sp = new StackPanel { Margin = new Thickness(0, 0, 8, 6) };
+                sp.Children.Add(new TextBlock
+                {
+                    Text = label,
+                    FontSize = 11,
+                    Foreground = muted,
+                    FontWeight = FontWeights.SemiBold
+                });
+                sp.Children.Add(new TextBlock
+                {
+                    Text = string.IsNullOrWhiteSpace(value) ? "—" : value,
+                    FontSize = 16,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = bright
+                });
+                combatGrid.Children.Add(sp);
+            }
+            AddCombatCell("Armor Class", p.ArmorClass);
+            AddCombatCell("Initiative", p.Initiative);
+            AddCombatCell("Speed", p.Speed);
+            AddCombatCell("Hit Points", p.HitPoints);
+            AddCombatCell("Hit Dice", p.HitDice);
+            AddCombatCell("Proficiency", p.ProficiencyBonus);
+            pnlExportPreview.Children.Add(combatGrid);
+
+            // Passive Perception under combat
+            pnlExportPreview.Children.Add(new TextBlock
+            {
+                Text = $"Passive Perception: {p.PassivePerception}",
+                FontSize = 13,
+                Foreground = bright,
+                Margin = new Thickness(0, -6, 0, 12)
+            });
+
+            // ── Ability scores ──
+            AddPreviewSectionHeader(pnlExportPreview, "ABILITY SCORES", accent);
+            var abilityGrid = new UniformGrid { Columns = 6, Margin = new Thickness(0, 0, 0, 14) };
+            foreach (var ab in p.AbilityScores)
+            {
+                var box = new Border
+                {
+                    Background = PreviewBrush("#2A2A2A"),
+                    BorderBrush = PreviewBrush("#444"),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(8, 6, 8, 6),
+                    Margin = new Thickness(0, 0, 6, 0)
+                };
+                var sp = new StackPanel { HorizontalAlignment = System.Windows.HorizontalAlignment.Center };
+                sp.Children.Add(new TextBlock
+                {
+                    Text = ab.Abbreviation,
+                    FontSize = 11,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = cyan,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+                });
+                sp.Children.Add(new TextBlock
+                {
+                    Text = ab.Score.ToString(),
+                    FontSize = 18,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = bright,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+                });
+                sp.Children.Add(new TextBlock
+                {
+                    Text = ab.Modifier,
+                    FontSize = 13,
+                    Foreground = accent,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+                });
+                box.Child = sp;
+                abilityGrid.Children.Add(box);
+            }
+            pnlExportPreview.Children.Add(abilityGrid);
+
+            // ── Saving throws ──
+            AddPreviewSectionHeader(pnlExportPreview, "SAVING THROWS", accent);
+            var saveParts = p.SavingThrows.Select(s =>
+            {
+                string mark = s.IsProficient ? "●" : "○";
+                return $"{mark} {s.Name} {s.Bonus}";
+            });
+            pnlExportPreview.Children.Add(new TextBlock
+            {
+                Text = string.Join("   ", saveParts),
+                FontSize = 13,
+                Foreground = bright,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12)
+            });
+
+            // ── Skills (proficient) ──
+            AddPreviewSectionHeader(pnlExportPreview, "SKILL PROFICIENCIES", accent);
+            if (p.ProficientSkills.Count == 0)
+            {
+                pnlExportPreview.Children.Add(new TextBlock
+                {
+                    Text = "None selected",
+                    FontSize = 13,
+                    Foreground = muted,
+                    Margin = new Thickness(0, 0, 0, 12)
+                });
+            }
+            else
+            {
+                string skillsLine = string.Join(", ", p.ProficientSkills.Select(s =>
+                    s.IsExpertise ? $"{s.Name} {s.Bonus} (expertise)" : $"{s.Name} {s.Bonus}"));
+                pnlExportPreview.Children.Add(new TextBlock
+                {
+                    Text = skillsLine,
+                    FontSize = 13,
+                    Foreground = bright,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 12)
+                });
+            }
+
+            // ── Attacks ──
+            AddPreviewSectionHeader(pnlExportPreview, "ATTACKS", accent);
+            if (p.Weapons.Count == 0)
+            {
+                pnlExportPreview.Children.Add(new TextBlock
+                {
+                    Text = "No weapons equipped",
+                    FontSize = 13,
+                    Foreground = muted,
+                    Margin = new Thickness(0, 0, 0, 12)
+                });
+            }
+            else
+            {
+                foreach (var w in p.Weapons)
+                {
+                    pnlExportPreview.Children.Add(new TextBlock
+                    {
+                        Text = $"{w.Name}   {w.AttackBonus}   {w.Damage}",
+                        FontSize = 13,
+                        Foreground = bright,
+                        Margin = new Thickness(0, 0, 0, 2)
+                    });
+                }
+                pnlExportPreview.Children.Add(new Border { Height = 10 });
+            }
+
+            // ── Spellcasting ──
+            if (p.HasSpellcasting)
+            {
+                AddPreviewSectionHeader(pnlExportPreview, "SPELLCASTING", accent);
+                var spellHeader = new List<string>();
+                if (!string.IsNullOrWhiteSpace(p.SpellcastingClass))
+                    spellHeader.Add(p.SpellcastingClass);
+                if (!string.IsNullOrWhiteSpace(p.SpellcastingAbility))
+                    spellHeader.Add(p.SpellcastingAbility);
+                if (!string.IsNullOrWhiteSpace(p.SpellSaveDC))
+                    spellHeader.Add("DC " + p.SpellSaveDC);
+                if (!string.IsNullOrWhiteSpace(p.SpellAttackBonus))
+                    spellHeader.Add("Atk " + p.SpellAttackBonus);
+                if (spellHeader.Count > 0)
+                {
+                    pnlExportPreview.Children.Add(new TextBlock
+                    {
+                        Text = string.Join("  •  ", spellHeader),
+                        FontSize = 13,
+                        Foreground = cyan,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 4)
+                    });
+                }
+                if (!string.IsNullOrWhiteSpace(p.SpellSlotsSummary) && p.SpellSlotsSummary != "—")
+                {
+                    pnlExportPreview.Children.Add(new TextBlock
+                    {
+                        Text = "Slots: " + p.SpellSlotsSummary,
+                        FontSize = 13,
+                        Foreground = bright,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 4)
+                    });
+                }
+                if (p.Cantrips.Count > 0)
+                {
+                    pnlExportPreview.Children.Add(new TextBlock
+                    {
+                        Text = "Cantrips: " + string.Join(", ", p.Cantrips),
+                        FontSize = 13,
+                        Foreground = bright,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 4)
+                    });
+                }
+                if (p.LeveledSpells.Count > 0)
+                {
+                    // Keep the preview compact — show first ~12, then a count of remaining
+                    const int maxShow = 12;
+                    var shown = p.LeveledSpells.Take(maxShow).ToList();
+                    string spellsText = string.Join("  |  ", shown);
+                    if (p.LeveledSpells.Count > maxShow)
+                        spellsText += $"  … (+{p.LeveledSpells.Count - maxShow} more)";
+                    pnlExportPreview.Children.Add(new TextBlock
+                    {
+                        Text = "Spells: " + spellsText,
+                        FontSize = 12,
+                        Foreground = bright,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 4)
+                    });
+                }
+                pnlExportPreview.Children.Add(new Border { Height = 8 });
+            }
+
+            // ── Other selections ──
+            if (p.ExtraSelections.Count > 0)
+            {
+                AddPreviewSectionHeader(pnlExportPreview, "FEATURE SELECTIONS", accent);
+                foreach (var sel in p.ExtraSelections)
+                {
+                    pnlExportPreview.Children.Add(new TextBlock
+                    {
+                        Text = "• " + sel,
+                        FontSize = 13,
+                        Foreground = bright,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 2)
+                    });
+                }
+                pnlExportPreview.Children.Add(new Border { Height = 8 });
+            }
+
+            // ── Proficiencies & languages ──
+            if (!string.IsNullOrWhiteSpace(p.ProficienciesAndLanguages))
+            {
+                AddPreviewSectionHeader(pnlExportPreview, "PROFICIENCIES & LANGUAGES", accent);
+                pnlExportPreview.Children.Add(new TextBlock
+                {
+                    Text = p.ProficienciesAndLanguages.Replace("\r\n", "\n").Trim(),
+                    FontSize = 13,
+                    Foreground = bright,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 12)
+                });
+            }
+
+            // ── Equipment (compact) ──
+            if (p.Equipment.Count > 0)
+            {
+                AddPreviewSectionHeader(pnlExportPreview, "EQUIPMENT", accent);
+                const int maxEq = 20;
+                string eqText = string.Join(", ", p.Equipment.Take(maxEq));
+                if (p.Equipment.Count > maxEq)
+                    eqText += $" … (+{p.Equipment.Count - maxEq} more)";
+                pnlExportPreview.Children.Add(new TextBlock
+                {
+                    Text = eqText,
+                    FontSize = 12,
+                    Foreground = bright,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+            }
+        }
+
+        private static void AddPreviewSectionHeader(Panel parent, string title, Brush accent)
+        {
+            parent.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = accent,
+                Margin = new Thickness(0, 2, 0, 6)
+            });
+            parent.Children.Add(new Border
+            {
+                Height = 1,
+                Background = PreviewBrush("#3A3A3A"),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+        }
+
+        /// <summary>
         /// Fills the official 5e multi-page fillable character sheet PDF with the current character
         /// (reverse of Load Character from PDF).
         /// </summary>
@@ -8037,35 +8497,7 @@ namespace Nemo
 
             try
             {
-                var extras = new CharacterSheetExporter.ExportExtras
-                {
-                    Skills = BuildFullSkillListForPDF(),
-                    SavingThrows = GetSavingThrows(),
-                    Weapons = GetFormattedEquippedWeapons()
-                        .Select(line =>
-                        {
-                            // "Name | Attack +X | Damage YdZ+N | ..."
-                            var parts = line.Split('|').Select(p => p.Trim()).ToArray();
-                            return new CharacterSheetExporter.WeaponAttackLine
-                            {
-                                Name = parts.Length > 0 ? parts[0] : "",
-                                AttackBonus = parts.Length > 1
-                                    ? parts[1].Replace("Attack", "", StringComparison.OrdinalIgnoreCase).Trim()
-                                    : "",
-                                Damage = parts.Length > 2
-                                    ? parts[2].Replace("Damage", "", StringComparison.OrdinalIgnoreCase).Trim()
-                                    : ""
-                            };
-                        }).ToList(),
-                    // Total hit dice from all class levels, e.g. 5d10 or 5d10/3d8
-                    HitDice = LevelUpCalculator.FormatHitDicePool(
-                        LevelUpCalculator.GetHitDicePool(GetActiveClassLevels()))
-                    // Spell slots (1st–9th) and page-3 spell lists are derived inside
-                    // CharacterSheetExporter from ClassLevels + selected/subclass spells.
-                };
-                if (string.IsNullOrWhiteSpace(extras.HitDice) || extras.HitDice == "—")
-                    extras.HitDice = "1d8";
-
+                var extras = BuildOfficialSheetExtras();
                 CharacterSheetExporter.ExportToFile(CurrentCharacter, saveDlg.FileName, extras);
 
                 MessageBox.Show(
@@ -8918,19 +9350,55 @@ namespace Nemo
                 CurrentCharacter.EquippedACDisplay = "";
             }
 
-            if (cmbClass.SelectedItem is string className &&
-                GameData.ClassData.TryGetValue(className, out var classData))
+            // Spellcasting ability / DC / attack — include third-caster subclasses (AT / EK use Int)
             {
-                CurrentCharacter.SpellcastingAbility = classData.SpellAbility;
-                int mod = classData.SpellAbility switch
+                string spellAbility = "";
+                if (cmbClass.SelectedItem is string className &&
+                    GameData.ClassData.TryGetValue(className, out var classData) &&
+                    classData.Spellcasting &&
+                    !string.IsNullOrWhiteSpace(classData.SpellAbility))
                 {
-                    "Wisdom" => GetModifierFromText(txtWisMod.Text),
-                    "Charisma" => GetModifierFromText(txtChaMod.Text),
-                    "Intelligence" => GetModifierFromText(txtIntMod.Text),
-                    _ => 0
-                };
-                CurrentCharacter.SpellSaveDC = 8 + CurrentCharacter.ProficiencyBonus + mod;
-                CurrentCharacter.SpellAttackBonus = CurrentCharacter.ProficiencyBonus + mod;
+                    spellAbility = classData.SpellAbility;
+                }
+                else
+                {
+                    // Prefer any casting class level (multiclass or third-caster subclass)
+                    foreach (var e in GetActiveClassLevels())
+                    {
+                        if (SpellProgressionCalculator.IsThirdCasterSubclass(e.ClassName, e.Subclass))
+                        {
+                            spellAbility = "Intelligence";
+                            break;
+                        }
+                        if (GameData.ClassData.TryGetValue(e.ClassName, out var cd) &&
+                            cd.Spellcasting &&
+                            !string.IsNullOrWhiteSpace(cd.SpellAbility))
+                        {
+                            spellAbility = cd.SpellAbility;
+                            break;
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(spellAbility))
+                {
+                    CurrentCharacter.SpellcastingAbility = spellAbility;
+                    int mod = spellAbility switch
+                    {
+                        "Wisdom" => GetModifierFromText(txtWisMod.Text),
+                        "Charisma" => GetModifierFromText(txtChaMod.Text),
+                        "Intelligence" => GetModifierFromText(txtIntMod.Text),
+                        _ => 0
+                    };
+                    CurrentCharacter.SpellSaveDC = 8 + CurrentCharacter.ProficiencyBonus + mod;
+                    CurrentCharacter.SpellAttackBonus = CurrentCharacter.ProficiencyBonus + mod;
+                }
+                else
+                {
+                    CurrentCharacter.SpellcastingAbility = "";
+                    CurrentCharacter.SpellSaveDC = 0;
+                    CurrentCharacter.SpellAttackBonus = 0;
+                }
             }
 
             CurrentCharacter.HighElfCantrip = highElfCantrip;
