@@ -1406,6 +1406,124 @@
                                     Margin="10,0,0,20"
                                     Orientation="Vertical"/>
 
+                        <!-- STARTING WEALTH: level-1 gold vs equipment, and higher-level DMG gold -->
+                        <TextBlock Text="STARTING WEALTH"
+                                   FontSize="15"
+                                   FontWeight="Bold"
+                                   Foreground="#7CFC00"
+                                   Margin="0,0,0,8"/>
+
+                        <Border Background="#1E1E1E"
+                                BorderBrush="#444"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="10"
+                                Margin="0,0,0,16">
+                            <StackPanel>
+                                <!-- Level 1: exclusive choice (starting class only) -->
+                                <StackPanel x:Name="pnlLevel1WealthMode">
+                                    <TextBlock Text="Character level 1 — choose one (starting class only; multiclass later does not re-roll):"
+                                               Foreground="#CCC"
+                                               FontSize="12"
+                                               Margin="0,0,0,6"
+                                               TextWrapping="Wrap"/>
+                                    <RadioButton x:Name="rbStartingEquipment"
+                                                 GroupName="StartingWealthMode"
+                                                 IsChecked="True"
+                                                 Margin="0,2"
+                                                 Checked="StartingWealthMode_Changed">
+                                        <TextBlock Text="Take class starting equipment"
+                                                   Foreground="White"
+                                                   TextWrapping="Wrap"/>
+                                    </RadioButton>
+                                    <RadioButton x:Name="rbRollStartingGold"
+                                                 GroupName="StartingWealthMode"
+                                                 Margin="0,2,0,6"
+                                                 Checked="StartingWealthMode_Changed">
+                                        <TextBlock Text="Roll for gold instead of equipment"
+                                                   Foreground="White"
+                                                   TextWrapping="Wrap"/>
+                                    </RadioButton>
+
+                                    <TextBlock x:Name="txtLevel1GoldFormula"
+                                               Text="Formula: —"
+                                               Foreground="#E8C36A"
+                                               FontSize="12"
+                                               Margin="4,0,0,6"
+                                               TextWrapping="Wrap"/>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <Button x:Name="btnRollLevel1Gold"
+                                                Content="Roll Gold"
+                                                Padding="12,4"
+                                                Click="BtnRollLevel1Gold_Click"
+                                                IsEnabled="False"/>
+                                        <TextBlock x:Name="txtLevel1GoldResult"
+                                                   Text=""
+                                                   Foreground="#7CFC00"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Margin="12,0,0,0"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Background equipment is still granted when you roll for gold."
+                                               Foreground="#888"
+                                               FontSize="11"
+                                               FontStyle="Italic"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,0"/>
+                                </StackPanel>
+
+                                <!-- Levels 5+: gold in addition to equipment (total character level) -->
+                                <StackPanel x:Name="pnlHigherLevelWealth"
+                                            Visibility="Collapsed"
+                                            Margin="0,4,0,0">
+                                    <TextBlock Text="Higher-level starting wealth (DMG) — total character level, once; in addition to starting-class equipment"
+                                               Foreground="#CCC"
+                                               FontSize="12"
+                                               Margin="0,0,0,6"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="txtHigherLevelWealthFormula"
+                                               Text=""
+                                               Foreground="#E8C36A"
+                                               FontSize="12"
+                                               Margin="0,0,0,4"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="txtHigherLevelMagicNote"
+                                               Text=""
+                                               Foreground="#888"
+                                               FontSize="11"
+                                               FontStyle="Italic"
+                                               Margin="0,0,0,8"
+                                               TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button x:Name="btnRollHigherLevelGold"
+                                                Content="Roll Wealth"
+                                                Padding="12,4"
+                                                Click="BtnRollHigherLevelGold_Click"/>
+                                        <TextBlock x:Name="txtHigherLevelGoldResult"
+                                                   Text=""
+                                                   Foreground="#7CFC00"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Margin="12,0,0,0"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Levels 2–4: no exclusive gold / no DMG band -->
+                                <TextBlock x:Name="txtWealthMidLevelNote"
+                                           Visibility="Collapsed"
+                                           Text="Levels 2–4: use starting-class equipment (and background gear). DMG wealth bands use total character level from 5+. Multiclassing adds no extra gold."
+                                           Foreground="#888"
+                                           FontSize="11"
+                                           FontStyle="Italic"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
                         <!-- Equipment Choices (this is where radios + combos go) -->
                         <StackPanel x:Name="pnlEquipmentChoices"/>
 

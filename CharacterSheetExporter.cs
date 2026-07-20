@@ -391,10 +391,17 @@ namespace Nemo
 
             // Spellcasting (same gates / values as page 3 of the sheet)
             var classLevels = LevelUpCalculator.GetClassLevelsFromCharacter(character);
+            int previewCharLevel = GetExportCharacterLevel(character, classLevels);
+            bool hasRacialSpells = GameData.GetRacialSpells(
+                character.Race, character.Subrace, previewCharLevel, character.HighElfCantrip).Count > 0;
+            bool hasFeatSpells = character.FeatSpells != null &&
+                character.FeatSpells.Any(s => !string.IsNullOrWhiteSpace(s));
             bool hasSpellContent =
                 !string.IsNullOrWhiteSpace(character.SpellcastingAbility) ||
                 (character.Cantrips?.Count > 0) ||
                 (character.Level1Spells?.Count > 0) ||
+                hasRacialSpells ||
+                hasFeatSpells ||
                 classLevels.Any(e =>
                     SpellSlotCalculator.GetProgressionKind(e.ClassName, e.Subclass) !=
                     CasterProgressionKind.None);
@@ -433,7 +440,7 @@ namespace Nemo
                 }
                 preview.SpellSlotsSummary = slotParts.Count > 0 ? string.Join(", ", slotParts) : "—";
 
-                foreach (var line in BuildCantripExportLines(character))
+                foreach (var line in BuildCantripExportLines(character, classLevels))
                     preview.Cantrips.Add(line.DisplayText);
 
                 var byLevel = BuildLeveledSpellExportLines(character, classLevels);
@@ -461,20 +468,18 @@ namespace Nemo
                 preview.ExtraSelections.Add("Race Skill: " + character.RaceGrantedSkill.Trim());
 
             // Equipment list (same merge as sheet Equipment field)
-            if (character.Equipment != null)
+            preview.Equipment.AddRange(MergeEquipmentLines(character));
+            if (character.UseRolledGoldInsteadOfEquipment && character.Level1RolledGoldGp > 0)
             {
-                foreach (var item in character.Equipment.Where(e => !string.IsNullOrWhiteSpace(e)))
-                    preview.Equipment.Add(item.Trim());
+                preview.Equipment.Add(string.IsNullOrWhiteSpace(character.Level1RolledGoldBreakdown)
+                    ? $"Starting gold: {character.Level1RolledGoldGp} gp"
+                    : $"Starting gold: {character.Level1RolledGoldBreakdown}");
             }
-            if (!string.IsNullOrWhiteSpace(character.BackgroundEquipment))
+            if (character.HigherLevelWealthGp > 0)
             {
-                foreach (var line in character.BackgroundEquipment.Split(
-                             new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-                {
-                    string t = line.Trim();
-                    if (t.Length > 0 && !preview.Equipment.Contains(t, StringComparer.OrdinalIgnoreCase))
-                        preview.Equipment.Add(t);
-                }
+                preview.Equipment.Add(string.IsNullOrWhiteSpace(character.HigherLevelWealthBreakdown)
+                    ? $"Higher-level wealth: {character.HigherLevelWealthGp:N0} gp"
+                    : $"Higher-level wealth: {character.HigherLevelWealthBreakdown}");
             }
 
             return preview;
@@ -776,14 +781,36 @@ namespace Nemo
             }
 
             // ── Equipment / proficiencies / features ──
+            // Equipment already includes background gear from the UI save path;
+            // MergeEquipmentLines only appends BackgroundEquipment when missing.
             string equipment = extras.EquipmentText
-                ?? (c.Equipment != null ? string.Join("\n", c.Equipment) : "");
-            if (!string.IsNullOrWhiteSpace(c.BackgroundEquipment))
+                ?? string.Join("\n", MergeEquipmentLines(c));
+            // Append rolled wealth notes so the sheet shows gold source without duplicating coin boxes
+            if (c.UseRolledGoldInsteadOfEquipment && c.Level1RolledGoldGp > 0)
             {
+                string note = string.IsNullOrWhiteSpace(c.Level1RolledGoldBreakdown)
+                    ? $"Starting gold: {c.Level1RolledGoldGp} gp"
+                    : $"Starting gold: {c.Level1RolledGoldBreakdown}";
                 if (!string.IsNullOrWhiteSpace(equipment)) equipment += "\n";
-                equipment += c.BackgroundEquipment;
+                equipment += note;
+            }
+            if (c.HigherLevelWealthGp > 0)
+            {
+                string note = string.IsNullOrWhiteSpace(c.HigherLevelWealthBreakdown)
+                    ? $"Higher-level wealth: {c.HigherLevelWealthGp:N0} gp"
+                    : $"Higher-level wealth: {c.HigherLevelWealthBreakdown}";
+                if (!string.IsNullOrWhiteSpace(equipment)) equipment += "\n";
+                equipment += note;
             }
             T("Equipment", equipment);
+
+            // Coin box: rolled starting gold, higher-level wealth, and (equipment path under 5)
+            // coins from background equipment (e.g. "pouch with 15 gp", Hermit "5 gp").
+            int sheetGp = GameData.ComputeSheetGoldPieces(c);
+            if (sheetGp > 0)
+                T("GP", sheetGp.ToString());
+            // Keep character field in sync for JSON / re-export
+            c.GoldPieces = sheetGp;
 
             string profLang = extras.ProficienciesAndLanguages ?? DeriveProficienciesAndLanguages(c);
             T("ProficienciesLang", profLang);
@@ -850,10 +877,18 @@ namespace Nemo
             Action<string, bool> C)
         {
             var classLevels = LevelUpCalculator.GetClassLevelsFromCharacter(c);
+            int charLevel = Math.Max(1, classLevels.Sum(e => e.Levels));
+            if (charLevel <= 0) charLevel = c.Level > 0 ? c.Level : 1;
+            bool hasRacialSpells = GameData.GetRacialSpells(
+                c.Race, c.Subrace, charLevel, c.HighElfCantrip).Count > 0;
+            bool hasFeatSpells = c.FeatSpells != null &&
+                c.FeatSpells.Any(s => !string.IsNullOrWhiteSpace(s));
             bool hasSpellContent =
                 !string.IsNullOrWhiteSpace(c.SpellcastingAbility) ||
                 (c.Cantrips?.Count > 0) ||
                 (c.Level1Spells?.Count > 0) ||
+                hasRacialSpells ||
+                hasFeatSpells ||
                 classLevels.Any(e =>
                     SpellSlotCalculator.GetProgressionKind(e.ClassName, e.Subclass) !=
                     CasterProgressionKind.None);
@@ -895,11 +930,11 @@ namespace Nemo
                 // Do not fill SlotsRemaining / expended — player tracks those in play
             }
 
-            // Cantrips (no subclass auto-list; player + racial picks already on character)
-            var cantrips = BuildCantripExportLines(c);
+            // Cantrips: racial + feat (tagged) first, then class selections
+            var cantrips = BuildCantripExportLines(c, classLevels);
             WriteSpellLines(payload, T, C, cantrips, CantripFields, preparedChecks: null);
 
-            // Leveled spells 1–9: subclass always-prepared/known first (tagged), then selected spells
+            // Leveled spells 1–9: racial/feat/subclass grants first (tagged), then selected spells
             var byLevel = BuildLeveledSpellExportLines(c, classLevels);
             for (int lvl = 1; lvl <= 9; lvl++)
             {
@@ -942,28 +977,61 @@ namespace Nemo
             }
         }
 
-        private static List<SpellExportLine> BuildCantripExportLines(Character c)
+        /// <summary>
+        /// Cantrip lines: racial + feat grants first with <c>Name (Source)</c> tags,
+        /// then class-selected cantrips.
+        /// </summary>
+        private static List<SpellExportLine> BuildCantripExportLines(
+            Character c,
+            IReadOnlyList<ClassLevelEntry>? classLevels = null)
         {
             var lines = new List<SpellExportLine>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            classLevels ??= LevelUpCalculator.GetClassLevelsFromCharacter(c);
+            int charLevel = GetExportCharacterLevel(c, classLevels);
 
-            // High Elf / racial cantrip first if present
-            if (!string.IsNullOrWhiteSpace(c.HighElfCantrip) && seen.Add(c.HighElfCantrip.Trim()))
+            // 1) Racial cantrips (includes High Elf chosen cantrip when set)
+            foreach (var g in GameData.GetRacialSpells(c.Race, c.Subrace, charLevel, c.HighElfCantrip))
             {
-                string name = c.HighElfCantrip.Trim();
+                if (g.SpellLevel > 0) continue;
+                if (string.IsNullOrWhiteSpace(g.SpellName) || !seen.Add(g.SpellName.Trim()))
+                    continue;
+                string name = g.SpellName.Trim();
+                string tag = ShortRacialSourceTag(g.SourceTrait, c.Race);
                 lines.Add(new SpellExportLine
                 {
                     SpellName = name,
-                    DisplayText = name,
-                    IsPrepared = true
+                    DisplayText = FormatTaggedSpell(name, tag),
+                    IsPrepared = true,
+                    SubclassTag = tag
                 });
             }
 
+            // 2) Feat cantrips (Magic Initiate, Spell Sniper, …)
+            string featTag = string.IsNullOrWhiteSpace(c.FeatSpellSource)
+                ? (c.SelectedFeat ?? "")
+                : c.FeatSpellSource.Trim();
+            foreach (var raw in c.FeatSpells ?? new List<string>())
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                string name = StripSubclassTag(raw.Trim());
+                if (ResolveSpellLevel(name) > 0) continue; // leveled — handled elsewhere
+                if (!seen.Add(name)) continue;
+                lines.Add(new SpellExportLine
+                {
+                    SpellName = name,
+                    DisplayText = FormatTaggedSpell(name, featTag),
+                    IsPrepared = true,
+                    SubclassTag = featTag
+                });
+            }
+
+            // 3) Class-selected cantrips
             foreach (var name in c.Cantrips ?? new List<string>())
             {
-                if (string.IsNullOrWhiteSpace(name) || !seen.Add(name.Trim()))
-                    continue;
-                string n = name.Trim();
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                string n = StripSubclassTag(name.Trim());
+                if (!seen.Add(n)) continue;
                 lines.Add(new SpellExportLine
                 {
                     SpellName = n,
@@ -976,8 +1044,8 @@ namespace Nemo
         }
 
         /// <summary>
-        /// Builds per-level spell lines: subclass always-prepared/known first with
-        /// <c>Faerie Fire (Twilight)</c>-style tags, then remaining selected spells from
+        /// Builds per-level spell lines: racial, feat, then subclass always-prepared/known
+        /// with <c>Faerie Fire (Twilight)</c>-style tags, then remaining selected spells from
         /// <see cref="Character.Level1Spells"/> (which holds all selected leveled spells 1–9).
         /// </summary>
         private static Dictionary<int, List<SpellExportLine>> BuildLeveledSpellExportLines(
@@ -996,9 +1064,46 @@ namespace Nemo
             }
 
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int charLevel = GetExportCharacterLevel(c, classLevels);
 
-            // 1) Subclass grants (always prepared / always known) — not expanded list
-            //    Only when the class has reached its subclass unlock level.
+            // 1) Racial leveled spells (e.g. Hellish Rebuke, Faerie Fire)
+            foreach (var g in GameData.GetRacialSpells(c.Race, c.Subrace, charLevel, c.HighElfCantrip))
+            {
+                if (g.SpellLevel < 1) continue;
+                if (string.IsNullOrWhiteSpace(g.SpellName) || !seen.Add(g.SpellName.Trim()))
+                    continue;
+                string name = g.SpellName.Trim();
+                string tag = ShortRacialSourceTag(g.SourceTrait, c.Race);
+                ListFor(g.SpellLevel).Add(new SpellExportLine
+                {
+                    SpellName = name,
+                    DisplayText = FormatTaggedSpell(name, tag),
+                    IsPrepared = true,
+                    SubclassTag = tag
+                });
+            }
+
+            // 2) Feat leveled spells (Magic Initiate 1st-level, Fey Touched, …)
+            string featTag = string.IsNullOrWhiteSpace(c.FeatSpellSource)
+                ? (c.SelectedFeat ?? "")
+                : c.FeatSpellSource.Trim();
+            foreach (var raw in c.FeatSpells ?? new List<string>())
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                string name = StripSubclassTag(raw.Trim());
+                int level = ResolveSpellLevel(name);
+                if (level < 1) continue;
+                if (!seen.Add(name)) continue;
+                ListFor(level).Add(new SpellExportLine
+                {
+                    SpellName = name,
+                    DisplayText = FormatTaggedSpell(name, featTag),
+                    IsPrepared = true,
+                    SubclassTag = featTag
+                });
+            }
+
+            // 3) Subclass grants (always prepared / always known)
             foreach (var entry in classLevels)
             {
                 string? effectiveSub = GameData.GetEffectiveSubclass(entry);
@@ -1019,9 +1124,7 @@ namespace Nemo
                     if (string.IsNullOrWhiteSpace(g.SpellName) || !seen.Add(g.SpellName))
                         continue;
 
-                    string display = string.IsNullOrEmpty(tag)
-                        ? g.SpellName
-                        : $"{g.SpellName} ({tag})";
+                    string display = FormatTaggedSpell(g.SpellName, tag);
 
                     ListFor(g.SpellLevel).Add(new SpellExportLine
                     {
@@ -1034,7 +1137,7 @@ namespace Nemo
                 }
             }
 
-            // 2) Player-selected leveled spells (stored on Level1Spells regardless of level)
+            // 4) Player-selected leveled spells (stored on Level1Spells regardless of level)
             foreach (var raw in c.Level1Spells ?? new List<string>())
             {
                 if (string.IsNullOrWhiteSpace(raw))
@@ -1058,6 +1161,37 @@ namespace Nemo
             }
 
             return byLevel;
+        }
+
+        private static int GetExportCharacterLevel(Character c, IReadOnlyList<ClassLevelEntry> classLevels)
+        {
+            int sum = classLevels?.Where(e => e != null && e.Levels > 0).Sum(e => e.Levels) ?? 0;
+            if (sum > 0) return Math.Clamp(sum, 1, 20);
+            return c.Level > 0 ? Math.Clamp(c.Level, 1, 20) : 1;
+        }
+
+        private static string FormatTaggedSpell(string spellName, string? tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag))
+                return spellName;
+            return $"{spellName} ({tag.Trim()})";
+        }
+
+        /// <summary>
+        /// Short parenthetical for racial grants, e.g. "Cantrip (High Elf)" → "High Elf",
+        /// "Infernal Legacy" → "Infernal Legacy", fallback to race name.
+        /// </summary>
+        private static string ShortRacialSourceTag(string? sourceTrait, string? race)
+        {
+            if (!string.IsNullOrWhiteSpace(sourceTrait))
+            {
+                string t = sourceTrait.Trim();
+                var m = Regex.Match(t, @"^Cantrip\s*\((.+)\)$", RegexOptions.IgnoreCase);
+                if (m.Success)
+                    return m.Groups[1].Value.Trim();
+                return t;
+            }
+            return string.IsNullOrWhiteSpace(race) ? "Race" : race.Trim();
         }
 
         private static int ResolveSpellLevel(string spellName)
@@ -1431,6 +1565,41 @@ namespace Nemo
                     Bonus = bonus
                 };
             }).ToList();
+        }
+
+        /// <summary>
+        /// Builds the equipment list for the sheet: class/UI items plus background gear,
+        /// without duplicating lines that are already present (case-insensitive).
+        /// Background gear is often already in <see cref="Character.Equipment"/> from the UI save path.
+        /// </summary>
+        private static List<string> MergeEquipmentLines(Character c)
+        {
+            var result = new List<string>();
+            if (c.Equipment != null)
+            {
+                foreach (var item in c.Equipment.Where(e => !string.IsNullOrWhiteSpace(e)))
+                    result.Add(item.Trim());
+            }
+
+            if (string.IsNullOrWhiteSpace(c.BackgroundEquipment))
+                return result;
+
+            foreach (var line in c.BackgroundEquipment.Split(
+                         new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string t = line.Trim();
+                if (t.Length == 0)
+                    continue;
+                // UI placeholder when no real background gear was applied
+                if (t.Contains("No additional equipment", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (t.Contains("See Background tab", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (!result.Contains(t, StringComparer.OrdinalIgnoreCase))
+                    result.Add(t);
+            }
+
+            return result;
         }
 
         private static List<WeaponAttackLine> DeriveWeapons(Character c, int prof)

@@ -44,6 +44,10 @@ namespace Nemo
         private string backgroundLanguage1 = "";
         private string backgroundLanguage2 = "";
         private string currentBackgroundEquipmentAdded = "";   // ← NEW
+        /// <summary>Suppress wealth-mode radio events while restoring from a saved character.</summary>
+        private bool _suppressWealthModeEvents;
+        /// <summary>Class used for the last level-1 gold formula / equipment kit (detect class changes).</summary>
+        private string _lastStartingWealthClass = "";
         private string highElfCantrip = "";
         private bool raceHasInnateSpellcasting = false;
         private List<Feat> allFeats = new();
@@ -493,6 +497,34 @@ namespace Nemo
         }
 
         /// <summary>
+        /// Starting class for wealth/equipment: first entry in <see cref="Character.ClassLevels"/>
+        /// (the class taken at character creation). Later multiclass rows never affect gold formulas.
+        /// </summary>
+        private string GetStartingClassName()
+        {
+            if (CurrentCharacter?.ClassLevels != null)
+            {
+                var first = CurrentCharacter.ClassLevels
+                    .FirstOrDefault(e => e != null && e.Levels > 0 && !string.IsNullOrWhiteSpace(e.ClassName));
+                if (first != null)
+                    return first.ClassName.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(CurrentCharacter?.Class))
+                return CurrentCharacter.Class.Trim();
+
+            if (cmbClass?.SelectedItem is string uiClass && !string.IsNullOrWhiteSpace(uiClass))
+                return uiClass.Trim();
+
+            return "";
+        }
+
+        /// <summary>
+        /// Total character level for DMG wealth bands (sum of all class levels — not per-class).
+        /// </summary>
+        private int GetCharacterLevelForWealth() => GetEffectiveCharacterLevel();
+
+        /// <summary>
         /// Keep Character.Class / Subclass mirrored from UI when ClassLevels is empty or single-class.
         /// Multiclass (2+ rows) is owned by the Level &amp; Multiclass tab.
         /// </summary>
@@ -792,6 +824,9 @@ namespace Nemo
             UpdateStatDisplays();
             // Multiclass / secondary-class subclasses (e.g. Twilight Cleric) grant armor & weapons
             UpdateEquipmentProficiencySummary();
+            // Level band controls equipment-vs-gold and DMG higher-level wealth
+            RefreshStartingWealthUi();
+            UpdateTotalEquipmentSummary();
 
             // Always refresh spell level unlocks when levels change (Ranger 5 → 2nd-level slots, etc.)
             // even if the Spells tab is not currently open. Isolated so failures don't break +/− levels.
@@ -4600,8 +4635,20 @@ namespace Nemo
             activeWeaponChoices.Clear();
             pnlWeaponChoices.Visibility = Visibility.Visible;   // Always keep middle column visible
 
-            if (!GameData.StartingEquipment.ContainsKey(className))
+            // Equipment kit is for the starting class only (first class at creation).
+            // Prefer ClassLevels[0] over the Class-tab combo when multiclassing.
+            string startingClass = GetStartingClassName();
+            if (!string.IsNullOrWhiteSpace(startingClass))
+                className = startingClass;
+
+            RefreshStartingWealthUi();
+
+            if (string.IsNullOrWhiteSpace(className) || !GameData.StartingEquipment.ContainsKey(className))
+            {
+                UpdateTotalEquipmentSummary();
+                UpdateEquipmentProficiencySummary();
                 return;
+            }
 
             var choices = GameData.StartingEquipment[className];
 
@@ -4720,71 +4767,331 @@ namespace Nemo
 
             UpdateTotalEquipmentSummary();
             UpdateEquipmentProficiencySummary();
+            ApplyEquipmentChoicesEnabledState();
+        }
+
+        /// <summary>
+        /// Level 1: equipment package OR roll gold for the <b>starting class</b> only.
+        /// Levels 5+: one DMG wealth roll by <b>total character level</b> (multiclass does not stack extra gold).
+        /// Levels 2–4: equipment only (no exclusive gold choice / no DMG band).
+        /// </summary>
+        private void RefreshStartingWealthUi()
+        {
+            if (pnlLevel1WealthMode == null) return;
+
+            int level = GetCharacterLevelForWealth();
+            string className = GetStartingClassName();
+
+            // Starting class changed (e.g. multiclass row 0) → prior class gold formula no longer applies
+            if (CurrentCharacter != null &&
+                !string.IsNullOrWhiteSpace(className) &&
+                !string.IsNullOrWhiteSpace(_lastStartingWealthClass) &&
+                !_lastStartingWealthClass.Equals(className, StringComparison.OrdinalIgnoreCase))
+            {
+                CurrentCharacter.Level1RolledGoldGp = 0;
+                CurrentCharacter.Level1RolledGoldBreakdown = "";
+                CurrentCharacter.UseRolledGoldInsteadOfEquipment = false;
+            }
+            if (!string.IsNullOrWhiteSpace(className))
+                _lastStartingWealthClass = className;
+
+            bool isLevel1 = level <= 1;
+            bool hasHigherWealth = GameData.GetHigherLevelWealthFormula(level) != null;
+            bool startedWithGold = CurrentCharacter?.UseRolledGoldInsteadOfEquipment == true
+                && CurrentCharacter.Level1RolledGoldGp > 0;
+
+            if (pnlLevel1WealthMode != null)
+                pnlLevel1WealthMode.Visibility = isLevel1 ? Visibility.Visible : Visibility.Collapsed;
+            if (pnlHigherLevelWealth != null)
+                pnlHigherLevelWealth.Visibility = hasHigherWealth ? Visibility.Visible : Visibility.Collapsed;
+            if (txtWealthMidLevelNote != null)
+            {
+                txtWealthMidLevelNote.Visibility = (!isLevel1 && !hasHigherWealth)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                if (txtWealthMidLevelNote.Visibility == Visibility.Visible)
+                {
+                    txtWealthMidLevelNote.Text =
+                        $"Character level {level} (levels 2–4): use starting-class equipment and background gear. " +
+                        "DMG wealth bands apply from total character level 5+. " +
+                        "Multiclassing adds no extra starting gold.";
+                }
+            }
+
+            // Level-1 formula / result — always the starting class, never later multiclass classes
+            var lvl1Formula = GameData.GetLevel1StartingGoldFormula(className);
+            if (txtLevel1GoldFormula != null)
+            {
+                txtLevel1GoldFormula.Text = lvl1Formula != null
+                    ? $"Starting class: {className} — {lvl1Formula.Display}  (average {lvl1Formula.AverageGp:0.#} gp)"
+                    : "Formula: — (select a starting class)";
+            }
+
+            bool useGoldChoice = isLevel1 && (rbRollStartingGold?.IsChecked == true
+                || (CurrentCharacter?.UseRolledGoldInsteadOfEquipment == true && rbStartingEquipment?.IsChecked != true));
+
+            if (btnRollLevel1Gold != null)
+                btnRollLevel1Gold.IsEnabled = isLevel1 && useGoldChoice && lvl1Formula != null;
+
+            if (txtLevel1GoldResult != null)
+            {
+                if (CurrentCharacter != null && CurrentCharacter.Level1RolledGoldGp > 0 &&
+                    !string.IsNullOrWhiteSpace(CurrentCharacter.Level1RolledGoldBreakdown))
+                {
+                    txtLevel1GoldResult.Text = CurrentCharacter.Level1RolledGoldBreakdown;
+                }
+                else if (useGoldChoice)
+                {
+                    txtLevel1GoldResult.Text = "Not rolled yet";
+                }
+                else
+                {
+                    txtLevel1GoldResult.Text = "";
+                }
+            }
+
+            // Higher-level wealth — one band from total character level (not per multiclass class)
+            var higher = GameData.GetHigherLevelWealthFormula(level);
+            if (higher != null)
+            {
+                if (txtHigherLevelWealthFormula != null)
+                {
+                    txtHigherLevelWealthFormula.Text =
+                        $"Character level {level} → {higher.BandLabel}: {higher.Display}\n" +
+                        $"(One roll for the whole character; added classes do not grant more gold.)";
+                }
+                if (txtHigherLevelMagicNote != null)
+                    txtHigherLevelMagicNote.Text = higher.MagicItemNote;
+                if (txtHigherLevelGoldResult != null)
+                {
+                    if (CurrentCharacter != null && CurrentCharacter.HigherLevelWealthGp > 0 &&
+                        !string.IsNullOrWhiteSpace(CurrentCharacter.HigherLevelWealthBreakdown))
+                        txtHigherLevelGoldResult.Text = CurrentCharacter.HigherLevelWealthBreakdown;
+                    else
+                        txtHigherLevelGoldResult.Text = "Not rolled yet";
+                }
+            }
+
+            // Past level 1: hide exclusive choice UI. Keep gold if they already rolled at 1;
+            // only reset the flag when they never completed a gold roll (were mid-choice).
+            if (!isLevel1 && CurrentCharacter != null)
+            {
+                if (CurrentCharacter.UseRolledGoldInsteadOfEquipment && CurrentCharacter.Level1RolledGoldGp <= 0)
+                {
+                    CurrentCharacter.UseRolledGoldInsteadOfEquipment = false;
+                    CurrentCharacter.Level1RolledGoldBreakdown = "";
+                }
+                // Do not clear Level1RolledGoldGp — multiclass / level-up keeps starting wealth
+                if (!startedWithGold)
+                {
+                    _suppressWealthModeEvents = true;
+                    try
+                    {
+                        if (rbStartingEquipment != null) rbStartingEquipment.IsChecked = true;
+                    }
+                    finally { _suppressWealthModeEvents = false; }
+                }
+            }
+
+            // Clear higher-level wealth only when total character level drops below 5
+            if (!hasHigherWealth && CurrentCharacter != null)
+            {
+                CurrentCharacter.HigherLevelWealthGp = 0;
+                CurrentCharacter.HigherLevelWealthBreakdown = "";
+            }
+
+            SyncGoldPiecesTotal();
+            ApplyEquipmentChoicesEnabledState();
+        }
+
+        private void StartingWealthMode_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_suppressWealthModeEvents) return;
+            if (CurrentCharacter == null) return;
+
+            bool useGold = rbRollStartingGold?.IsChecked == true;
+            CurrentCharacter.UseRolledGoldInsteadOfEquipment = useGold;
+
+            if (!useGold)
+            {
+                // Switching back to equipment: clear the exclusive gold roll
+                CurrentCharacter.Level1RolledGoldGp = 0;
+                CurrentCharacter.Level1RolledGoldBreakdown = "";
+                if (txtLevel1GoldResult != null)
+                    txtLevel1GoldResult.Text = "";
+            }
+            else if (CurrentCharacter.Level1RolledGoldGp <= 0 && txtLevel1GoldResult != null)
+            {
+                txtLevel1GoldResult.Text = "Not rolled yet";
+            }
+
+            if (btnRollLevel1Gold != null)
+            {
+                string className = GetStartingClassName();
+                btnRollLevel1Gold.IsEnabled = useGold
+                    && GetCharacterLevelForWealth() <= 1
+                    && GameData.GetLevel1StartingGoldFormula(className) != null;
+            }
+
+            SyncGoldPiecesTotal();
+            ApplyEquipmentChoicesEnabledState();
+            UpdateTotalEquipmentSummary();
+        }
+
+        private void BtnRollLevel1Gold_Click(object sender, RoutedEventArgs e)
+        {
+            if (CurrentCharacter == null) return;
+            // Always the first / starting class — never a later multiclass
+            string className = GetStartingClassName();
+            if (string.IsNullOrWhiteSpace(className)) return;
+
+            int gp = GameData.RollLevel1StartingGold(className, out string breakdown);
+            CurrentCharacter.Level1RolledGoldGp = gp;
+            CurrentCharacter.Level1RolledGoldBreakdown = breakdown;
+            CurrentCharacter.UseRolledGoldInsteadOfEquipment = true;
+
+            if (txtLevel1GoldResult != null)
+                txtLevel1GoldResult.Text = breakdown;
+
+            SyncGoldPiecesTotal();
+            UpdateTotalEquipmentSummary();
+        }
+
+        private void BtnRollHigherLevelGold_Click(object sender, RoutedEventArgs e)
+        {
+            if (CurrentCharacter == null) return;
+            // Total character level only (sum of all classes) — not per multiclass class
+            int level = GetCharacterLevelForWealth();
+            int gp = GameData.RollHigherLevelWealthGold(level, out string breakdown);
+            if (gp <= 0) return;
+
+            CurrentCharacter.HigherLevelWealthGp = gp;
+            CurrentCharacter.HigherLevelWealthBreakdown = breakdown;
+
+            if (txtHigherLevelGoldResult != null)
+                txtHigherLevelGoldResult.Text = breakdown;
+
+            SyncGoldPiecesTotal();
+            UpdateTotalEquipmentSummary();
+        }
+
+        private void SyncGoldPiecesTotal()
+        {
+            if (CurrentCharacter == null) return;
+            // Matches PDF export: rolled gold + higher-level wealth + background pouch gp (equipment path, level &lt; 5)
+            if (txtBackgroundEquipment != null && !string.IsNullOrWhiteSpace(txtBackgroundEquipment.Text))
+                CurrentCharacter.BackgroundEquipment = txtBackgroundEquipment.Text;
+            CurrentCharacter.GoldPieces = GameData.ComputeSheetGoldPieces(CurrentCharacter);
+        }
+
+        /// <summary>
+        /// When the character started with level-1 gold instead of kit, disable class kit radios and weapon combos.
+        /// </summary>
+        private void ApplyEquipmentChoicesEnabledState()
+        {
+            bool useGoldInstead = CurrentCharacter?.UseRolledGoldInsteadOfEquipment == true
+                || (GetCharacterLevelForWealth() <= 1 && rbRollStartingGold?.IsChecked == true);
+
+            if (pnlEquipmentChoices != null)
+                pnlEquipmentChoices.IsEnabled = !useGoldInstead;
+
+            // Weapon pickers only matter when taking equipment
+            for (int i = 1; i <= 6; i++)
+            {
+                if (this.FindName($"cmbWeaponChoice{i}") is ComboBox cmb)
+                    cmb.IsEnabled = !useGoldInstead;
+            }
+
+            // Visual cue on the choices panel
+            if (pnlEquipmentChoices != null)
+                pnlEquipmentChoices.Opacity = useGoldInstead ? 0.45 : 1.0;
         }
 
         private void UpdateTotalEquipmentSummary()
         {
+            if (pnlTotalEquipmentSummary == null) return;
             pnlTotalEquipmentSummary.Children.Clear();
 
             var totalItems = new List<string>();
+            // Started with gold instead of kit (persists after multiclass / level-up)
+            bool useGoldInstead = CurrentCharacter?.UseRolledGoldInsteadOfEquipment == true
+                || (GetCharacterLevelForWealth() <= 1 && rbRollStartingGold?.IsChecked == true);
 
-            // === RADIO BUTTONS + AUTOMATIC ITEMS ===
-            foreach (var sp in pnlEquipmentChoices.Children.OfType<StackPanel>())
+            if (!useGoldInstead)
             {
-                foreach (var element in sp.Children)
+                // === RADIO BUTTONS + AUTOMATIC ITEMS ===
+                foreach (var sp in pnlEquipmentChoices.Children.OfType<StackPanel>())
                 {
-                    if (element is RadioButton rb && rb.IsChecked == true)
+                    foreach (var element in sp.Children)
                     {
-                        string text = "";
-
-                        if (rb.Content is TextBlock tb)
-                            text = tb.Text;
-                        else if (rb.Content is StackPanel spContent)
+                        if (element is RadioButton rb && rb.IsChecked == true)
                         {
-                            var firstTextBlock = spContent.Children.OfType<TextBlock>().FirstOrDefault();
-                            if (firstTextBlock != null)
-                                text = firstTextBlock.Text;
+                            string text = "";
+
+                            if (rb.Content is TextBlock tb)
+                                text = tb.Text;
+                            else if (rb.Content is StackPanel spContent)
+                            {
+                                var firstTextBlock = spContent.Children.OfType<TextBlock>().FirstOrDefault();
+                                if (firstTextBlock != null)
+                                    text = firstTextBlock.Text;
+                            }
+                            else
+                                text = rb.Content?.ToString() ?? "";
+
+                            if (!string.IsNullOrWhiteSpace(text))
+                                totalItems.Add("• " + text);
                         }
-                        else
-                            text = rb.Content?.ToString() ?? "";
-
-                        if (!string.IsNullOrWhiteSpace(text))
-                            totalItems.Add("• " + text);
-                    }
-                    else if (element is TextBlock tb && tb.Text.StartsWith("• "))
-                    {
-                        totalItems.Add(tb.Text);
+                        else if (element is TextBlock tb && tb.Text.StartsWith("• "))
+                        {
+                            totalItems.Add(tb.Text);
+                        }
                     }
                 }
-            }
 
-            // === WEAPONS FROM COMBOBOXES + SPECIAL CASES ===
-            foreach (var weaponEntry in pickedWeapons)
-            {
-                string clean = weaponEntry.Contains(": ")
-                    ? weaponEntry.Substring(weaponEntry.IndexOf(": ") + 2)
-                    : weaponEntry;
-
-                if (!string.IsNullOrWhiteSpace(clean))
-                    totalItems.Add("• " + clean);
-
-                // === SPECIAL: Martial weapon and shield ===
-                if (weaponEntry.Contains("Martial weapon and shield", StringComparison.OrdinalIgnoreCase))
+                // === WEAPONS FROM COMBOBOXES + SPECIAL CASES ===
+                foreach (var weaponEntry in pickedWeapons)
                 {
-                    if (!totalItems.Any(x => x.Contains("Shield", StringComparison.OrdinalIgnoreCase)))
-                        totalItems.Add("• Shield");
+                    string clean = weaponEntry.Contains(": ")
+                        ? weaponEntry.Substring(weaponEntry.IndexOf(": ") + 2)
+                        : weaponEntry;
+
+                    if (!string.IsNullOrWhiteSpace(clean))
+                        totalItems.Add("• " + clean);
+
+                    // === SPECIAL: Martial weapon and shield ===
+                    if (weaponEntry.Contains("Martial weapon and shield", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!totalItems.Any(x => x.Contains("Shield", StringComparison.OrdinalIgnoreCase)))
+                            totalItems.Add("• Shield");
+                    }
+                }
+
+                // === REMOVE ALL GENERIC PLACEHOLDER LABELS (this is the fix you asked for) ===
+                totalItems.RemoveAll(x => x.Contains("Any simple weapon", StringComparison.OrdinalIgnoreCase));
+                totalItems.RemoveAll(x => x.Contains("Any martial weapon", StringComparison.OrdinalIgnoreCase));
+                totalItems.RemoveAll(x => x.Contains("Martial weapon and shield", StringComparison.OrdinalIgnoreCase));
+                totalItems.RemoveAll(x => x.Contains("Any simple melee weapon", StringComparison.OrdinalIgnoreCase));
+                totalItems.RemoveAll(x => x.Contains("Two martial weapons", StringComparison.OrdinalIgnoreCase));
+                totalItems.RemoveAll(x => x.Contains("Any martial melee weapon", StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                // Gold instead of class kit
+                if (CurrentCharacter != null && CurrentCharacter.Level1RolledGoldGp > 0)
+                {
+                    totalItems.Add($"• Starting gold: {CurrentCharacter.Level1RolledGoldGp} gp"
+                        + (string.IsNullOrWhiteSpace(CurrentCharacter.Level1RolledGoldBreakdown)
+                            ? ""
+                            : $" ({CurrentCharacter.Level1RolledGoldBreakdown})"));
+                }
+                else
+                {
+                    totalItems.Add("• Starting gold: not rolled yet — click Roll Gold");
                 }
             }
 
-            // === REMOVE ALL GENERIC PLACEHOLDER LABELS (this is the fix you asked for) ===
-            totalItems.RemoveAll(x => x.Contains("Any simple weapon", StringComparison.OrdinalIgnoreCase));
-            totalItems.RemoveAll(x => x.Contains("Any martial weapon", StringComparison.OrdinalIgnoreCase));
-            totalItems.RemoveAll(x => x.Contains("Martial weapon and shield", StringComparison.OrdinalIgnoreCase));
-            totalItems.RemoveAll(x => x.Contains("Any simple melee weapon", StringComparison.OrdinalIgnoreCase));
-            totalItems.RemoveAll(x => x.Contains("Two martial weapons", StringComparison.OrdinalIgnoreCase));
-            totalItems.RemoveAll(x => x.Contains("Any martial melee weapon", StringComparison.OrdinalIgnoreCase));
-
-            // === BACKGROUND EQUIPMENT (as ONE item) ===
+            // === BACKGROUND EQUIPMENT (as ONE item; always granted) ===
             if (cmbBackground.SelectedItem is string bg)
             {
                 string bgEquip = GameData.GetBackgroundEquipment(bg);
@@ -4794,15 +5101,32 @@ namespace Nemo
                 }
             }
 
+            // === HIGHER-LEVEL WEALTH (DMG, in addition to equipment) ===
+            if (CurrentCharacter != null && CurrentCharacter.HigherLevelWealthGp > 0)
+            {
+                totalItems.Add($"• Higher-level wealth: {CurrentCharacter.HigherLevelWealthGp:N0} gp"
+                    + (string.IsNullOrWhiteSpace(CurrentCharacter.HigherLevelWealthBreakdown)
+                        ? ""
+                        : $" ({CurrentCharacter.HigherLevelWealthBreakdown})"));
+            }
+            else if (GameData.GetHigherLevelWealthFormula(GetCharacterLevelForWealth()) != null)
+            {
+                totalItems.Add("• Higher-level wealth: not rolled yet — click Roll Wealth");
+            }
+
             // === FINAL CLEAN DISPLAY ===
             if (totalItems.Count > 0)
             {
                 foreach (var item in totalItems.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
+                    bool isGoldLine = item.Contains("Starting gold", StringComparison.OrdinalIgnoreCase)
+                        || item.Contains("Higher-level wealth", StringComparison.OrdinalIgnoreCase);
                     pnlTotalEquipmentSummary.Children.Add(new TextBlock
                     {
                         Text = item,
-                        Foreground = Brushes.White,
+                        Foreground = isGoldLine
+                            ? new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString("#E8C36A"))
+                            : Brushes.White,
                         Margin = new Thickness(10, 2, 0, 2),
                         TextWrapping = TextWrapping.Wrap,
                         FontSize = 13
@@ -9305,16 +9629,27 @@ namespace Nemo
                 });
             }
 
-            // Equipment (rebuild from UI)
+            // Equipment (rebuild from UI; gold is stored on dedicated fields, not as gear lines)
             CurrentCharacter.Equipment ??= new List<string>();
             CurrentCharacter.Equipment.Clear();
             foreach (var child in pnlTotalEquipmentSummary.Children.OfType<TextBlock>())
             {
                 string text = child.Text.Replace("• ", "").Trim();
-                if (!string.IsNullOrWhiteSpace(text))
-                    CurrentCharacter.Equipment.Add(text);
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                if (text.StartsWith("Starting gold", StringComparison.OrdinalIgnoreCase)) continue;
+                if (text.StartsWith("Higher-level wealth", StringComparison.OrdinalIgnoreCase)) continue;
+                if (text.Contains("not rolled yet", StringComparison.OrdinalIgnoreCase)) continue;
+                CurrentCharacter.Equipment.Add(text);
             }
             CurrentCharacter.BackgroundEquipment = txtBackgroundEquipment?.Text ?? "";
+
+            // Starting wealth: at level 1, mode follows the radio; after level-up/multiclass,
+            // keep UseRolledGoldInsteadOfEquipment if they already rolled (don't wipe on save).
+            if (GetCharacterLevelForWealth() <= 1)
+            {
+                CurrentCharacter.UseRolledGoldInsteadOfEquipment = rbRollStartingGold?.IsChecked == true;
+            }
+            SyncGoldPiecesTotal();
 
             // Spells (rebuild from UI; Level1Spells stores all selected leveled spells 1–9)
             CurrentCharacter.Cantrips = cantripOptions.Where(c => c.IsChecked).Select(c => c.Name).ToList();
@@ -9323,6 +9658,15 @@ namespace Nemo
                 .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First().AssignedClassKey, StringComparer.OrdinalIgnoreCase);
             CurrentCharacter.Level1Spells = spell1Options.Where(s => s.IsChecked).Select(s => s.Name).ToList();
+
+            // Feat-granted spells (Magic Initiate, Fey Touched, etc.) for PDF tags / reload
+            CurrentCharacter.FeatSpellSource = currentFeatSpellSource ?? "";
+            CurrentCharacter.FeatSpells = currentFeatSpells?
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList()
+                ?? new List<string>();
 
             // Derived values
             CurrentCharacter.Initiative = GetModifierFromText(txtInitiative.Text);
@@ -9497,6 +9841,19 @@ namespace Nemo
                     break;
                 }
             }
+
+            // Restore feat-granted spells for labels / re-export after load
+            if (CurrentCharacter.FeatSpells != null && CurrentCharacter.FeatSpells.Count > 0)
+            {
+                currentFeatSpellSource = CurrentCharacter.FeatSpellSource
+                    ?? CurrentCharacter.SelectedFeat
+                    ?? "";
+                currentFeatSpells = CurrentCharacter.FeatSpells
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => s.Trim())
+                    .ToList();
+                UpdateFeatSpellsLabel();
+            }
         }
 
         private void RestoreCantrips()
@@ -9546,36 +9903,42 @@ namespace Nemo
 
         private void RestoreEquipment()
         {
-            if (CurrentCharacter.Equipment == null || pnlTotalEquipmentSummary == null)
-                return;
-
-            // Clear current summary
-            pnlTotalEquipmentSummary.Children.Clear();
-
-            // Add header
-            var header = new TextBlock
+            // Restore starting wealth mode / prior rolls before rebuilding the summary
+            _suppressWealthModeEvents = true;
+            try
             {
-                Text = "YOUR TOTAL STARTING EQUIPMENT",
-                FontWeight = FontWeights.Bold,
-                Foreground = AccentGreen,
-                Margin = new Thickness(0, 25, 0, 8),
-                FontSize = 15
-            };
-            pnlTotalEquipmentSummary.Children.Add(header);
-
-            // Repopulate saved equipment
-            foreach (string item in CurrentCharacter.Equipment.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                var tb = new TextBlock
+                if (rbRollStartingGold != null && rbStartingEquipment != null)
                 {
-                    Text = "• " + item,
-                    Foreground = Brushes.White,
-                    Margin = new Thickness(10, 2, 0, 2),
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 13
-                };
-                pnlTotalEquipmentSummary.Children.Add(tb);
+                    if (CurrentCharacter.UseRolledGoldInsteadOfEquipment && GetEffectiveCharacterLevel() <= 1)
+                        rbRollStartingGold.IsChecked = true;
+                    else
+                        rbStartingEquipment.IsChecked = true;
+                }
             }
+            finally
+            {
+                _suppressWealthModeEvents = false;
+            }
+
+            // Align class tracker so regenerating equipment after load doesn't wipe rolls
+            string loadedClass = cmbClass?.SelectedItem as string ?? CurrentCharacter.Class ?? "";
+            if (!string.IsNullOrWhiteSpace(loadedClass))
+                _lastStartingWealthClass = loadedClass;
+
+            RefreshStartingWealthUi();
+
+            if (txtLevel1GoldResult != null && CurrentCharacter.Level1RolledGoldGp > 0)
+                txtLevel1GoldResult.Text = string.IsNullOrWhiteSpace(CurrentCharacter.Level1RolledGoldBreakdown)
+                    ? $"{CurrentCharacter.Level1RolledGoldGp} gp"
+                    : CurrentCharacter.Level1RolledGoldBreakdown;
+
+            if (txtHigherLevelGoldResult != null && CurrentCharacter.HigherLevelWealthGp > 0)
+                txtHigherLevelGoldResult.Text = string.IsNullOrWhiteSpace(CurrentCharacter.HigherLevelWealthBreakdown)
+                    ? $"{CurrentCharacter.HigherLevelWealthGp:N0} gp"
+                    : CurrentCharacter.HigherLevelWealthBreakdown;
+
+            // Rebuild live summary (class kit / gold / background / higher-level wealth)
+            UpdateTotalEquipmentSummary();
 
             // === Try to restore weapon combo boxes intelligently ===
             RestoreWeaponSelectionsFromEquipment();

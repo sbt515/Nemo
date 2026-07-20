@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -1153,6 +1154,255 @@ namespace Nemo
     }
         };
 
+        // ==================== STARTING GOLD (PHB class wealth / DMG higher-level) ====================
+
+        /// <summary>Level-1 starting gold when rolling instead of taking the class equipment package.</summary>
+        public sealed class Level1GoldFormula
+        {
+            public int DiceCount { get; init; }
+            public int DieSides { get; init; } = 4;
+            /// <summary>Multiply the dice total by this (usually 10; Monk uses 1).</summary>
+            public int Multiplier { get; init; } = 10;
+            public string Display { get; init; } = "";
+            public double AverageGp { get; init; }
+        }
+
+        /// <summary>DMG wealth-by-level gold for characters starting at higher levels (plus normal equipment).</summary>
+        public sealed class HigherLevelWealthFormula
+        {
+            public int MinLevel { get; init; }
+            public int MaxLevel { get; init; }
+            public int FlatGp { get; init; }
+            public int DiceCount { get; init; }
+            public int DieSides { get; init; } = 10;
+            public int Multiplier { get; init; } = 25;
+            public string Display { get; init; } = "";
+            public string BandLabel { get; init; } = "";
+            public string MagicItemNote { get; init; } = "";
+        }
+
+        /// <summary>
+        /// PHB class starting gold (roll instead of equipment). Artificer uses 5d4×10 (same tier as Fighter).
+        /// For multiclass characters, use only the <b>starting class</b> (first class taken) — never sum classes.
+        /// </summary>
+        public static readonly Dictionary<string, Level1GoldFormula> Level1StartingGoldByClass =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Artificer"] = new Level1GoldFormula { DiceCount = 5, DieSides = 4, Multiplier = 10, Display = "5d4 × 10 gp", AverageGp = 125 },
+                ["Barbarian"] = new Level1GoldFormula { DiceCount = 2, DieSides = 4, Multiplier = 10, Display = "2d4 × 10 gp", AverageGp = 50 },
+                ["Bard"] = new Level1GoldFormula { DiceCount = 5, DieSides = 4, Multiplier = 10, Display = "5d4 × 10 gp", AverageGp = 125 },
+                ["Cleric"] = new Level1GoldFormula { DiceCount = 5, DieSides = 4, Multiplier = 10, Display = "5d4 × 10 gp", AverageGp = 125 },
+                ["Druid"] = new Level1GoldFormula { DiceCount = 2, DieSides = 4, Multiplier = 10, Display = "2d4 × 10 gp", AverageGp = 50 },
+                ["Fighter"] = new Level1GoldFormula { DiceCount = 5, DieSides = 4, Multiplier = 10, Display = "5d4 × 10 gp", AverageGp = 125 },
+                ["Monk"] = new Level1GoldFormula { DiceCount = 5, DieSides = 4, Multiplier = 1, Display = "5d4 gp", AverageGp = 12.5 },
+                ["Paladin"] = new Level1GoldFormula { DiceCount = 5, DieSides = 4, Multiplier = 10, Display = "5d4 × 10 gp", AverageGp = 125 },
+                ["Ranger"] = new Level1GoldFormula { DiceCount = 5, DieSides = 4, Multiplier = 10, Display = "5d4 × 10 gp", AverageGp = 125 },
+                ["Rogue"] = new Level1GoldFormula { DiceCount = 4, DieSides = 4, Multiplier = 10, Display = "4d4 × 10 gp", AverageGp = 100 },
+                ["Sorcerer"] = new Level1GoldFormula { DiceCount = 3, DieSides = 4, Multiplier = 10, Display = "3d4 × 10 gp", AverageGp = 75 },
+                ["Warlock"] = new Level1GoldFormula { DiceCount = 4, DieSides = 4, Multiplier = 10, Display = "4d4 × 10 gp", AverageGp = 100 },
+                ["Wizard"] = new Level1GoldFormula { DiceCount = 4, DieSides = 4, Multiplier = 10, Display = "4d4 × 10 gp", AverageGp = 100 },
+            };
+
+        public static readonly HigherLevelWealthFormula WealthLevels5to10 = new()
+        {
+            MinLevel = 5,
+            MaxLevel = 10,
+            FlatGp = 500,
+            DiceCount = 1,
+            DieSides = 10,
+            Multiplier = 25,
+            BandLabel = "Levels 5–10",
+            Display = "500 gp + 1d10 × 25 gp",
+            MagicItemNote = "Plus normal starting equipment. Standard magic: no extra items. High magic: +1 uncommon magic item."
+        };
+
+        public static readonly HigherLevelWealthFormula WealthLevels11to16 = new()
+        {
+            MinLevel = 11,
+            MaxLevel = 16,
+            FlatGp = 5000,
+            DiceCount = 1,
+            DieSides = 10,
+            Multiplier = 250,
+            BandLabel = "Levels 11–16",
+            Display = "5,000 gp + 1d10 × 250 gp",
+            MagicItemNote = "Plus normal starting equipment and 1–3 uncommon magic items depending on campaign magic level."
+        };
+
+        public static readonly HigherLevelWealthFormula WealthLevels17Plus = new()
+        {
+            MinLevel = 17,
+            MaxLevel = 20,
+            FlatGp = 20000,
+            DiceCount = 1,
+            DieSides = 10,
+            Multiplier = 250,
+            BandLabel = "Levels 17+",
+            Display = "20,000 gp + 1d10 × 250 gp",
+            MagicItemNote = "Plus normal starting equipment and uncommon/rare items depending on campaign magic level."
+        };
+
+        public static Level1GoldFormula? GetLevel1StartingGoldFormula(string className)
+        {
+            if (string.IsNullOrWhiteSpace(className)) return null;
+            return Level1StartingGoldByClass.TryGetValue(className.Trim(), out var f) ? f : null;
+        }
+
+        /// <summary>
+        /// DMG wealth band for a character's <b>total</b> level (sum of all class levels).
+        /// Multiclassing does not grant separate rolls per class.
+        /// </summary>
+        public static HigherLevelWealthFormula? GetHigherLevelWealthFormula(int characterLevel)
+        {
+            if (characterLevel >= 17) return WealthLevels17Plus;
+            if (characterLevel >= 11) return WealthLevels11to16;
+            if (characterLevel >= 5) return WealthLevels5to10;
+            return null;
+        }
+
+        public static int RollDiceSum(int diceCount, int dieSides, Random? rng = null)
+        {
+            rng ??= Random.Shared;
+            int sum = 0;
+            for (int i = 0; i < diceCount; i++)
+                sum += rng.Next(1, dieSides + 1);
+            return sum;
+        }
+
+        /// <summary>Rolls level-1 class gold. Returns total gp and a breakdown like "4d4 (3+2+4+1)=10 × 10 = 100 gp".</summary>
+        public static int RollLevel1StartingGold(string className, out string breakdown, Random? rng = null)
+        {
+            breakdown = "";
+            var formula = GetLevel1StartingGoldFormula(className);
+            if (formula == null) return 0;
+
+            rng ??= Random.Shared;
+            var rolls = new int[formula.DiceCount];
+            int sum = 0;
+            for (int i = 0; i < formula.DiceCount; i++)
+            {
+                rolls[i] = rng.Next(1, formula.DieSides + 1);
+                sum += rolls[i];
+            }
+
+            int total = sum * formula.Multiplier;
+            string dicePart = $"{formula.DiceCount}d{formula.DieSides} ({string.Join("+", rolls)})={sum}";
+            breakdown = formula.Multiplier == 1
+                ? $"{dicePart} = {total} gp"
+                : $"{dicePart} × {formula.Multiplier} = {total} gp";
+            return total;
+        }
+
+        /// <summary>Rolls DMG higher-level wealth gold (levels 5+). Returns 0 if level &lt; 5.</summary>
+        public static int RollHigherLevelWealthGold(int characterLevel, out string breakdown, Random? rng = null)
+        {
+            breakdown = "";
+            var formula = GetHigherLevelWealthFormula(characterLevel);
+            if (formula == null) return 0;
+
+            rng ??= Random.Shared;
+            int die = RollDiceSum(formula.DiceCount, formula.DieSides, rng);
+            int variable = die * formula.Multiplier;
+            int total = formula.FlatGp + variable;
+            breakdown = $"{formula.FlatGp:N0} + {formula.DiceCount}d{formula.DieSides} ({die}) × {formula.Multiplier} = {total:N0} gp";
+            return total;
+        }
+
+        /// <summary>
+        /// Parses coin amounts from background/equipment text (e.g. "pouch with 15 gp", "herbalism kit, 5 gp").
+        /// Skips item valuations like "jewelry worth 10 gp".
+        /// </summary>
+        public static int ExtractGoldPiecesFromText(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return 0;
+
+            int total = 0;
+            // Negative lookbehind: do not count "worth N gp" (item value, not coins)
+            foreach (Match m in Regex.Matches(text, @"(?<!worth\s)(\d+)\s*gp\b", RegexOptions.IgnoreCase))
+            {
+                if (int.TryParse(m.Groups[1].Value, out int n) && n > 0)
+                    total += n;
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// Total GP for the character sheet coin box:
+        /// level-1 rolled gold (if any) + higher-level wealth (if any) +
+        /// background pouch gold when taking equipment instead of class gold and total level &lt; 5.
+        /// </summary>
+        public static int ComputeSheetGoldPieces(Character character)
+        {
+            if (character == null) return 0;
+
+            int total = 0;
+            if (character.Level1RolledGoldGp > 0)
+                total += character.Level1RolledGoldGp;
+            if (character.HigherLevelWealthGp > 0)
+                total += character.HigherLevelWealthGp;
+
+            int charLevel = GetCharacterTotalLevel(character);
+            bool tookEquipment = !character.UseRolledGoldInsteadOfEquipment;
+
+            // Equipment path under level 5: include coins from background gear (pouch / loose gp)
+            if (tookEquipment && charLevel < 5)
+            {
+                total += ExtractBackgroundGoldPieces(character);
+            }
+
+            return total;
+        }
+
+        /// <summary>Sum of class levels (multiclass total), falling back to <see cref="Character.Level"/>.</summary>
+        public static int GetCharacterTotalLevel(Character character)
+        {
+            if (character == null) return 1;
+            if (character.ClassLevels != null && character.ClassLevels.Count > 0)
+            {
+                int sum = character.ClassLevels
+                    .Where(e => e != null && e.Levels > 0)
+                    .Sum(e => e.Levels);
+                if (sum > 0) return Math.Clamp(sum, 1, 20);
+            }
+            return character.Level > 0 ? Math.Clamp(character.Level, 1, 20) : 1;
+        }
+
+        /// <summary>
+        /// Coins granted by background equipment (and matching lines already on the equipment list).
+        /// Prefer <see cref="Character.BackgroundEquipment"/> so duplicated list lines are not double-counted.
+        /// </summary>
+        public static int ExtractBackgroundGoldPieces(Character character)
+        {
+            if (character == null) return 0;
+
+            if (!string.IsNullOrWhiteSpace(character.BackgroundEquipment))
+            {
+                // Ignore UI placeholders
+                if (character.BackgroundEquipment.Contains("No additional equipment", StringComparison.OrdinalIgnoreCase) ||
+                    character.BackgroundEquipment.Contains("See Background tab", StringComparison.OrdinalIgnoreCase))
+                    return 0;
+
+                return ExtractGoldPiecesFromText(character.BackgroundEquipment);
+            }
+
+            // Fallback: scan equipment lines that look like the background package (contain "gp")
+            if (character.Equipment == null) return 0;
+            int fromList = 0;
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in character.Equipment)
+            {
+                if (string.IsNullOrWhiteSpace(item)) continue;
+                if (!item.Contains("gp", StringComparison.OrdinalIgnoreCase)) continue;
+                // Skip rolled-wealth notes
+                if (item.StartsWith("Starting gold", StringComparison.OrdinalIgnoreCase)) continue;
+                if (item.StartsWith("Higher-level wealth", StringComparison.OrdinalIgnoreCase)) continue;
+                string key = item.Trim();
+                if (!seen.Add(key)) continue;
+                fromList += ExtractGoldPiecesFromText(item);
+            }
+            return fromList;
+        }
+
         // ==================== FULL 5E WEAPON LISTS ====================
         public static readonly List<Weapon> SimpleWeapons = new()
 {
@@ -2190,6 +2440,22 @@ public class Character
     public List<string> Equipment { get; set; } = new();
     public string BackgroundEquipment { get; set; } = "";
 
+    /// <summary>
+    /// When true (level 1), the character rolled class starting gold instead of taking the class equipment package.
+    /// Background equipment still applies.
+    /// </summary>
+    public bool UseRolledGoldInsteadOfEquipment { get; set; }
+    /// <summary>Gold pieces from the level-1 class gold roll (instead of equipment).</summary>
+    public int Level1RolledGoldGp { get; set; }
+    /// <summary>Human-readable breakdown of the level-1 roll, e.g. "4d4 (3+2+4+1)=10 × 10 = 100 gp".</summary>
+    public string Level1RolledGoldBreakdown { get; set; } = "";
+    /// <summary>DMG higher-level wealth gold (levels 5+), in addition to normal starting equipment.</summary>
+    public int HigherLevelWealthGp { get; set; }
+    /// <summary>Breakdown of the higher-level wealth roll.</summary>
+    public string HigherLevelWealthBreakdown { get; set; } = "";
+    /// <summary>Total gold pieces for the character sheet coin box (level-1 roll + higher-level wealth).</summary>
+    public int GoldPieces { get; set; }
+
     // === Spells ===
     public List<string> Cantrips { get; set; } = new();
     /// <summary>
@@ -2213,6 +2479,17 @@ public class Character
     public string HighElfCantrip { get; set; } = "";
     public string RaceGrantedSkill { get; set; } = "";
     public List<string> BackgroundLanguages { get; set; } = new();
+
+    /// <summary>
+    /// Feat that grants <see cref="FeatSpells"/> (e.g. "Magic Initiate", "Fey Touched").
+    /// Used on the 5e sheet as the parenthetical source tag.
+    /// </summary>
+    public string FeatSpellSource { get; set; } = "";
+    /// <summary>
+    /// Spell names granted by the selected feat (cantrips and/or leveled spells).
+    /// Not counted against class known/prepared budgets; listed with (Source) on export.
+    /// </summary>
+    public List<string> FeatSpells { get; set; } = new();
 }
 
 // Helper class for structured ability scores
