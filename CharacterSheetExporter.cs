@@ -481,6 +481,13 @@ namespace Nemo
                     ? $"Higher-level wealth: {character.HigherLevelWealthGp:N0} gp"
                     : $"Higher-level wealth: {character.HigherLevelWealthBreakdown}");
             }
+            if (character.CustomGoldGp > 0)
+            {
+                string custom = $"Custom / DM gold: {character.CustomGoldGp:N0} gp";
+                if (!string.IsNullOrWhiteSpace(character.CustomGoldNote))
+                    custom += $" ({character.CustomGoldNote.Trim()})";
+                preview.Equipment.Add(custom);
+            }
 
             return preview;
         }
@@ -802,9 +809,17 @@ namespace Nemo
                 if (!string.IsNullOrWhiteSpace(equipment)) equipment += "\n";
                 equipment += note;
             }
+            if (c.CustomGoldGp > 0)
+            {
+                string note = $"Custom / DM gold: {c.CustomGoldGp:N0} gp";
+                if (!string.IsNullOrWhiteSpace(c.CustomGoldNote))
+                    note += $" ({c.CustomGoldNote.Trim()})";
+                if (!string.IsNullOrWhiteSpace(equipment)) equipment += "\n";
+                equipment += note;
+            }
             T("Equipment", equipment);
 
-            // Coin box: rolled starting gold, higher-level wealth, and (equipment path under 5)
+            // Coin box: rolled gold, higher-level wealth, custom/DM gold, and (equipment path under 5)
             // coins from background equipment (e.g. "pouch with 15 gp", Hermit "5 gp").
             int sheetGp = GameData.ComputeSheetGoldPieces(c);
             if (sheetGp > 0)

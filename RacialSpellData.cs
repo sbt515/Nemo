@@ -67,6 +67,75 @@ namespace Nemo
                 list.Add(G("Light", 0, 1, "Light Bearer"));
             }
 
+            // ── Fairy ──
+            if (r.Equals("Fairy", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(G("Druidcraft", 0, 1, "Fairy Magic"));
+                list.Add(G("Faerie Fire", 1, 3, "Fairy Magic", "1/long rest"));
+                list.Add(G("Enlarge/Reduce", 2, 5, "Fairy Magic", "1/long rest"));
+            }
+
+            // ── Firbolg ──
+            if (r.Equals("Firbolg", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(G("Detect Magic", 1, 1, "Firbolg Magic", "1/short rest"));
+                list.Add(G("Disguise Self", 1, 1, "Firbolg Magic", "1/short rest; up to 3 ft shorter"));
+            }
+
+            // ── Genasi subraces ──
+            if (r.Equals("Genasi", StringComparison.OrdinalIgnoreCase))
+            {
+                if (s.Contains("Air", StringComparison.OrdinalIgnoreCase))
+                    list.Add(G("Levitate", 2, 1, "Mingle with the Wind", "1/long rest"));
+                else if (s.Contains("Earth", StringComparison.OrdinalIgnoreCase))
+                    list.Add(G("Pass without Trace", 2, 1, "Merge with Stone", "1/long rest"));
+                else if (s.Contains("Fire", StringComparison.OrdinalIgnoreCase))
+                {
+                    list.Add(G("Produce Flame", 0, 1, "Reach to the Blaze"));
+                    list.Add(G("Burning Hands", 1, 3, "Reach to the Blaze", "1/long rest"));
+                }
+                else if (s.Contains("Water", StringComparison.OrdinalIgnoreCase))
+                {
+                    list.Add(G("Shape Water", 0, 1, "Call to the Wave"));
+                    list.Add(G("Create or Destroy Water", 1, 3, "Call to the Wave", "as 2nd-level; 1/long rest"));
+                }
+            }
+
+            // ── Gith ──
+            if (r.Equals("Gith", StringComparison.OrdinalIgnoreCase))
+            {
+                if (s.Contains("Githyanki", StringComparison.OrdinalIgnoreCase))
+                {
+                    list.Add(G("Mage Hand", 0, 1, "Githyanki Psionics", "invisible hand"));
+                    list.Add(G("Jump", 1, 3, "Githyanki Psionics", "1/long rest"));
+                    list.Add(G("Misty Step", 2, 5, "Githyanki Psionics", "1/long rest"));
+                }
+                else if (s.Contains("Githzerai", StringComparison.OrdinalIgnoreCase))
+                {
+                    list.Add(G("Mage Hand", 0, 1, "Githzerai Psionics", "invisible hand"));
+                    list.Add(G("Shield", 1, 3, "Githzerai Psionics", "1/long rest"));
+                    list.Add(G("Detect Thoughts", 2, 5, "Githzerai Psionics", "1/long rest"));
+                }
+            }
+
+            // ── Triton ──
+            if (r.Equals("Triton", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(G("Fog Cloud", 1, 1, "Control Air and Water", "1/long rest"));
+                list.Add(G("Gust of Wind", 2, 3, "Control Air and Water", "1/long rest"));
+                list.Add(G("Wall of Water", 3, 5, "Control Air and Water", "1/long rest"));
+            }
+
+            // ── Yuan-ti Pureblood ──
+            if (r.Equals("Yuan-ti Pureblood", StringComparison.OrdinalIgnoreCase) ||
+                r.Equals("Yuan-Ti", StringComparison.OrdinalIgnoreCase) ||
+                r.Equals("Yuan-ti", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(G("Poison Spray", 0, 1, "Innate Spellcasting"));
+                list.Add(G("Animal Friendship", 1, 1, "Innate Spellcasting", "snakes only; at will"));
+                list.Add(G("Suggestion", 2, 3, "Innate Spellcasting", "1/long rest"));
+            }
+
             // ── Elf ──
             if (r.Equals("Elf", StringComparison.OrdinalIgnoreCase))
             {
@@ -91,9 +160,10 @@ namespace Nemo
                 list.Add(G("Minor Illusion", 0, 1, "Natural Illusionist"));
             }
 
-            // ── Dwarf (Duergar) ──
-            if (r.Equals("Dwarf", StringComparison.OrdinalIgnoreCase) &&
-                s.Contains("Duergar", StringComparison.OrdinalIgnoreCase))
+            // ── Duergar (full race or Dwarf subrace) ──
+            if (r.Equals("Duergar", StringComparison.OrdinalIgnoreCase) ||
+                (r.Equals("Dwarf", StringComparison.OrdinalIgnoreCase) &&
+                 s.Contains("Duergar", StringComparison.OrdinalIgnoreCase)))
             {
                 list.Add(G("Enlarge/Reduce", 2, 3, "Duergar Magic", "enlarge only; 1/long rest"));
                 list.Add(G("Invisibility", 2, 5, "Duergar Magic", "self only; 1/long rest"));

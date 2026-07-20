@@ -161,6 +161,24 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel>
+                        <TextBlock Text="RACE CATEGORY"
+                                   FontSize="15"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,8"/>
+                        <ComboBox x:Name="cmbRaceCategory"
+                                  Height="34"
+                                  FontSize="15"
+                                  Background="#2A2A2A"
+                                  Foreground="#F0F0F0"
+                                  BorderBrush="#555"
+                                  Padding="8,4"
+                                  SelectionChanged="cmbRaceCategory_SelectionChanged"/>
+                        <TextBlock Text="Common · Exotic · Monstrous (dnd5e.wikidot.com)"
+                                   FontSize="11"
+                                   Foreground="#888"
+                                   Margin="0,4,0,12"
+                                   TextWrapping="Wrap"/>
+
                         <TextBlock Text="SELECT RACE"
                                    FontSize="15"
                                    FontWeight="Bold"
@@ -1521,6 +1539,61 @@
                                            FontSize="11"
                                            FontStyle="Italic"
                                            TextWrapping="Wrap"/>
+
+                                <!-- Custom / DM fixed gold — always available -->
+                                <Border BorderBrush="#555"
+                                        BorderThickness="0,1,0,0"
+                                        Margin="0,12,0,0"
+                                        Padding="0,12,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Custom / DM gold (optional)"
+                                                   Foreground="#CCC"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,4"/>
+                                        <TextBlock Text="Fixed amount granted by your DM (or house rule). Added to the GP total on the sheet alongside any rolls or background pouch gold."
+                                                   Foreground="#888"
+                                                   FontSize="11"
+                                                   FontStyle="Italic"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,0,8"/>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBox x:Name="txtCustomGoldGp"
+                                                     Width="90"
+                                                     Height="28"
+                                                     Padding="6,4"
+                                                     Background="#2A2A2A"
+                                                     Foreground="#F0F0F0"
+                                                     BorderBrush="#555"
+                                                     CaretBrush="White"
+                                                     Text="0"
+                                                     VerticalContentAlignment="Center"
+                                                     TextChanged="TxtCustomGoldGp_TextChanged"/>
+                                            <TextBlock Text="gp"
+                                                       Foreground="#E8C36A"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       Margin="8,0,16,0"/>
+                                            <TextBox x:Name="txtCustomGoldNote"
+                                                     Width="160"
+                                                     Height="28"
+                                                     Padding="6,4"
+                                                     Background="#2A2A2A"
+                                                     Foreground="#F0F0F0"
+                                                     BorderBrush="#555"
+                                                     CaretBrush="White"
+                                                     VerticalContentAlignment="Center"
+                                                     ToolTip="Optional note (e.g. DM starting fund)"
+                                                     TextChanged="TxtCustomGoldNote_TextChanged"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="txtCustomGoldHint"
+                                                   Text="Note (optional): e.g. “DM starting fund”"
+                                                   Foreground="#666"
+                                                   FontSize="10"
+                                                   Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
 

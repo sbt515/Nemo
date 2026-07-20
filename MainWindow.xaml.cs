@@ -133,11 +133,44 @@ namespace Nemo
             StatMethod_Changed(null, null);
         }
 
+        private bool _suppressRaceCategoryEvents;
+
         private void LoadAllCombos()
         {
-            cmbRace.ItemsSource = GameData.RaceData.Keys.OrderBy(r => r).ToList();
+            if (cmbRaceCategory != null)
+            {
+                cmbRaceCategory.ItemsSource = GameData.RaceCategories.ToList();
+                cmbRaceCategory.SelectedItem = "Common";
+            }
+            RefreshRaceComboForCategory("Common");
             cmbBackground.ItemsSource = GameData.AllBackgrounds;
             cmbClass.ItemsSource = GameData.ClassData.Keys.OrderBy(c => c).ToList();
+        }
+
+        private void cmbRaceCategory_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_suppressRaceCategoryEvents) return;
+            string cat = cmbRaceCategory?.SelectedItem as string ?? "Common";
+            string? previousRace = cmbRace?.SelectedItem as string;
+            RefreshRaceComboForCategory(cat);
+
+            // Keep prior race if it still exists in the new category list
+            if (previousRace != null && cmbRace?.Items.Cast<object>()
+                    .Any(i => string.Equals(i?.ToString(), previousRace, StringComparison.OrdinalIgnoreCase)) == true)
+            {
+                cmbRace.SelectedItem = previousRace;
+            }
+            else if (cmbRace != null && cmbRace.Items.Count > 0)
+            {
+                cmbRace.SelectedIndex = -1; // force user to pick (or leave empty)
+            }
+        }
+
+        private void RefreshRaceComboForCategory(string category)
+        {
+            if (cmbRace == null) return;
+            var races = GameData.GetRacesInCategory(category);
+            cmbRace.ItemsSource = races;
         }
 
         private void cmbRace_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -4978,10 +5011,77 @@ namespace Nemo
         private void SyncGoldPiecesTotal()
         {
             if (CurrentCharacter == null) return;
-            // Matches PDF export: rolled gold + higher-level wealth + background pouch gp (equipment path, level &lt; 5)
+            // Matches PDF export: rolled + higher-level + custom/DM + background pouch (equipment path, level &lt; 5)
             if (txtBackgroundEquipment != null && !string.IsNullOrWhiteSpace(txtBackgroundEquipment.Text))
                 CurrentCharacter.BackgroundEquipment = txtBackgroundEquipment.Text;
+            ApplyCustomGoldFromUi();
             CurrentCharacter.GoldPieces = GameData.ComputeSheetGoldPieces(CurrentCharacter);
+        }
+
+        /// <summary>Reads the custom/DM gold text boxes into <see cref="Character"/>.</summary>
+        private void ApplyCustomGoldFromUi()
+        {
+            if (CurrentCharacter == null) return;
+
+            if (txtCustomGoldGp != null)
+            {
+                string raw = (txtCustomGoldGp.Text ?? "").Trim().Replace(",", "");
+                if (int.TryParse(raw, out int gp) && gp > 0)
+                    CurrentCharacter.CustomGoldGp = gp;
+                else
+                    CurrentCharacter.CustomGoldGp = 0;
+            }
+
+            if (txtCustomGoldNote != null)
+                CurrentCharacter.CustomGoldNote = (txtCustomGoldNote.Text ?? "").Trim();
+        }
+
+        private void TxtCustomGoldGp_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (CurrentCharacter == null) return;
+            ApplyCustomGoldFromUi();
+            CurrentCharacter.GoldPieces = GameData.ComputeSheetGoldPieces(CurrentCharacter);
+            UpdateTotalEquipmentSummary();
+        }
+
+        private void TxtCustomGoldNote_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (CurrentCharacter == null) return;
+            ApplyCustomGoldFromUi();
+            // Note-only change: refresh summary labels without re-parsing if amount unchanged
+            UpdateTotalEquipmentSummary();
+        }
+
+        /// <summary>Pushes saved custom gold values into the Starting Wealth text boxes.</summary>
+        private void RestoreCustomGoldUi()
+        {
+            if (txtCustomGoldGp != null)
+            {
+                txtCustomGoldGp.TextChanged -= TxtCustomGoldGp_TextChanged;
+                try
+                {
+                    txtCustomGoldGp.Text = CurrentCharacter?.CustomGoldGp > 0
+                        ? CurrentCharacter.CustomGoldGp.ToString()
+                        : "0";
+                }
+                finally
+                {
+                    txtCustomGoldGp.TextChanged += TxtCustomGoldGp_TextChanged;
+                }
+            }
+
+            if (txtCustomGoldNote != null)
+            {
+                txtCustomGoldNote.TextChanged -= TxtCustomGoldNote_TextChanged;
+                try
+                {
+                    txtCustomGoldNote.Text = CurrentCharacter?.CustomGoldNote ?? "";
+                }
+                finally
+                {
+                    txtCustomGoldNote.TextChanged += TxtCustomGoldNote_TextChanged;
+                }
+            }
         }
 
         /// <summary>
@@ -5114,13 +5214,23 @@ namespace Nemo
                 totalItems.Add("• Higher-level wealth: not rolled yet — click Roll Wealth");
             }
 
+            // === CUSTOM / DM FIXED GOLD ===
+            if (CurrentCharacter != null && CurrentCharacter.CustomGoldGp > 0)
+            {
+                string customLine = $"• Custom / DM gold: {CurrentCharacter.CustomGoldGp:N0} gp";
+                if (!string.IsNullOrWhiteSpace(CurrentCharacter.CustomGoldNote))
+                    customLine += $" ({CurrentCharacter.CustomGoldNote.Trim()})";
+                totalItems.Add(customLine);
+            }
+
             // === FINAL CLEAN DISPLAY ===
             if (totalItems.Count > 0)
             {
                 foreach (var item in totalItems.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     bool isGoldLine = item.Contains("Starting gold", StringComparison.OrdinalIgnoreCase)
-                        || item.Contains("Higher-level wealth", StringComparison.OrdinalIgnoreCase);
+                        || item.Contains("Higher-level wealth", StringComparison.OrdinalIgnoreCase)
+                        || item.Contains("Custom / DM gold", StringComparison.OrdinalIgnoreCase);
                     pnlTotalEquipmentSummary.Children.Add(new TextBlock
                     {
                         Text = item,
@@ -9638,6 +9748,7 @@ namespace Nemo
                 if (string.IsNullOrWhiteSpace(text)) continue;
                 if (text.StartsWith("Starting gold", StringComparison.OrdinalIgnoreCase)) continue;
                 if (text.StartsWith("Higher-level wealth", StringComparison.OrdinalIgnoreCase)) continue;
+                if (text.StartsWith("Custom / DM gold", StringComparison.OrdinalIgnoreCase)) continue;
                 if (text.Contains("not rolled yet", StringComparison.OrdinalIgnoreCase)) continue;
                 CurrentCharacter.Equipment.Add(text);
             }
@@ -9649,6 +9760,7 @@ namespace Nemo
             {
                 CurrentCharacter.UseRolledGoldInsteadOfEquipment = rbRollStartingGold?.IsChecked == true;
             }
+            ApplyCustomGoldFromUi();
             SyncGoldPiecesTotal();
 
             // Spells (rebuild from UI; Level1Spells stores all selected leveled spells 1–9)
@@ -9937,6 +10049,8 @@ namespace Nemo
                     ? $"{CurrentCharacter.HigherLevelWealthGp:N0} gp"
                     : CurrentCharacter.HigherLevelWealthBreakdown;
 
+            RestoreCustomGoldUi();
+
             // Rebuild live summary (class kit / gold / background / higher-level wealth)
             UpdateTotalEquipmentSummary();
 
@@ -10087,16 +10201,31 @@ namespace Nemo
                 }
             }
 
-            // Race first (triggers racial bonuses / subrace list)
+            // Race category first so the race dropdown contains the saved race
             if (!string.IsNullOrEmpty(CurrentCharacter.Race))
             {
+                string cat = GameData.GetRaceCategory(CurrentCharacter.Race);
+                if (cmbRaceCategory != null)
+                {
+                    _suppressRaceCategoryEvents = true;
+                    try
+                    {
+                        cmbRaceCategory.SelectedItem = cat;
+                        RefreshRaceComboForCategory(cat);
+                    }
+                    finally
+                    {
+                        _suppressRaceCategoryEvents = false;
+                    }
+                }
+
                 // Match race case-insensitively against combo items
-                string? raceMatch = cmbRace.Items.Cast<object>()
+                string? raceMatch = cmbRace?.Items.Cast<object>()
                     .Select(i => i?.ToString())
                     .FirstOrDefault(r => r != null &&
                         r.Equals(CurrentCharacter.Race, StringComparison.OrdinalIgnoreCase));
 
-                if (raceMatch != null)
+                if (raceMatch != null && cmbRace != null)
                     cmbRace.SelectedItem = raceMatch;
             }
 

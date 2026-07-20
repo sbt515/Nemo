@@ -370,6 +370,41 @@ namespace Nemo
                         "Drow Weapon Training: You have proficiency with rapiers, shortswords, and hand crossbows."
                     },
                     HasInnateSpellcasting = true
+                },
+                new()
+                {
+                    Name = "Eladrin",
+                    AbilityBonus = new() { ["Charisma"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Charisma score increases by 1.",
+                        "Fey Step: As a bonus action, you can magically teleport up to 30 feet to an unoccupied space you can see. Once you use this trait, you can't do so again until you finish a short or long rest. When you reach 3rd level, your Fey Step gains an additional effect based on your season (choose or change when you finish a long rest): Autumn (charm), Winter (frighten), Spring (teleport another), or Summer (fire damage) — see Mordenkainen's Tome of Foes for full text."
+                    },
+                    HasInnateSpellcasting = false
+                },
+                new()
+                {
+                    Name = "Sea Elf",
+                    AbilityBonus = new() { ["Constitution"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Constitution score increases by 1.",
+                        "Sea Elf Training: You have proficiency with the spear, trident, light crossbow, and net.",
+                        "Child of the Sea: You have a swimming speed of 30 feet, and you can breathe air and water.",
+                        "Friend of the Sea: Using gestures and sounds, you can communicate simple ideas with any beast that has an innate swimming speed.",
+                        "Languages: You can speak, read, and write Aquan."
+                    }
+                },
+                new()
+                {
+                    Name = "Shadar-kai",
+                    AbilityBonus = new() { ["Constitution"] = 1 },
+                    Traits = new()
+                    {
+                        "Ability Score Increase: Your Constitution score increases by 1.",
+                        "Necrotic Resistance: You have resistance to necrotic damage.",
+                        "Blessing of the Raven Queen: As a bonus action, you can magically teleport up to 30 feet to an unoccupied space you can see. Once you use this trait, you can't do so again until you finish a long rest. Starting at 3rd level, you also gain resistance to all damage when you teleport with this trait; the resistance lasts until the start of your next turn. During that time, you appear ghostly and translucent."
+                    }
                 }
             },
 
@@ -1329,6 +1364,7 @@ namespace Nemo
         /// <summary>
         /// Total GP for the character sheet coin box:
         /// level-1 rolled gold (if any) + higher-level wealth (if any) +
+        /// custom/DM fixed gold (if any) +
         /// background pouch gold when taking equipment instead of class gold and total level &lt; 5.
         /// </summary>
         public static int ComputeSheetGoldPieces(Character character)
@@ -1340,6 +1376,8 @@ namespace Nemo
                 total += character.Level1RolledGoldGp;
             if (character.HigherLevelWealthGp > 0)
                 total += character.HigherLevelWealthGp;
+            if (character.CustomGoldGp > 0)
+                total += character.CustomGoldGp;
 
             int charLevel = GetCharacterTotalLevel(character);
             bool tookEquipment = !character.UseRolledGoldInsteadOfEquipment;
@@ -2453,8 +2491,15 @@ public class Character
     public int HigherLevelWealthGp { get; set; }
     /// <summary>Breakdown of the higher-level wealth roll.</summary>
     public string HigherLevelWealthBreakdown { get; set; } = "";
-    /// <summary>Total gold pieces for the character sheet coin box (level-1 roll + higher-level wealth).</summary>
+    /// <summary>Total gold pieces for the character sheet coin box (rolls + custom + background when applicable).</summary>
     public int GoldPieces { get; set; }
+    /// <summary>
+    /// Fixed gold set by the DM (or house rule), independent of class rolls / wealth bands.
+    /// Always included in the sheet GP total when &gt; 0.
+    /// </summary>
+    public int CustomGoldGp { get; set; }
+    /// <summary>Optional note for custom gold, e.g. "DM starting fund".</summary>
+    public string CustomGoldNote { get; set; } = "";
 
     // === Spells ===
     public List<string> Cantrips { get; set; } = new();
@@ -2525,6 +2570,8 @@ public class SkillEntry
 
 public class RaceData
 {
+    /// <summary>Wikidot-style lineage group: Common, Exotic, or Monstrous.</summary>
+    public string Category { get; set; } = "Common";
     public Dictionary<string, int> AbilityBonuses { get; set; } = new();
     public List<string> Traits { get; set; } = new();
     public List<string> Languages { get; set; } = new();
