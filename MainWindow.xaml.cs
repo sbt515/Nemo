@@ -4015,11 +4015,44 @@ namespace Nemo
         }
 
         /// <summary>
+        /// Base proficiency name without display suffixes like "(multiclass Ranger)" or "(Twilight Domain)".
+        /// </summary>
+        private static string ProficiencyBaseName(string item)
+        {
+            if (string.IsNullOrWhiteSpace(item)) return "";
+            string clean = item.Trim();
+            int paren = clean.IndexOf(" (", StringComparison.Ordinal);
+            if (paren > 0) clean = clean.Substring(0, paren).Trim();
+            return clean;
+        }
+
+        /// <summary>
+        /// True if the list already includes this proficiency (by base name, ignoring source suffixes).
+        /// Also treats "Shields (non-metal)" as covered when "Shields" is already present.
+        /// </summary>
+        private static bool HasProficiency(List<string> list, string item)
+        {
+            string baseName = ProficiencyBaseName(item);
+            if (string.IsNullOrEmpty(baseName)) return true;
+
+            if (list.Any(x => ProficiencyBaseName(x).Equals(baseName, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            // Full shield proficiency already covers non-metal-only shields
+            if (baseName.Equals("Shields (non-metal)", StringComparison.OrdinalIgnoreCase) &&
+                list.Any(x => ProficiencyBaseName(x).Equals("Shields", StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
         /// Collect armor/weapon proficiency lines using official 5e multiclass rules:
         /// <list type="bullet">
         /// <item><description>Primary class (first ClassLevels row / character start): full starting armor &amp; weapons.</description></item>
         /// <item><description>Each additional class: only the PHB Multiclassing Proficiencies table (not full 1st-level list).</description></item>
         /// <item><description>Subclass features (e.g. Twilight Domain) still grant their bonus proficiencies at the usual class level.</description></item>
+        /// <item><description>Already-owned proficiencies are not re-listed (e.g. Rogue + Ranger does not repeat Simple weapons).</description></item>
         /// </list>
         /// </summary>
         private void CollectClassAndSubclassProficiencies(
@@ -4027,11 +4060,15 @@ namespace Nemo
             List<string> weapons,
             List<string>? subclassGrantNotes = null)
         {
-            void AddUnique(List<string> list, string item)
+            // Add by base name only — no redundant "(multiclass X)" / source re-listings
+            bool TryAdd(List<string> list, string item)
             {
-                if (string.IsNullOrWhiteSpace(item)) return;
-                if (!list.Any(x => x.Equals(item, StringComparison.OrdinalIgnoreCase)))
-                    list.Add(item);
+                if (string.IsNullOrWhiteSpace(item)) return false;
+                string baseName = ProficiencyBaseName(item);
+                if (string.IsNullOrEmpty(baseName) || HasProficiency(list, baseName))
+                    return false;
+                list.Add(baseName);
+                return true;
             }
 
             var entries = CurrentCharacter?.ClassLevels?
@@ -4061,9 +4098,9 @@ namespace Nemo
                     if (GameData.ClassData.TryGetValue(className, out var classData))
                     {
                         foreach (var a in classData.ArmorProficiencies ?? new List<string>())
-                            AddUnique(armor, a);
+                            TryAdd(armor, a);
                         foreach (var w in classData.WeaponProficiencies ?? new List<string>())
-                            AddUnique(weapons, w);
+                            TryAdd(weapons, w);
                     }
                 }
                 else
@@ -4071,9 +4108,9 @@ namespace Nemo
                     // PHB: secondary classes only get the Multiclassing Proficiencies table
                     var mc = LevelUpCalculator.GetMulticlassProficiencies(className);
                     foreach (var a in mc.Armor)
-                        AddUnique(armor, $"{a} (multiclass {className})");
+                        TryAdd(armor, a);
                     foreach (var w in mc.Weapons)
-                        AddUnique(weapons, $"{w} (multiclass {className})");
+                        TryAdd(weapons, w);
                 }
 
                 // Subclass bonus proficiencies only once the class has unlocked its subclass
@@ -4084,22 +4121,25 @@ namespace Nemo
                 GetSubclassBonusProficiencies(className, subName,
                     out var subArmor, out var subWeapons, out string sourceLabel);
 
+                var newArmor = new List<string>();
+                var newWeapons = new List<string>();
                 foreach (var a in subArmor)
                 {
-                    string line = string.IsNullOrEmpty(sourceLabel) ? a : $"{a} ({sourceLabel})";
-                    AddUnique(armor, line);
+                    if (TryAdd(armor, a))
+                        newArmor.Add(ProficiencyBaseName(a));
                 }
                 foreach (var w in subWeapons)
                 {
-                    string line = string.IsNullOrEmpty(sourceLabel) ? w : $"{w} ({sourceLabel})";
-                    AddUnique(weapons, line);
+                    if (TryAdd(weapons, w))
+                        newWeapons.Add(ProficiencyBaseName(w));
                 }
 
-                if (subclassGrantNotes != null && (subArmor.Count > 0 || subWeapons.Count > 0))
+                // Only note grants that actually added something new
+                if (subclassGrantNotes != null && (newArmor.Count > 0 || newWeapons.Count > 0))
                 {
                     var bits = new List<string>();
-                    if (subArmor.Count > 0) bits.Add("armor: " + string.Join(", ", subArmor));
-                    if (subWeapons.Count > 0) bits.Add("weapons: " + string.Join(", ", subWeapons));
+                    if (newArmor.Count > 0) bits.Add("armor: " + string.Join(", ", newArmor));
+                    if (newWeapons.Count > 0) bits.Add("weapons: " + string.Join(", ", newWeapons));
                     subclassGrantNotes.Add($"{className} — {sourceLabel}: {string.Join("; ", bits)}");
                 }
             }
@@ -4228,27 +4268,7 @@ namespace Nemo
                 });
             }
 
-            // === NOTES: multiclass table + subclass feature grants ===
-            bool multi = (CurrentCharacter?.ClassLevels?.Count ?? 0) > 1;
-            if (multi)
-            {
-                pnlProficiencySummary.Children.Add(new TextBlock
-                {
-                    Text = "MULTICLASS NOTE",
-                    FontWeight = FontWeights.Bold,
-                    Foreground = (Brush)new BrushConverter().ConvertFromString("#E8C36A"),
-                    Margin = new Thickness(0, 8, 0, 4)
-                });
-                pnlProficiencySummary.Children.Add(new TextBlock
-                {
-                    Text = "Your first class grants full starting armor/weapons. Each additional class only adds the PHB Multiclassing Proficiencies table (not that class's full 1st-level list). Subclass features (domains, patrons, etc.) still grant their bonus proficiencies at the usual class level.",
-                    Foreground = (Brush)new BrushConverter().ConvertFromString("#AAA"),
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 11,
-                    Margin = new Thickness(0, 0, 0, 8)
-                });
-            }
-
+            // Subclass grants that added new armor/weapons (already merged into lists above)
             if (subclassNotes.Count > 0)
             {
                 pnlProficiencySummary.Children.Add(new TextBlock
@@ -4846,7 +4866,7 @@ namespace Nemo
                 {
                     txtWealthMidLevelNote.Text =
                         $"Character level {level} (levels 2–4): use starting-class equipment and background gear. " +
-                        "DMG wealth bands apply from total character level 5+. " +
+                        "Wealth bands apply from total character level 5+. " +
                         "Multiclassing adds no extra starting gold.";
                 }
             }
@@ -5011,14 +5031,14 @@ namespace Nemo
         private void SyncGoldPiecesTotal()
         {
             if (CurrentCharacter == null) return;
-            // Matches PDF export: rolled + higher-level + custom/DM + background pouch (equipment path, level &lt; 5)
+            // Matches PDF export: rolled + higher-level + custom gold + background pouch (equipment path, level < 5)
             if (txtBackgroundEquipment != null && !string.IsNullOrWhiteSpace(txtBackgroundEquipment.Text))
                 CurrentCharacter.BackgroundEquipment = txtBackgroundEquipment.Text;
             ApplyCustomGoldFromUi();
             CurrentCharacter.GoldPieces = GameData.ComputeSheetGoldPieces(CurrentCharacter);
         }
 
-        /// <summary>Reads the custom/DM gold text boxes into <see cref="Character"/>.</summary>
+        /// <summary>Reads the custom gold amount into <see cref="Character"/>.</summary>
         private void ApplyCustomGoldFromUi()
         {
             if (CurrentCharacter == null) return;
@@ -5031,9 +5051,6 @@ namespace Nemo
                 else
                     CurrentCharacter.CustomGoldGp = 0;
             }
-
-            if (txtCustomGoldNote != null)
-                CurrentCharacter.CustomGoldNote = (txtCustomGoldNote.Text ?? "").Trim();
         }
 
         private void TxtCustomGoldGp_TextChanged(object sender, TextChangedEventArgs e)
@@ -5041,14 +5058,6 @@ namespace Nemo
             if (CurrentCharacter == null) return;
             ApplyCustomGoldFromUi();
             CurrentCharacter.GoldPieces = GameData.ComputeSheetGoldPieces(CurrentCharacter);
-            UpdateTotalEquipmentSummary();
-        }
-
-        private void TxtCustomGoldNote_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            if (CurrentCharacter == null) return;
-            ApplyCustomGoldFromUi();
-            // Note-only change: refresh summary labels without re-parsing if amount unchanged
             UpdateTotalEquipmentSummary();
         }
 
@@ -5067,19 +5076,6 @@ namespace Nemo
                 finally
                 {
                     txtCustomGoldGp.TextChanged += TxtCustomGoldGp_TextChanged;
-                }
-            }
-
-            if (txtCustomGoldNote != null)
-            {
-                txtCustomGoldNote.TextChanged -= TxtCustomGoldNote_TextChanged;
-                try
-                {
-                    txtCustomGoldNote.Text = CurrentCharacter?.CustomGoldNote ?? "";
-                }
-                finally
-                {
-                    txtCustomGoldNote.TextChanged += TxtCustomGoldNote_TextChanged;
                 }
             }
         }
@@ -5217,7 +5213,7 @@ namespace Nemo
             // === CUSTOM / DM FIXED GOLD ===
             if (CurrentCharacter != null && CurrentCharacter.CustomGoldGp > 0)
             {
-                string customLine = $"• Custom / DM gold: {CurrentCharacter.CustomGoldGp:N0} gp";
+                string customLine = $"• Custom gold: {CurrentCharacter.CustomGoldGp:N0} gp";
                 if (!string.IsNullOrWhiteSpace(CurrentCharacter.CustomGoldNote))
                     customLine += $" ({CurrentCharacter.CustomGoldNote.Trim()})";
                 totalItems.Add(customLine);
@@ -5230,6 +5226,7 @@ namespace Nemo
                 {
                     bool isGoldLine = item.Contains("Starting gold", StringComparison.OrdinalIgnoreCase)
                         || item.Contains("Higher-level wealth", StringComparison.OrdinalIgnoreCase)
+                        || item.Contains("Custom gold", StringComparison.OrdinalIgnoreCase)
                         || item.Contains("Custom / DM gold", StringComparison.OrdinalIgnoreCase);
                     pnlTotalEquipmentSummary.Children.Add(new TextBlock
                     {
@@ -9748,6 +9745,7 @@ namespace Nemo
                 if (string.IsNullOrWhiteSpace(text)) continue;
                 if (text.StartsWith("Starting gold", StringComparison.OrdinalIgnoreCase)) continue;
                 if (text.StartsWith("Higher-level wealth", StringComparison.OrdinalIgnoreCase)) continue;
+                if (text.StartsWith("Custom gold", StringComparison.OrdinalIgnoreCase)) continue;
                 if (text.StartsWith("Custom / DM gold", StringComparison.OrdinalIgnoreCase)) continue;
                 if (text.Contains("not rolled yet", StringComparison.OrdinalIgnoreCase)) continue;
                 CurrentCharacter.Equipment.Add(text);

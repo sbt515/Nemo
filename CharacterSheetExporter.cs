@@ -483,7 +483,7 @@ namespace Nemo
             }
             if (character.CustomGoldGp > 0)
             {
-                string custom = $"Custom / DM gold: {character.CustomGoldGp:N0} gp";
+                string custom = $"Custom gold: {character.CustomGoldGp:N0} gp";
                 if (!string.IsNullOrWhiteSpace(character.CustomGoldNote))
                     custom += $" ({character.CustomGoldNote.Trim()})";
                 preview.Equipment.Add(custom);
@@ -811,7 +811,7 @@ namespace Nemo
             }
             if (c.CustomGoldGp > 0)
             {
-                string note = $"Custom / DM gold: {c.CustomGoldGp:N0} gp";
+                string note = $"Custom gold: {c.CustomGoldGp:N0} gp";
                 if (!string.IsNullOrWhiteSpace(c.CustomGoldNote))
                     note += $" ({c.CustomGoldNote.Trim()})";
                 if (!string.IsNullOrWhiteSpace(equipment)) equipment += "\n";

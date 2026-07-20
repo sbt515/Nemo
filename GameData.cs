@@ -2498,7 +2498,7 @@ public class Character
     /// Always included in the sheet GP total when &gt; 0.
     /// </summary>
     public int CustomGoldGp { get; set; }
-    /// <summary>Optional note for custom gold, e.g. "DM starting fund".</summary>
+    /// <summary>Optional note for custom gold (persisted for older saves; no longer shown in UI).</summary>
     public string CustomGoldNote { get; set; } = "";
 
     // === Spells ===
