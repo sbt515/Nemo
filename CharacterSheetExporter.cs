@@ -27,13 +27,14 @@ namespace Nemo
         /// Page 3 spell-list field names, in visual top-to-bottom order for the official sheet.
         /// Geometry on the template places <c>Spells 1015</c> under 1st-level (not cantrips).
         /// </summary>
-        private static readonly string[] CantripFields =
+        /// <summary>Cantrip name fields (page 3). Shared with <see cref="CharacterSheetImporter"/>.</summary>
+        public static readonly string[] CantripFields =
         {
             "Spells 1014", "Spells 1016", "Spells 1017", "Spells 1018",
             "Spells 1019", "Spells 1020", "Spells 1021", "Spells 1022"
         };
 
-        private static readonly string[] Level1SpellFields =
+        public static readonly string[] Level1SpellFields =
         {
             "Spells 1015",
             "Spells 1023", "Spells 1024", "Spells 1025", "Spells 1026", "Spells 1027",
@@ -41,14 +42,14 @@ namespace Nemo
         };
 
         /// <summary>Prepared checkboxes aligned with <see cref="Level1SpellFields"/> (null = no box on that row).</summary>
-        private static readonly string?[] Level1PreparedChecks =
+        public static readonly string?[] Level1PreparedChecks =
         {
             null, // Spells 1015 has no prep checkbox on this template
             "Check Box 309", "Check Box 3010", "Check Box 3011", "Check Box 3012", "Check Box 3013",
             "Check Box 3014", "Check Box 3015", "Check Box 3016", "Check Box 3017", "Check Box 3018", "Check Box 3019"
         };
 
-        private static readonly string[] Level2SpellFields =
+        public static readonly string[] Level2SpellFields =
         {
             "Spells 1046",
             "Spells 1034", "Spells 1035", "Spells 1036", "Spells 1037", "Spells 1038",
@@ -56,7 +57,7 @@ namespace Nemo
             "Spells 1044", "Spells 1045"
         };
 
-        private static readonly string?[] Level2PreparedChecks =
+        public static readonly string?[] Level2PreparedChecks =
         {
             "Check Box 313", "Check Box 310", "Check Box 3020", "Check Box 3021", "Check Box 3022",
             "Check Box 3023", "Check Box 3024", "Check Box 3025", "Check Box 3026", "Check Box 3027",
@@ -65,89 +66,89 @@ namespace Nemo
 
         // ── Levels 3–9 (middle + right columns on page 3; visual top→bottom order) ──
 
-        private static readonly string[] Level3SpellFields =
+        public static readonly string[] Level3SpellFields =
         {
             "Spells 1048", "Spells 1047", "Spells 1049", "Spells 1050", "Spells 1051",
             "Spells 1052", "Spells 1053", "Spells 1054", "Spells 1055", "Spells 1056",
             "Spells 1057", "Spells 1058", "Spells 1059"
         };
 
-        private static readonly string?[] Level3PreparedChecks =
+        public static readonly string?[] Level3PreparedChecks =
         {
             "Check Box 315", "Check Box 314", "Check Box 3031", "Check Box 3032", "Check Box 3033",
             "Check Box 3034", "Check Box 3035", "Check Box 3036", "Check Box 3037", "Check Box 3038",
             "Check Box 3039", "Check Box 3040", "Check Box 3041"
         };
 
-        private static readonly string[] Level4SpellFields =
+        public static readonly string[] Level4SpellFields =
         {
             "Spells 1061", "Spells 1060", "Spells 1062", "Spells 1063", "Spells 1064",
             "Spells 1065", "Spells 1066", "Spells 1067", "Spells 1068", "Spells 1069",
             "Spells 1070", "Spells 1071", "Spells 1072"
         };
 
-        private static readonly string?[] Level4PreparedChecks =
+        public static readonly string?[] Level4PreparedChecks =
         {
             "Check Box 317", "Check Box 316", "Check Box 3042", "Check Box 3043", "Check Box 3044",
             "Check Box 3045", "Check Box 3046", "Check Box 3047", "Check Box 3048", "Check Box 3049",
             "Check Box 3050", "Check Box 3051", "Check Box 3052"
         };
 
-        private static readonly string[] Level5SpellFields =
+        public static readonly string[] Level5SpellFields =
         {
             "Spells 1074", "Spells 1073", "Spells 1075", "Spells 1076", "Spells 1077",
             "Spells 1078", "Spells 1079", "Spells 1080", "Spells 1081"
         };
 
-        private static readonly string?[] Level5PreparedChecks =
+        public static readonly string?[] Level5PreparedChecks =
         {
             "Check Box 319", "Check Box 318", "Check Box 3053", "Check Box 3054", "Check Box 3055",
             "Check Box 3056", "Check Box 3057", "Check Box 3058", "Check Box 3059"
         };
 
-        private static readonly string[] Level6SpellFields =
+        public static readonly string[] Level6SpellFields =
         {
             "Spells 1083", "Spells 1082", "Spells 1084", "Spells 1085", "Spells 1086",
             "Spells 1087", "Spells 1088", "Spells 1089", "Spells 1090"
         };
 
-        private static readonly string?[] Level6PreparedChecks =
+        public static readonly string?[] Level6PreparedChecks =
         {
             "Check Box 321", "Check Box 320", "Check Box 3060", "Check Box 3061", "Check Box 3062",
             "Check Box 3063", "Check Box 3064", "Check Box 3065", "Check Box 3066"
         };
 
-        private static readonly string[] Level7SpellFields =
+        public static readonly string[] Level7SpellFields =
         {
             "Spells 1092", "Spells 1091", "Spells 1093", "Spells 1094", "Spells 1095",
             "Spells 1096", "Spells 1097", "Spells 1098", "Spells 1099"
         };
 
-        private static readonly string?[] Level7PreparedChecks =
+        public static readonly string?[] Level7PreparedChecks =
         {
             "Check Box 323", "Check Box 322", "Check Box 3067", "Check Box 3068", "Check Box 3069",
             "Check Box 3070", "Check Box 3071", "Check Box 3072", "Check Box 3073"
         };
 
-        private static readonly string[] Level8SpellFields =
+        public static readonly string[] Level8SpellFields =
         {
             "Spells 10101", "Spells 10100", "Spells 10102", "Spells 10103",
             "Spells 10104", "Spells 10105", "Spells 10106"
         };
 
-        private static readonly string?[] Level8PreparedChecks =
+        public static readonly string?[] Level8PreparedChecks =
         {
             "Check Box 325", "Check Box 324", "Check Box 3074", "Check Box 3075",
             "Check Box 3076", "Check Box 3077", "Check Box 3078"
         };
 
-        private static readonly string[] Level9SpellFields =
+        public static readonly string[] Level9SpellFields =
         {
             "Spells 10108", "Spells 10107", "Spells 10109", "Spells 101010",
             "Spells 101011", "Spells 101012", "Spells 101013"
         };
 
-        private static readonly string?[] Level9PreparedChecks =
+        public static readonly string?[] Level9PreparedChecks =
         {
             "Check Box 327", "Check Box 326", "Check Box 3079", "Check Box 3080",
             "Check Box 3081", "Check Box 3082", "Check Box 3083"
@@ -156,7 +157,7 @@ namespace Nemo
         /// <summary>
         /// Spell name fields per spell level (index 1–9). Top-to-bottom visual order on page 3.
         /// </summary>
-        private static readonly string[][] SpellFieldsByLevel =
+        public static readonly string[][] SpellFieldsByLevel =
         {
             Array.Empty<string>(), // 0 = cantrips handled separately
             Level1SpellFields,
@@ -173,7 +174,7 @@ namespace Nemo
         /// <summary>
         /// Prepared checkboxes aligned with <see cref="SpellFieldsByLevel"/> (index 1–9).
         /// </summary>
-        private static readonly string?[][] PreparedChecksByLevel =
+        public static readonly string?[][] PreparedChecksByLevel =
         {
             Array.Empty<string?>(),
             Level1PreparedChecks,
@@ -191,7 +192,7 @@ namespace Nemo
         /// Spell-slot total/remaining field pairs by spell level (1–9).
         /// Template names: SlotsTotal/Remaining 19 = 1st … 27 = 9th.
         /// </summary>
-        private static readonly (string Total, string Remaining)[] SlotFieldsByLevel =
+        public static readonly (string Total, string Remaining)[] SlotFieldsByLevel =
         {
             default!, // index 0 unused
             ("SlotsTotal 19", "SlotsRemaining 19"), // 1st
@@ -204,6 +205,66 @@ namespace Nemo
             ("SlotsTotal 26", "SlotsRemaining 26"), // 8th
             ("SlotsTotal 27", "SlotsRemaining 27"), // 9th
         };
+
+        /// <summary>
+        /// Skill display name → (text field name, proficiency checkbox) on the official sheet.
+        /// </summary>
+        public static readonly Dictionary<string, (string Field, string Check)> SkillFieldMap =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Acrobatics"] = ("Acrobatics", "Check Box 23"),
+                ["Animal Handling"] = ("Animal", "Check Box 24"),
+                ["Arcana"] = ("Arcana", "Check Box 25"),
+                ["Athletics"] = ("Athletics", "Check Box 26"),
+                ["Deception"] = ("Deception ", "Check Box 27"),
+                ["History"] = ("History ", "Check Box 28"),
+                ["Insight"] = ("Insight", "Check Box 29"),
+                ["Intimidation"] = ("Intimidation", "Check Box 30"),
+                ["Investigation"] = ("Investigation ", "Check Box 31"),
+                ["Medicine"] = ("Medicine", "Check Box 32"),
+                ["Nature"] = ("Nature", "Check Box 33"),
+                ["Perception"] = ("Perception ", "Check Box 34"),
+                ["Performance"] = ("Performance", "Check Box 35"),
+                ["Persuasion"] = ("Persuasion", "Check Box 36"),
+                ["Religion"] = ("Religion", "Check Box 37"),
+                ["Sleight of Hand"] = ("SleightofHand", "Check Box 38"),
+                ["Stealth"] = ("Stealth ", "Check Box 39"),
+                ["Survival"] = ("Survival", "Check Box 40"),
+            };
+
+        /// <summary>Save ability → (bonus field, proficiency checkbox).</summary>
+        public static readonly Dictionary<string, (string Field, string Check)> SaveFieldMap =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Strength"] = ("ST Strength", "Check Box 11"),
+                ["Dexterity"] = ("ST Dexterity", "Check Box 18"),
+                ["Constitution"] = ("ST Constitution", "Check Box 19"),
+                ["Intelligence"] = ("ST Intelligence", "Check Box 20"),
+                ["Wisdom"] = ("ST Wisdom", "Check Box 21"),
+                ["Charisma"] = ("ST Charisma", "Check Box 22"),
+            };
+
+        /// <summary>Strips sheet display tags such as <c>Faerie Fire (Twilight)</c> → <c>Faerie Fire</c>.</summary>
+        public static string StripSpellDisplayTag(string display)
+        {
+            if (string.IsNullOrWhiteSpace(display)) return "";
+            string s = display.Trim();
+            int open = s.LastIndexOf(" (", StringComparison.Ordinal);
+            if (open > 0 && s.EndsWith(")", StringComparison.Ordinal))
+                return s.Substring(0, open).Trim();
+            return s;
+        }
+
+        /// <summary>Extracts the parenthetical tag from a sheet spell line, if any.</summary>
+        public static string? GetSpellDisplayTag(string display)
+        {
+            if (string.IsNullOrWhiteSpace(display)) return null;
+            string s = display.Trim();
+            int open = s.LastIndexOf(" (", StringComparison.Ordinal);
+            if (open > 0 && s.EndsWith(")", StringComparison.Ordinal))
+                return s.Substring(open + 2, s.Length - open - 3).Trim();
+            return null;
+        }
 
         /// <summary>
         /// Optional precomputed values that are easier to assemble from the UI layer.
@@ -698,56 +759,16 @@ namespace Nemo
             var saves = extras.SavingThrows ?? DeriveSavingThrows(c, prof);
             foreach (var save in saves)
             {
-                string field = save.Name switch
-                {
-                    "Strength" => "ST Strength",
-                    "Dexterity" => "ST Dexterity",
-                    "Constitution" => "ST Constitution",
-                    "Intelligence" => "ST Intelligence",
-                    "Wisdom" => "ST Wisdom",
-                    "Charisma" => "ST Charisma",
-                    _ => ""
-                };
-                if (field.Length > 0)
-                    T(field, FmtMod(save.Bonus));
+                if (!SaveFieldMap.TryGetValue(save.Name, out var map)) continue;
+                T(map.Field, FmtMod(save.Bonus));
+                C(map.Check, save.IsProficient);
             }
-
-            // Save proficiency checkboxes (standard layout for this PDF)
-            C("Check Box 11", saves.Any(s => s.Name == "Strength" && s.IsProficient));
-            C("Check Box 18", saves.Any(s => s.Name == "Dexterity" && s.IsProficient));
-            C("Check Box 19", saves.Any(s => s.Name == "Constitution" && s.IsProficient));
-            C("Check Box 20", saves.Any(s => s.Name == "Intelligence" && s.IsProficient));
-            C("Check Box 21", saves.Any(s => s.Name == "Wisdom" && s.IsProficient));
-            C("Check Box 22", saves.Any(s => s.Name == "Charisma" && s.IsProficient));
 
             // ── Skills ──
             var skills = extras.Skills ?? DeriveSkills(c, prof);
-            // Map skill display name → (field name, checkbox name)
-            var skillFields = new Dictionary<string, (string Field, string Check)>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["Acrobatics"] = ("Acrobatics", "Check Box 23"),
-                ["Animal Handling"] = ("Animal", "Check Box 24"),
-                ["Arcana"] = ("Arcana", "Check Box 25"),
-                ["Athletics"] = ("Athletics", "Check Box 26"),
-                ["Deception"] = ("Deception ", "Check Box 27"),       // trailing space
-                ["History"] = ("History ", "Check Box 28"),           // trailing space
-                ["Insight"] = ("Insight", "Check Box 29"),
-                ["Intimidation"] = ("Intimidation", "Check Box 30"),
-                ["Investigation"] = ("Investigation ", "Check Box 31"), // trailing space
-                ["Medicine"] = ("Medicine", "Check Box 32"),
-                ["Nature"] = ("Nature", "Check Box 33"),
-                ["Perception"] = ("Perception ", "Check Box 34"),     // trailing space
-                ["Performance"] = ("Performance", "Check Box 35"),
-                ["Persuasion"] = ("Persuasion", "Check Box 36"),
-                ["Religion"] = ("Religion", "Check Box 37"),
-                ["Sleight of Hand"] = ("SleightofHand", "Check Box 38"),
-                ["Stealth"] = ("Stealth ", "Check Box 39"),           // trailing space
-                ["Survival"] = ("Survival", "Check Box 40"),
-            };
-
             foreach (var skill in skills)
             {
-                if (!skillFields.TryGetValue(skill.Name, out var map)) continue;
+                if (!SkillFieldMap.TryGetValue(skill.Name, out var map)) continue;
                 T(map.Field, FmtMod(skill.Bonus));
                 C(map.Check, skill.IsProficient);
             }
@@ -1219,14 +1240,7 @@ namespace Nemo
             return 1;
         }
 
-        private static string StripSubclassTag(string display)
-        {
-            // "Faerie Fire (Twilight)" → "Faerie Fire"
-            int open = display.LastIndexOf(" (", StringComparison.Ordinal);
-            if (open > 0 && display.EndsWith(")", StringComparison.Ordinal))
-                return display.Substring(0, open).Trim();
-            return display;
-        }
+        private static string StripSubclassTag(string display) => StripSpellDisplayTag(display);
 
         /// <summary>
         /// Short label for sheet notation, e.g. "Twilight Domain" → "Twilight",

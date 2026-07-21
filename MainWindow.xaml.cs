@@ -6,8 +6,6 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
-using PdfSharp.Pdf;
-using PdfSharp.Drawing;
 using System.Windows.Media;
 using System.ComponentModel;
 using System.Windows.Data;
@@ -23,7 +21,6 @@ using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
 
-// Alias to avoid conflicts with PdfSharp
 using iTextPdfDocument = iText.Kernel.Pdf.PdfDocument;
 using iTextPdfPage = iText.Kernel.Pdf.PdfPage;
 
@@ -7587,42 +7584,6 @@ namespace Nemo
             return racialBonuses.TryGetValue(ability, out int bonus) ? bonus : 0;
         }
 
-        private string GetFinalACStringForPDF()
-        {
-            if (CurrentCharacter != null && !string.IsNullOrWhiteSpace(CurrentCharacter.EquippedACDisplay))
-            {
-                return CurrentCharacter.EquippedACDisplay;
-            }
-
-            // Fallback (should rarely happen)
-            return CurrentCharacter?.ArmorClass.ToString() ?? "10";
-        }
-
-        private void DrawSectionHeader(XGraphics gfx, string title, double x, ref double y, double pageWidth)
-        {
-            var rect = new XRect(x, y - 4, pageWidth - 80, 18);
-            gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(230, 230, 240)), rect);
-            gfx.DrawString(title, new XFont("Arial", 11, XFontStyleEx.Bold), XBrushes.DarkSlateBlue, new XPoint(x + 5, y + 10));
-            y += 28;
-        }
-
-        private void DrawCleanAbilityScore(XGraphics gfx, string label, AbilityScore score, double x, ref double y)
-        {
-            var bold = new XFont("Arial", 9, XFontStyleEx.Bold);
-            var normal = new XFont("Arial", 9);
-
-            gfx.DrawString(label, bold, XBrushes.DarkSlateBlue, new XPoint(x, y));
-            y += 13;
-
-            string mainLine = $"{score.Final} ({score.Modifier:+#;-#;0})";
-            gfx.DrawString(mainLine, new XFont("Arial", 11, XFontStyleEx.Bold), XBrushes.Black, new XPoint(x, y));
-            y += 12;
-
-            string breakdown = $"Base {score.Base} + Racial {score.Racial} + Feat {score.Feat}";
-            gfx.DrawString(breakdown, normal, XBrushes.Gray, new XPoint(x, y));
-            y += 18;
-        }
-
         private List<SkillEntry> BuildFullSkillListForPDF()
         {
             var skills = new List<SkillEntry>();
@@ -7752,705 +7713,6 @@ namespace Nemo
                 .Replace(",", "")
                 .Replace("(", "")
                 .Replace(")", "");
-        }
-
-        /// <summary>
-        /// Draws text that wraps within the given maxWidth and advances y accordingly.
-        /// </summary>
-        private void DrawWrappedText(XGraphics gfx, string text, XFont font, XBrush brush,
-                                     double x, ref double y, double maxWidth, double lineHeight = 11)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return;
-
-            var words = text.Split(' ');
-            string currentLine = "";
-
-            foreach (var word in words)
-            {
-                string testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
-                double width = gfx.MeasureString(testLine, font).Width;
-
-                if (width > maxWidth && currentLine.Length > 0)
-                {
-                    gfx.DrawString(currentLine, font, brush, new XPoint(x, y));
-                    y += lineHeight;
-                    currentLine = word;
-                }
-                else
-                {
-                    currentLine = testLine;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(currentLine))
-            {
-                gfx.DrawString(currentLine, font, brush, new XPoint(x, y));
-                y += lineHeight;
-            }
-        }
-
-        private void ExportPDF_Click(object sender, RoutedEventArgs e)
-        {
-            // === STEP 1: Auto-save JSON silently ===
-            AutoSaveCharacterToJson();
-
-            if (CurrentCharacter == null)
-            {
-                MessageBox.Show("No character loaded. Please save the character first.", "Export Failed");
-                return;
-            }
-
-            // === Build clean filename from character name ===
-            string characterName = CurrentCharacter.Name?.Trim() ?? "";
-
-            // Remove invalid filename characters and replace spaces with underscores
-            string safeName = string.IsNullOrWhiteSpace(characterName)
-                ? "Untitled"
-                : string.Join("_", characterName.Split(System.IO.Path.GetInvalidFileNameChars()));
-
-            string defaultFileName = $"{safeName}_CharacterSheet.pdf";
-
-            var dlg = new Microsoft.Win32.SaveFileDialog
-            {
-                FileName = defaultFileName,
-                DefaultExt = ".pdf",
-                Filter = "PDF Files (*.pdf)|*.pdf|All files (*.*)|*.*",
-                Title = "Export Character Sheet as PDF"
-            };
-
-            if (dlg.ShowDialog() != true)
-                return; // User cancelled
-
-            string filePath = dlg.FileName;
-
-            try
-            {
-                var document = new PdfSharp.Pdf.PdfDocument();
-                document.Info.Title = $"{CurrentCharacter.Name} - D&D 5e Character Sheet";
-                document.Info.Author = "Nemo Character Creator";
-
-                var page = document.AddPage();
-                var gfx = XGraphics.FromPdfPage(page);
-
-                var font = new XFont("Arial", 10);
-                var boldFont = new XFont("Arial", 11, XFontStyleEx.Bold);
-                var titleFont = new XFont("Arial", 18, XFontStyleEx.Bold);
-                var sectionFont = new XFont("Arial", 11, XFontStyleEx.Bold);
-                var normalFont = new XFont("Arial", 9);
-                var grayBrush = XBrushes.DimGray;
-                var smallGray = new XFont("Arial", 8);
-                var linkFont = new XFont("Arial", 10, XFontStyleEx.Underline);
-                var linkBrush = XBrushes.Blue;
-
-                double y = 40;
-                double left = 40;
-                double pageWidth = page.Width;
-                double maxTextWidth = pageWidth - 100;
-
-                // ========== HEADER ==========
-                gfx.DrawString("D&D 5e", titleFont, XBrushes.DarkSlateBlue, new XPoint(left, y));
-                y += 26;
-
-                gfx.DrawString(CurrentCharacter.Name, new XFont("Arial", 16, XFontStyleEx.Bold), XBrushes.Black, new XPoint(left, y));
-                gfx.DrawString($"Player: {CurrentCharacter.PlayerName}", font, XBrushes.Black, new XPoint(320, y));
-                y += 22;
-
-                // Clean class name for display
-                string displayClass = CurrentCharacter.Class;
-                if (displayClass.Contains("("))
-                    displayClass = displayClass.Substring(0, displayClass.IndexOf("(")).Trim();
-
-                // Clean subclass (in case old data still has the placeholder)
-                string displaySubclass = CurrentCharacter.Subclass;
-                if (!string.IsNullOrEmpty(displaySubclass) && displaySubclass.Contains("Requires Level", StringComparison.OrdinalIgnoreCase))
-                    displaySubclass = "";
-
-                string raceLine = $"{CurrentCharacter.Race}";
-                if (!string.IsNullOrEmpty(CurrentCharacter.Subrace)) raceLine += $" ({CurrentCharacter.Subrace})";
-                raceLine += $"  •  {displayClass}";
-                if (!string.IsNullOrEmpty(displaySubclass)) raceLine += $" ({displaySubclass})";
-                raceLine += $"  •  {CurrentCharacter.Background}";
-
-                gfx.DrawString(raceLine, font, XBrushes.Black, new XPoint(left, y));
-                y += 18;
-
-                if (!string.IsNullOrEmpty(CurrentCharacter.SelectedFeat))
-                    gfx.DrawString($"Feat: {CurrentCharacter.SelectedFeat}", font, XBrushes.DarkGreen, new XPoint(left, y));
-
-                y += 25;
-
-                // ========== ABILITY SCORES ==========
-                DrawSectionHeader(gfx, "ABILITY SCORES", left, ref y, pageWidth);
-
-                double col1X = left;
-                double col2X = 280;
-                double startY = y;
-
-                // Left column
-                DrawCleanAbilityScore(gfx, "Strength", CurrentCharacter.AbilityScores.Strength, col1X, ref y);
-                DrawCleanAbilityScore(gfx, "Constitution", CurrentCharacter.AbilityScores.Constitution, col1X, ref y);
-                DrawCleanAbilityScore(gfx, "Wisdom", CurrentCharacter.AbilityScores.Wisdom, col1X, ref y);
-
-                // Right column (reset y)
-                y = startY;
-                DrawCleanAbilityScore(gfx, "Dexterity", CurrentCharacter.AbilityScores.Dexterity, col2X, ref y);
-                DrawCleanAbilityScore(gfx, "Intelligence", CurrentCharacter.AbilityScores.Intelligence, col2X, ref y);
-                DrawCleanAbilityScore(gfx, "Charisma", CurrentCharacter.AbilityScores.Charisma, col2X, ref y);
-
-                y = Math.Max(y, startY) + 15;
-
-                // ========== COMBAT ==========
-                DrawSectionHeader(gfx, "COMBAT", left, ref y, pageWidth);
-
-                string finalAC = GetFinalACStringForPDF();
-
-                int strMod = CurrentCharacter.AbilityScores.Strength.Modifier;
-                int dexMod = CurrentCharacter.AbilityScores.Dexterity.Modifier;
-                int prof = CurrentCharacter.ProficiencyBonus;
-
-                string combatText = $"AC: {finalAC}     HP: {CurrentCharacter.HitPoints}     " +
-                                    $"Initiative: +{CurrentCharacter.Initiative}     Proficiency: +{prof}";
-
-                gfx.DrawString(combatText, boldFont, XBrushes.Black, new XPoint(left, y));
-                y += 18;
-
-                // === NEW: Weapon Attack Bonuses ===
-                string meleeAttack = (strMod + prof) >= 0 ? $"+{strMod + prof}" : (strMod + prof).ToString();
-                string rangedAttack = (dexMod + prof) >= 0 ? $"+{dexMod + prof}" : (dexMod + prof).ToString();
-
-                string attackText = $"Weapon Attack (Str): {meleeAttack}     Ranged Weapon Attack (Dex): {rangedAttack}";
-                gfx.DrawString(attackText, font, XBrushes.Black, new XPoint(left, y));
-                y += 20;
-
-                // Spellcasting line (only if the character has spellcasting)
-                if (!string.IsNullOrEmpty(CurrentCharacter.SpellcastingAbility))
-                {
-                    gfx.DrawString($"Spell DC: {CurrentCharacter.SpellSaveDC}     Spell Attack: +{CurrentCharacter.SpellAttackBonus}",
-                                   font, XBrushes.Black, new XPoint(left, y));
-                    y += 18;
-                }
-
-                // ========== SPEED ==========
-                int speed = GetFinalSpeed();
-
-                gfx.DrawString($"Speed: {speed} ft", font, XBrushes.Black, new XPoint(left, y));
-                y += 18;
-
-                // ========== EQUIPPED WEAPONS ==========
-                var equippedWeapons = GetFormattedEquippedWeapons();
-                if (equippedWeapons.Count > 0)
-                {
-                    DrawSectionHeader(gfx, "EQUIPPED WEAPONS", left, ref y, pageWidth);
-
-                    foreach (var weaponLine in equippedWeapons)
-                    {
-                        if (y > page.Height - 70)
-                        {
-                            page = document.AddPage();
-                            gfx = XGraphics.FromPdfPage(page);
-                            y = 40;
-                            DrawSectionHeader(gfx, "EQUIPPED WEAPONS (continued)", left, ref y, pageWidth);
-                        }
-
-                        gfx.DrawString(weaponLine, font, XBrushes.Black, new XPoint(left, y));
-                        y += 16;
-                    }
-
-                    y += 10;
-                }
-
-                // ========== CLASS FEATURES (up to each class's actual levels only) ==========
-                var featureClassLevels = GetActiveClassLevels();
-                if (featureClassLevels.Count == 0 && !string.IsNullOrWhiteSpace(CurrentCharacter.Class))
-                {
-                    featureClassLevels = new List<ClassLevelEntry>
-                    {
-                        new(CurrentCharacter.Class, Math.Max(1, CurrentCharacter.Level), CurrentCharacter.Subclass)
-                    };
-                }
-
-                if (featureClassLevels.Count > 0)
-                {
-                    DrawSectionHeader(gfx, "CLASS FEATURES", left, ref y, pageWidth);
-                    double pageHeight = page.Height;
-
-                    foreach (var classEntry in featureClassLevels)
-                    {
-                        string classKey = classEntry.ClassName;
-                        int classLv = Math.Max(1, classEntry.Levels);
-                        string displayClassName = classKey;
-                        if (displayClassName.Contains("("))
-                            displayClassName = displayClassName.Substring(0, displayClassName.IndexOf("(")).Trim();
-
-                        if (y > page.Height - 95)
-                        {
-                            page = document.AddPage();
-                            gfx = XGraphics.FromPdfPage(page);
-                            y = 40;
-                            DrawSectionHeader(gfx, "CLASS FEATURES (continued)", left, ref y, pageWidth);
-                            pageHeight = page.Height;
-                        }
-
-                        string classSlug = Slugify(displayClassName);
-                        string classUrl = $"https://dnd5e.wikidot.com/{classSlug}";
-                        string classHeader = $"{displayClassName} {classLv}";
-                        gfx.DrawString(classHeader, linkFont, linkBrush, new XPoint(left + 10, y));
-                        double classNameWidth = gfx.MeasureString(classHeader, linkFont).Width;
-                        var classLinkRect = new PdfRectangle(new XRect(left + 10, pageHeight - (y + 4), classNameWidth + 4, 16));
-                        page.AddWebLink(classLinkRect, classUrl);
-
-                        string? subclassKey = GameData.GetEffectiveSubclass(classEntry);
-                        if (!string.IsNullOrWhiteSpace(subclassKey) &&
-                            (classKey == "Cleric" || classKey == "Sorcerer" || classKey == "Warlock"))
-                        {
-                            double xAfterClass = left + 10 + classNameWidth + 6;
-                            gfx.DrawString(" / ", normalFont, XBrushes.Black, new XPoint(xAfterClass, y));
-                            double slashWidth = gfx.MeasureString(" / ", normalFont).Width;
-                            double subX = xAfterClass + slashWidth;
-                            string subSlug = Slugify(subclassKey);
-                            string subUrl = classKey.ToLowerInvariant() switch
-                            {
-                                "cleric" => $"https://dnd5e.wikidot.com/cleric:{subSlug}",
-                                "sorcerer" => $"https://dnd5e.wikidot.com/sorcerer:{subSlug}",
-                                "warlock" => $"https://dnd5e.wikidot.com/warlock:{subSlug}",
-                                _ => $"https://dnd5e.wikidot.com/{subSlug}"
-                            };
-                            gfx.DrawString(subclassKey, linkFont, linkBrush, new XPoint(subX, y));
-                            double subWidth = gfx.MeasureString(subclassKey, linkFont).Width;
-                            page.AddWebLink(new PdfRectangle(new XRect(subX, pageHeight - (y + 4), subWidth + 4, 16)), subUrl);
-                        }
-
-                        y += 18;
-
-                        var classFeatures = GameData.GetClassFeaturesUpToLevel(classKey, classLv, includeOptional: true);
-                        if (classFeatures.Count == 0 && classLv <= 1 &&
-                            GameData.ClassLevel1Features.TryGetValue(classKey, out var legacyClassFeatures))
-                            classFeatures = legacyClassFeatures;
-
-                        foreach (var feature in classFeatures)
-                        {
-                            if (y > page.Height - 95)
-                            {
-                                page = document.AddPage();
-                                gfx = XGraphics.FromPdfPage(page);
-                                y = 40;
-                                DrawSectionHeader(gfx, "CLASS FEATURES (continued)", left, ref y, pageWidth);
-                                pageHeight = page.Height;
-                            }
-
-                            string featName = feature.Level > 1 ? $"(Lv {feature.Level}) {feature.Name}" : feature.Name;
-                            gfx.DrawString($"• {featName}", boldFont, XBrushes.Black, new XPoint(left + 10, y));
-                            y += 13;
-
-                            string desc = feature.Description ?? "";
-                            if (desc.Length > 220)
-                                desc = desc.Substring(0, 217) + "...";
-                            DrawWrappedText(gfx, desc, smallGray, XBrushes.Gray, left + 18, ref y, maxTextWidth - 10, 10);
-                            y += 3;
-
-                            if (!string.IsNullOrWhiteSpace(feature.Uses))
-                            {
-                                gfx.DrawString($"   Uses: {feature.Uses}", normalFont, XBrushes.DarkGreen, new XPoint(left + 18, y));
-                                y += 12;
-                            }
-
-                            y += 5;
-                        }
-
-                        y += 8;
-
-                        if (string.IsNullOrWhiteSpace(subclassKey))
-                            continue;
-
-                        var subFeatures = GameData.GetSubclassFeaturesUpToLevel(subclassKey, classLv);
-                        if (subFeatures.Count == 0 &&
-                            GameData.SubclassLevel1Features.TryGetValue(subclassKey, out var legacySubFeatures))
-                            subFeatures = legacySubFeatures.Where(f => f.Level <= classLv || f.Level <= 0).ToList();
-
-                        if (subFeatures.Count == 0)
-                            continue;
-
-                        if (y > page.Height - 70)
-                        {
-                            page = document.AddPage();
-                            gfx = XGraphics.FromPdfPage(page);
-                            y = 40;
-                            DrawSectionHeader(gfx, "CLASS FEATURES (continued)", left, ref y, pageWidth);
-                            pageHeight = page.Height;
-                        }
-
-                        string subHeader = $"{subclassKey} Features";
-                        gfx.DrawString(subHeader, boldFont, XBrushes.DarkSlateBlue, new XPoint(left + 10, y));
-                        y += 16;
-
-                        foreach (var feature in subFeatures)
-                        {
-                            if (y > page.Height - 95)
-                            {
-                                page = document.AddPage();
-                                gfx = XGraphics.FromPdfPage(page);
-                                y = 40;
-                                DrawSectionHeader(gfx, "CLASS FEATURES (continued)", left, ref y, pageWidth);
-                                pageHeight = page.Height;
-                            }
-
-                            string featName = feature.Level > 0
-                                ? $"(Lv {feature.Level}) {feature.Name}"
-                                : feature.Name;
-                            gfx.DrawString($"• {featName}", boldFont, XBrushes.Black, new XPoint(left + 10, y));
-                            y += 13;
-
-                            string desc = feature.Description;
-                            if (desc.Length > 220)
-                                desc = desc.Substring(0, 217) + "...";
-                            DrawWrappedText(gfx, desc, smallGray, XBrushes.Gray, left + 18, ref y, maxTextWidth - 10, 10);
-                            y += 3;
-
-                            if (!string.IsNullOrWhiteSpace(feature.Uses))
-                            {
-                                gfx.DrawString($"   Uses: {feature.Uses}", normalFont, XBrushes.DarkGreen, new XPoint(left + 18, y));
-                                y += 12;
-                            }
-
-                            y += 5;
-                        }
-
-                        y += 6;
-                    }
-                }
-
-                // ========== SAVING THROWS (NEW) ==========
-                DrawSectionHeader(gfx, "SAVING THROWS", left, ref y, pageWidth);
-
-                var savingThrows = GetSavingThrows();
-                double saveY = y;
-
-                // Left column
-                for (int i = 0; i < 3; i++)
-                {
-                    var save = savingThrows[i];
-                    string text = $"{save.Name}: {save.Bonus:+#;-#;0}";
-                    if (save.IsProficient) text += "  (Proficient)";
-                    gfx.DrawString(text, font, XBrushes.Black, new XPoint(left, saveY));
-                    saveY += 15;
-                }
-
-                // Right column
-                saveY = y;
-                for (int i = 3; i < 6; i++)
-                {
-                    var save = savingThrows[i];
-                    string text = $"{save.Name}: {save.Bonus:+#;-#;0}";
-                    if (save.IsProficient) text += "  (Proficient)";
-                    gfx.DrawString(text, font, XBrushes.Black, new XPoint(300, saveY));
-                    saveY += 15;
-                }
-
-                y = Math.Max(y, saveY) + 15;
-
-                // ========== SKILLS ==========
-                DrawSectionHeader(gfx, "SKILLS", left, ref y, pageWidth);
-
-                // Build full skill list with current bonuses
-                var allSkillsList = BuildFullSkillListForPDF();
-
-                int half = (allSkillsList.Count + 1) / 2;
-                double skillY = y;
-
-                for (int i = 0; i < half; i++)
-                {
-                    var skill = allSkillsList[i];
-                    string sign = skill.Bonus >= 0 ? "+" : "";
-                    string profMark = skill.IsProficient ? " ●" : "";
-                    gfx.DrawString($"{skill.Name} ({skill.Ability}): {sign}{skill.Bonus}{profMark}", font, XBrushes.Black, new XPoint(left, skillY));
-                    skillY += 14;
-                }
-
-                skillY = y;
-                for (int i = half; i < allSkillsList.Count; i++)
-                {
-                    var skill = allSkillsList[i];
-                    string sign = skill.Bonus >= 0 ? "+" : "";
-                    string profMark = skill.IsProficient ? " ●" : "";
-                    gfx.DrawString($"{skill.Name} ({skill.Ability}): {sign}{skill.Bonus}{profMark}", font, XBrushes.Black, new XPoint(300, skillY));
-                    skillY += 14;
-                }
-
-                y = Math.Max(y + (half * 14), skillY) + 12;
-
-                // ========== PROFICIENCIES AND ATTRIBUTES ==========
-                DrawSectionHeader(gfx, "PROFICIENCIES AND ATTRIBUTES", left, ref y, pageWidth);
-
-                // Helper to check for new page
-                void CheckNewPage()
-                {
-                    if (y > page.Height - 120)
-                    {
-                        page = document.AddPage();
-                        gfx = XGraphics.FromPdfPage(page);
-                        y = 40;
-                    }
-                }
-
-                // === ARMOR PROFICIENCIES ===
-                CheckNewPage();
-                gfx.DrawString("Armor Proficiencies:", boldFont, XBrushes.Black, new XPoint(left, y));
-                y += 16;
-
-                var armorProfs = new List<string>();
-
-                if (GameData.ClassData.TryGetValue(CurrentCharacter.Class, out var classData))
-                {
-                    armorProfs.AddRange(classData.ArmorProficiencies);
-                }
-
-                // Add subclass armor profs (example for Twilight Cleric, etc.)
-                if (!string.IsNullOrEmpty(CurrentCharacter.Subclass))
-                {
-                    if (CurrentCharacter.Class == "Cleric" && GameData.ClericSubclasses.TryGetValue(CurrentCharacter.Subclass, out var clericSub))
-                        armorProfs.AddRange(clericSub.ArmorProficiencies);
-                    else if (CurrentCharacter.Class == "Warlock" && GameData.WarlockSubclasses.TryGetValue(CurrentCharacter.Subclass, out var warlockSub))
-                        armorProfs.AddRange(warlockSub.ArmorProficiencies);
-                }
-
-                // Race-based armor proficiencies
-                string race = CurrentCharacter.Race;
-                if (race.Contains("Dwarf"))
-                    armorProfs.Add("Dwarven Armor Training (light & medium armor)");
-
-                string armorText = armorProfs.Count > 0
-                    ? string.Join(", ", armorProfs.Distinct(StringComparer.OrdinalIgnoreCase))
-                    : "None";
-
-                CheckNewPage();
-                DrawWrappedText(gfx, armorText, normalFont, XBrushes.Black, left + 10, ref y, maxTextWidth);
-                y += 18;
-
-                // === WEAPON PROFICIENCIES ===
-                CheckNewPage();
-                gfx.DrawString("Weapon Proficiencies:", boldFont, XBrushes.Black, new XPoint(left, y));
-                y += 16;
-
-                var weaponProfs = new List<string>();
-
-                if (classData != null)
-                    weaponProfs.AddRange(classData.WeaponProficiencies);
-
-                // Subclass weapon profs
-                if (!string.IsNullOrEmpty(CurrentCharacter.Subclass))
-                {
-                    if (CurrentCharacter.Class == "Cleric" && GameData.ClericSubclasses.TryGetValue(CurrentCharacter.Subclass, out var clericSub))
-                        weaponProfs.AddRange(clericSub.WeaponProficiencies);
-                    else if (CurrentCharacter.Class == "Warlock" && GameData.WarlockSubclasses.TryGetValue(CurrentCharacter.Subclass, out var warlockSub))
-                        weaponProfs.AddRange(warlockSub.WeaponProficiencies);
-                }
-
-                // Race weapon training
-                if (race.Contains("Dwarf"))
-                    weaponProfs.Add("Dwarven Combat Training (battleaxe, handaxe, light hammer, warhammer)");
-                if (race.Contains("Elf"))
-                    weaponProfs.Add("Elf Weapon Training (longsword, shortsword, shortbow, longbow)");
-
-                string weaponText = weaponProfs.Count > 0
-                    ? string.Join(", ", weaponProfs.Distinct(StringComparer.OrdinalIgnoreCase))
-                    : "None";
-
-                CheckNewPage();
-                DrawWrappedText(gfx, weaponText, normalFont, XBrushes.Black, left + 10, ref y, maxTextWidth);
-                y += 18;
-
-                // === LANGUAGES ===
-                CheckNewPage();
-                gfx.DrawString("Languages:", boldFont, XBrushes.Black, new XPoint(left, y));
-                y += 16;
-
-                var languages = new List<string>();
-                if (GameData.RaceData.TryGetValue(race, out var raceData))
-                    languages.AddRange(raceData.Languages);
-
-                string langText = languages.Count > 0 ? string.Join(", ", languages) : "Common";
-                CheckNewPage();
-                DrawWrappedText(gfx, langText, normalFont, XBrushes.Black, left + 10, ref y, maxTextWidth);
-                y += 18;
-
-                // === RACIAL TRAITS ===
-                CheckNewPage();
-                gfx.DrawString("Racial Traits:", boldFont, XBrushes.Black, new XPoint(left, y));
-                y += 16;
-
-                if (raceData != null && raceData.Traits.Any())
-                {
-                    foreach (var trait in raceData.Traits)
-                    {
-                        CheckNewPage();
-                        DrawWrappedText(gfx, "• " + trait, normalFont, XBrushes.Black, left + 10, ref y, maxTextWidth);
-                        y += 4;
-                    }
-                }
-                y += 10;
-
-                // === SUBRACIAL TRAITS (if any) ===
-                if (!string.IsNullOrEmpty(CurrentCharacter.Subrace) &&
-                    GameData.RaceSubraces.TryGetValue(race, out var subList))
-                {
-                    var subrace = subList.FirstOrDefault(s => s.Name == CurrentCharacter.Subrace);
-                    if (subrace != null && subrace.Traits.Any())
-                    {
-                        CheckNewPage();
-                        gfx.DrawString($"Subracial Traits ({CurrentCharacter.Subrace}):", boldFont, XBrushes.Black, new XPoint(left, y));
-                        y += 16;
-
-                        foreach (var trait in subrace.Traits)
-                        {
-                            CheckNewPage();
-                            DrawWrappedText(gfx, "• " + trait, normalFont, XBrushes.Black, left + 10, ref y, maxTextWidth);
-                            y += 4;
-                        }
-                    }
-                }
-
-                y += 20;
-
-                // ========== EQUIPMENT ==========
-                DrawSectionHeader(gfx, "EQUIPMENT", left, ref y, pageWidth);
-
-                if (CurrentCharacter.Equipment != null && CurrentCharacter.Equipment.Count > 0)
-                {
-                    foreach (var item in CurrentCharacter.Equipment)
-                    {
-                        // Check if we need to start a new page
-                        if (y > page.Height - 70)
-                        {
-                            page = document.AddPage();
-                            gfx = XGraphics.FromPdfPage(page);
-                            y = 40;
-
-                            DrawSectionHeader(gfx, "EQUIPMENT", left, ref y, pageWidth);
-                        }
-
-                        gfx.DrawString($"• {item}", font, XBrushes.Black, new XPoint(left, y));
-                        y += 15;
-                    }
-                }
-                else
-                {
-                    gfx.DrawString("No equipment recorded.", font, XBrushes.Gray, new XPoint(left, y));
-                    y += 15;
-                }
-
-                y += 15;
-
-                // ========== SPELLS ==========
-                if (CurrentCharacter.Cantrips.Any() || CurrentCharacter.Level1Spells.Any())
-                {
-                    DrawSectionHeader(gfx, "SPELLS", left, ref y, pageWidth);
-
-                    double pageHeight = page.Height;
-
-                    // --- Cantrips ---
-                    if (CurrentCharacter.Cantrips.Any())
-                    {
-                        gfx.DrawString("Cantrips:", boldFont, XBrushes.Black, new XPoint(left, y));
-                        y += 16;
-
-                        foreach (var cantripName in CurrentCharacter.Cantrips)
-                        {
-                            var spell = GameData.AllCantrips.FirstOrDefault(s =>
-                                s.Name.Equals(cantripName, StringComparison.OrdinalIgnoreCase));
-
-                            string url = $"https://dnd5e.wikidot.com/spell:{Slugify(cantripName)}";
-
-                            // Clickable spell name
-                            gfx.DrawString($"• {cantripName}", linkFont, linkBrush, new XPoint(left + 10, y));
-                            double nameWidth = gfx.MeasureString($"• {cantripName}", linkFont).Width;
-                            var linkRect = new PdfRectangle(new XRect(left + 10, pageHeight - (y + 4), nameWidth + 4, 16));
-                            page.AddWebLink(linkRect, url);
-
-                            if (spell != null)
-                            {
-                                y += 13;
-                                string dicePart = !string.IsNullOrWhiteSpace(spell.DamageDice)
-                                    ? $"{spell.DamageDice} {spell.DamageType}" : "—";
-                                string rollPart = !string.IsNullOrWhiteSpace(spell.RollType) ? spell.RollType : "—";
-                                string concPart = spell.IsConcentration ? " | Concentration: Yes" : "";
-
-                                gfx.DrawString($"   Casting Time: {spell.CastingTime}  |  Range: {spell.Range}  |  Duration: {spell.Duration}{concPart}",
-                                               normalFont, grayBrush, new XPoint(left + 14, y));
-
-                                y += 13;
-                                gfx.DrawString($"   Dice: {dicePart}  |  Roll: {rollPart}", normalFont, grayBrush, new XPoint(left + 14, y));
-
-                                // === WRAPPED DESCRIPTION ===
-                                y += 13;
-                                string shortDesc = spell.Description.Length > 440
-                                    ? spell.Description.Substring(0, 437) + "..."
-                                    : spell.Description;
-
-                                DrawWrappedText(gfx, shortDesc, smallGray, XBrushes.Gray, left + 14, ref y, maxTextWidth, 10);
-                            }
-
-                            y += 16;
-                        }
-                        y += 6;
-                    }
-
-                    // --- 1st Level Spells (same pattern) ---
-                    if (CurrentCharacter.Level1Spells.Any())
-                    {
-                        gfx.DrawString("1st Level Spells:", boldFont, XBrushes.Black, new XPoint(left, y));
-                        y += 16;
-
-                        foreach (var spellName in CurrentCharacter.Level1Spells)
-                        {
-                            var spell = GameData.All1stLevelSpells.FirstOrDefault(s =>
-                                s.Name.Equals(spellName, StringComparison.OrdinalIgnoreCase));
-
-                            string url = $"https://dnd5e.wikidot.com/spell:{Slugify(spellName)}";
-
-                            gfx.DrawString($"• {spellName}", linkFont, linkBrush, new XPoint(left + 10, y));
-                            double nameWidth = gfx.MeasureString($"• {spellName}", linkFont).Width;
-                            var linkRect = new PdfRectangle(new XRect(left + 10, pageHeight - (y + 4), nameWidth + 4, 16));
-                            page.AddWebLink(linkRect, url);
-
-                            if (spell != null)
-                            {
-                                y += 13;
-                                string dicePart = !string.IsNullOrWhiteSpace(spell.DamageDice)
-                                    ? $"{spell.DamageDice} {spell.DamageType}" : "—";
-                                string rollPart = !string.IsNullOrWhiteSpace(spell.RollType) ? spell.RollType : "—";
-                                string concPart = spell.IsConcentration ? " | Concentration: Yes" : "";
-
-                                gfx.DrawString($"   Casting Time: {spell.CastingTime}  |  Range: {spell.Range}  |  Duration: {spell.Duration}{concPart}",
-                                               normalFont, grayBrush, new XPoint(left + 14, y));
-
-                                y += 13;
-                                gfx.DrawString($"   Dice: {dicePart}  |  Roll: {rollPart}", normalFont, grayBrush, new XPoint(left + 14, y));
-
-                                y += 13;
-                                string shortDesc = spell.Description.Length > 440
-                                    ? spell.Description.Substring(0, 437) + "..."
-                                    : spell.Description;
-
-                                DrawWrappedText(gfx, shortDesc, smallGray, XBrushes.Gray, left + 14, ref y, maxTextWidth, 10);
-                            }
-
-                            y += 16;
-                        }
-                    }
-                }
-
-                // Footer
-                gfx.DrawString($"Generated by Nemo D&D 5e Character Creator  •  {DateTime.Now:yyyy-MM-dd HH:mm}",
-                    new XFont("Arial", 8), XBrushes.Gray, new XPoint(left, page.Height - 25));
-
-                document.Save(filePath);
-
-                MessageBox.Show($"PDF exported successfully to:\n{filePath}", "Export Complete");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to export PDF:\n{ex.Message}", "Error");
-            }
         }
 
         /// <summary>
@@ -9867,21 +9129,21 @@ namespace Nemo
             CurrentCharacter.HitPointRolls ??= new List<int>();
             CurrentCharacter.BackgroundLanguages ??= new List<string>();
 
-            // === Save to fixed path next to the .exe ===
+            // === Save Foundry VTT–compatible actor JSON next to the .exe ===
+            // Full Nemo state is embedded under flags.nemo.character for round-trip load.
             try
             {
                 string savePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "character.json");
-
-                string json = JsonSerializer.Serialize(CurrentCharacter, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-
+                string json = FoundryCharacterExporter.ToJson(CurrentCharacter);
                 File.WriteAllText(savePath, json);
 
                 if (showMessage)
                 {
-                    MessageBox.Show($"✅ Character saved successfully!", "Save Complete");
+                    MessageBox.Show(
+                        "✅ Character saved as Foundry VTT JSON.\n\n" +
+                        "In Foundry: create a Character actor → right-click → Import Data → pick this file.\n" +
+                        "Nemo can also reload this file with full character data.",
+                        "Save Complete");
                 }
             }
             catch (Exception ex)
@@ -10115,7 +9377,7 @@ namespace Nemo
                 var dlg = new Microsoft.Win32.OpenFileDialog
                 {
                     Title = "Load Character",
-                    Filter = "Character Files (*.json;*.pdf)|*.json;*.pdf|Character JSON (*.json)|*.json|Character Sheet PDF (*.pdf)|*.pdf|All Files (*.*)|*.*",
+                    Filter = "Character Files (*.json;*.pdf)|*.json;*.pdf|Foundry / Nemo JSON (*.json)|*.json|Character Sheet PDF (*.pdf)|*.pdf|All Files (*.*)|*.*",
                     DefaultExt = ".json",
                     CheckFileExists = true
                 };
@@ -10136,7 +9398,7 @@ namespace Nemo
                 else
                 {
                     string json = File.ReadAllText(path);
-                    CurrentCharacter = JsonSerializer.Deserialize<Character>(json);
+                    CurrentCharacter = FoundryCharacterExporter.TryParseCharacter(json, out importNote);
                 }
 
                 if (CurrentCharacter == null)
@@ -10274,6 +9536,13 @@ namespace Nemo
                     cmbSubclass.SelectedItem = subcMatch;
             }
 
+            // Level / multiclass tab from ClassLevels (PDF and JSON imports)
+            if (CurrentCharacter.ClassLevels != null && CurrentCharacter.ClassLevels.Count > 0)
+            {
+                try { RefreshLevelMulticlassTab(); }
+                catch { /* UI may not be fully ready */ }
+            }
+
             // Ability scores — for PDF, reverse base so final ≈ PDF final after racial
             if (fromPdf && CurrentCharacter.AbilityScores != null)
             {
@@ -10298,10 +9567,13 @@ namespace Nemo
             if (CurrentCharacter.HitPoints > 0 && txtHitPoints != null)
                 txtHitPoints.Text = CurrentCharacter.HitPoints.ToString();
 
-            if (CurrentCharacter.ArmorClass > 0 && txtBaseAC != null)
+            if (CurrentCharacter.ArmorClass > 0)
             {
-                // Don't overwrite if equipped AC display is more informative; base AC from PDF is total
-                // Leave base AC calculation alone when possible; show equipped display if we have one
+                if (!string.IsNullOrWhiteSpace(CurrentCharacter.EquippedACDisplay) && txtEquippedAC != null)
+                {
+                    txtEquippedAC.Text = CurrentCharacter.EquippedACDisplay;
+                    txtEquippedAC.Visibility = Visibility.Visible;
+                }
             }
 
             if (txtInitiative != null)
