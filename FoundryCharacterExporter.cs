@@ -214,6 +214,11 @@ namespace Nemo
                 if (!string.IsNullOrWhiteSpace(style))
                     items.Add(BuildFeatItem(NewId(), style, "class", "Fighting Style.", requirements: "Fighting Style"));
             }
+            if (!string.IsNullOrWhiteSpace(c.FightingInitiateStyle))
+            {
+                items.Add(BuildFeatItem(NewId(), c.FightingInitiateStyle.Trim(), "feat",
+                    "Fighting Style from Fighting Initiate.", requirements: "Fighting Initiate"));
+            }
             foreach (var inv in c.EldritchInvocations ?? Enumerable.Empty<string>())
             {
                 if (!string.IsNullOrWhiteSpace(inv))

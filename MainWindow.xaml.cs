@@ -4289,6 +4289,40 @@ namespace Nemo
             }
         }
 
+        /// <summary>
+        /// Clears feat detail combo boxes so choices from one feat never leak into another.
+        /// Must run before configuring UI for the newly selected feat.
+        /// </summary>
+        private void ResetFeatChoiceUi()
+        {
+            // Detach Magic Initiate class handler so changing cmb1 later cannot re-show combos 2–4
+            if (cmbFeatStatChoice1 != null)
+                cmbFeatStatChoice1.SelectionChanged -= MagicInitiateClass_Changed;
+
+            // Collapse first so FeatStatChoice_Changed (if fired while clearing) is a no-op
+            pnlFeatStatChoices.Visibility = Visibility.Collapsed;
+            lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE(S) TO INCREASE";
+
+            void ClearCombo(ComboBox cmb, bool startVisible = false)
+            {
+                if (cmb == null) return;
+                cmb.ItemsSource = null;
+                cmb.SelectedIndex = -1;
+                cmb.Visibility = startVisible ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            // cmb1 is the default primary picker when a feat needs choices; keep layout ready but panel hidden
+            ClearCombo(cmbFeatStatChoice1, startVisible: true);
+            ClearCombo(cmbFeatStatChoice2);
+            ClearCombo(cmbFeatStatChoice3);
+            ClearCombo(cmbFeatStatChoice4);
+
+            brdFeatSpellPreview.Visibility = Visibility.Collapsed;
+            if (txtFeatSpellDetails != null)
+                txtFeatSpellDetails.Text = "";
+            featSelectedSpell = "";
+        }
+
         private void DgFeats_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (dgFeats.SelectedItem is not Feat selectedFeat) return;
@@ -4298,21 +4332,11 @@ namespace Nemo
 
             string name = selectedFeat.Name.ToLowerInvariant();
 
-            // === FULL RESET ===
-            pnlFeatStatChoices.Visibility = Visibility.Collapsed;
-            cmbFeatStatChoice1.ItemsSource = null;
-            cmbFeatStatChoice1.Visibility = Visibility.Visible;
-            cmbFeatStatChoice2.ItemsSource = null;
-            cmbFeatStatChoice2.Visibility = Visibility.Collapsed;
-            cmbFeatStatChoice3.ItemsSource = null;
-            cmbFeatStatChoice3.Visibility = Visibility.Collapsed;
-            brdFeatSpellPreview.Visibility = Visibility.Collapsed;
-            txtFeatSpellDetails.Text = "";
-            featSelectedSpell = "";
-            lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE(S) TO INCREASE";
+            // === FULL RESET (every feat switch) ===
+            ResetFeatChoiceUi();
 
             // === 1. RESILIENT → ability score (+1) and save proficiency (cmb1) ===
-            if (name.Contains("resilient"))
+            if (name == "resilient")
             {
                 var allAbilities = new List<string> { "Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma" };
                 cmbFeatStatChoice1.ItemsSource = allAbilities;
@@ -4323,7 +4347,7 @@ namespace Nemo
                 FeatStatChoice_Changed(cmbFeatStatChoice1, null);
             }
             // === 2. SPELL SNIPER → Only cantrip with attack roll (cmb2) ===
-            else if (name.Contains("spell sniper"))
+            else if (name == "spell sniper")
             {
                 var attackCantrips = GameData.AllCantrips
                     .Where(c => !string.IsNullOrWhiteSpace(c.RollType) &&
@@ -4332,16 +4356,16 @@ namespace Nemo
                     .OrderBy(n => n)
                     .ToList();
 
+                cmbFeatStatChoice1.Visibility = Visibility.Collapsed;
                 cmbFeatStatChoice2.ItemsSource = attackCantrips;
                 cmbFeatStatChoice2.Visibility = Visibility.Visible;
                 if (attackCantrips.Any()) cmbFeatStatChoice2.SelectedIndex = 0;
 
-                cmbFeatStatChoice1.Visibility = Visibility.Collapsed;
                 lblFeatStatChoiceHeader.Text = "CHOOSE A CANTRIP THAT REQUIRES AN ATTACK ROLL";
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
             }
             // === 3. FEY TOUCHED / SHADOW TOUCHED → Mental stats (cmb1) + Spell (cmb2) ===
-            else if (name.Contains("fey touched") || name.Contains("shadow touched"))
+            else if (name == "fey touched" || name == "shadow touched")
             {
                 lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE AND SPELL";
                 // Ability score dropdown
@@ -4351,7 +4375,7 @@ namespace Nemo
                 cmbFeatStatChoice1.Visibility = Visibility.Visible;
 
                 // Spell dropdown
-                List<string> allowedSchools = name.Contains("fey touched")
+                List<string> allowedSchools = name == "fey touched"
                     ? new List<string> { "Enchantment", "Illusion" }
                     : new List<string> { "Illusion", "Necromancy" };
 
@@ -4368,7 +4392,7 @@ namespace Nemo
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
             }
             // === 4. ARTIFICER INITIATE ===
-            else if (name.Contains("artificer initiate"))
+            else if (name == "artificer initiate")
             {
                 lblFeatStatChoiceHeader.Text = "CHOOSE ARTIFICER CANTRIP AND 1ST-LEVEL SPELL";
 
@@ -4393,11 +4417,39 @@ namespace Nemo
 
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
             }
+            // === GIFT OF THE DRAGON FEATS (mental +1 and fixed spells) ===
+            // Check specific dragon gifts before the generic mental-stat branch.
+            else if (name == "gift of the chromatic dragon" ||
+                     name == "gift of the gem dragon" ||
+                     name == "gift of the metallic dragon")
+            {
+                lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE TO INCREASE";
+                var mentalStats = new List<string> { "Intelligence", "Wisdom", "Charisma" };
+                cmbFeatStatChoice1.ItemsSource = mentalStats;
+                cmbFeatStatChoice1.SelectedIndex = 0;
+                cmbFeatStatChoice1.Visibility = Visibility.Visible;
+                pnlFeatStatChoices.Visibility = Visibility.Visible;
+
+                if (name == "gift of the chromatic dragon")
+                {
+                    currentFeatSpellSource = "Gift of the Chromatic Dragon";
+                    currentFeatSpells = new List<string> { "Chromatic Orb" };
+                }
+                else if (name == "gift of the gem dragon")
+                {
+                    currentFeatSpellSource = "Gift of the Gem Dragon";
+                    currentFeatSpells = new List<string> { "Detect Thoughts" };
+                }
+                else
+                {
+                    currentFeatSpellSource = "Gift of the Metallic Dragon";
+                    currentFeatSpells = new List<string> { "Cure Wounds", "Detect Magic" };
+                }
+                UpdateFeatSpellsLabel();
+            }
             // === MENTAL STATS ONLY (Int / Wis / Cha) ===
-            // Used by: Telekinetic, Telepathic, Gift of the Metallic/Chromatic/Gem Dragon
-            else if (name.Contains("telekinetic") ||
-                     name.Contains("telepathic") ||
-                     name.Contains("gift of the"))
+            // Used by: Telekinetic, Telepathic
+            else if (name == "telekinetic" || name == "telepathic")
             {
                 lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE TO INCREASE";
 
@@ -4406,40 +4458,18 @@ namespace Nemo
                 cmbFeatStatChoice1.SelectedIndex = 0;
                 cmbFeatStatChoice1.Visibility = Visibility.Visible;
 
-                cmbFeatStatChoice2.Visibility = Visibility.Collapsed;
-                cmbFeatStatChoice3.Visibility = Visibility.Collapsed;
-
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
             }
-            // === GIFT OF THE DRAGON FEATS (fixed spells) ===
-            else if (name.Contains("gift of the chromatic dragon"))
-            {
-                currentFeatSpellSource = "Gift of the Chromatic Dragon";
-                currentFeatSpells = new List<string> { "Chromatic Orb" };
-                UpdateFeatSpellsLabel();
-            }
-            else if (name.Contains("gift of the gem dragon"))
-            {
-                currentFeatSpellSource = "Gift of the Gem Dragon";
-                currentFeatSpells = new List<string> { "Detect Thoughts" };
-                UpdateFeatSpellsLabel();
-            }
-            else if (name.Contains("gift of the metallic dragon"))
-            {
-                currentFeatSpellSource = "Gift of the Metallic Dragon";
-                currentFeatSpells = new List<string> { "Cure Wounds", "Detect Magic" };
-                UpdateFeatSpellsLabel();
-            }
             // === MAGIC INITIATE ===
-            else if (name.Contains("magic initiate"))
+            else if (name == "magic initiate")
             {
                 lblFeatStatChoiceHeader.Text = "CHOOSE CLASS + 2 CANTRIPS + 1ST LEVEL SPELL";
 
                 // Combo 1: Class selection
                 var spellcastingClasses = new List<string>
-    {
-        "Bard", "Cleric", "Druid", "Sorcerer", "Warlock", "Wizard"
-    };
+                {
+                    "Bard", "Cleric", "Druid", "Sorcerer", "Warlock", "Wizard"
+                };
                 cmbFeatStatChoice1.ItemsSource = spellcastingClasses;
                 cmbFeatStatChoice1.SelectedIndex = 0;
                 cmbFeatStatChoice1.Visibility = Visibility.Visible;
@@ -4448,36 +4478,46 @@ namespace Nemo
                 string initialClass = spellcastingClasses[0];
                 PopulateMagicInitiateChoices(initialClass);
 
-                // Wire up class change handler
+                // Wire up class change handler (ResetFeatChoiceUi always detaches first)
                 cmbFeatStatChoice1.SelectionChanged -= MagicInitiateClass_Changed;
                 cmbFeatStatChoice1.SelectionChanged += MagicInitiateClass_Changed;
 
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
             }
-            // === 5. Physical feats (Slasher, Piercer, etc.) → cmb1 only ===
-            else if (name.Contains("slasher") || name.Contains("piercer") ||
-                     name.Contains("dual wielder") || name.Contains("weapon master"))
+            // === FIGHTING INITIATE → fighter fighting style (cmb1) ===
+            else if (name == "fighting initiate")
             {
+                SetupFightingInitiateChoices();
+            }
+            // === 5. Physical feats (Slasher, Piercer, Dual Wielder, Weapon Master) → cmb1 only ===
+            // Exact names: "weapon master" must not match "Great Weapon Master".
+            else if (name is "slasher" or "piercer" or "dual wielder" or "weapon master")
+            {
+                lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE TO INCREASE";
                 var physicalStats = new List<string> { "Strength", "Dexterity" };
                 cmbFeatStatChoice1.ItemsSource = physicalStats;
                 cmbFeatStatChoice1.SelectedIndex = 0;
+                cmbFeatStatChoice1.Visibility = Visibility.Visible;
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
             }
             // === 6. Athlete → cmb1 only ===
-            else if (name.Contains("athlete"))
+            else if (name == "athlete")
             {
+                lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE TO INCREASE";
                 var stats = new List<string> { "Strength", "Dexterity", "Constitution" };
                 cmbFeatStatChoice1.ItemsSource = stats;
                 cmbFeatStatChoice1.SelectedIndex = 0;
+                cmbFeatStatChoice1.Visibility = Visibility.Visible;
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
             }
             // === 7. Skill Expert / Prodigy → cmb1 + cmb2 + cmb3 ===
-            else if (name.Contains("skill expert") || name.Contains("prodigy"))
+            else if (name is "skill expert" or "prodigy")
             {
                 lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE AND SKILL PROFICIENCY";
                 var allAbilities = new List<string> { "Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma" };
                 cmbFeatStatChoice1.ItemsSource = allAbilities;
                 cmbFeatStatChoice1.SelectedIndex = 0;
+                cmbFeatStatChoice1.Visibility = Visibility.Visible;
 
                 cmbFeatStatChoice2.ItemsSource = allSkills.Select(s => s.SkillName).ToList();
                 cmbFeatStatChoice2.SelectedIndex = 0;
@@ -4492,6 +4532,7 @@ namespace Nemo
             }
             else
             {
+                // Feats with no choices (e.g. Great Weapon Master, Alert, …)
                 pnlFeatStatChoices.Visibility = Visibility.Collapsed;
             }
         }
@@ -5435,9 +5476,7 @@ namespace Nemo
 
             // === 5. Defense fighting style: +1 AC while wearing armor ===
             bool wearingArmor = bestArmor != null;
-            bool hasDefenseStyle = CurrentCharacter?.FightingStyles != null &&
-                CurrentCharacter.FightingStyles.Any(fs =>
-                    fs.Equals("Defense", StringComparison.OrdinalIgnoreCase));
+            bool hasDefenseStyle = CharacterHasFightingStyle("Defense");
             if (hasDefenseStyle && wearingArmor)
                 finalAC += 1;
 
@@ -5591,8 +5630,19 @@ namespace Nemo
             if (!string.IsNullOrEmpty(resilientSaveAbility))
                 resilientSaveAbility = "";
 
+            // Only apply choices when the choices panel is actually shown for this feat
+            if (pnlFeatStatChoices.Visibility != Visibility.Visible)
+                return;
+
+            // ===================== FIGHTING INITIATE =====================
+            if (name == "fighting initiate")
+            {
+                ApplyFightingInitiateStyleFromUi();
+                return;
+            }
+
             // ===================== MAGIC INITIATE =====================
-            if (name.Contains("magic initiate"))
+            if (name == "magic initiate")
             {
                 currentFeatSpellSource = "Magic Initiate";
                 currentFeatSpells.Clear();
@@ -5613,7 +5663,7 @@ namespace Nemo
             }
 
             // ===================== FEY TOUCHED =====================
-            if (name.Contains("fey touched"))
+            if (name == "fey touched")
             {
                 currentFeatSpellSource = "Fey Touched";
                 currentFeatSpells.Clear();
@@ -5638,7 +5688,7 @@ namespace Nemo
             }
 
             // ===================== SHADOW TOUCHED =====================
-            if (name.Contains("shadow touched"))
+            if (name == "shadow touched")
             {
                 currentFeatSpellSource = "Shadow Touched";
                 currentFeatSpells.Clear();
@@ -5663,7 +5713,7 @@ namespace Nemo
             }
 
             // ===================== SPELL SNIPER =====================
-            if (name.Contains("spell sniper"))
+            if (name == "spell sniper")
             {
                 currentFeatSpellSource = "Spell Sniper";
                 currentFeatSpells.Clear();
@@ -5677,7 +5727,7 @@ namespace Nemo
 
             // ===================== RESILIENT =====================
             // +1 to chosen ability and proficiency in that ability's saving throws
-            if (name.Contains("resilient"))
+            if (name == "resilient")
             {
                 if (cmbFeatStatChoice1.SelectedItem is string resilientAbility)
                 {
@@ -6151,6 +6201,135 @@ namespace Nemo
             }
         }
 
+        /// <summary>True if Fighting Initiate is checked on the Feats tab.</summary>
+        private bool IsFightingInitiateSelected()
+        {
+            return GameData.AllFeats?.Any(f =>
+                       f != null &&
+                       f.IsSelected &&
+                       f.Name.Equals("Fighting Initiate", StringComparison.OrdinalIgnoreCase)) == true;
+        }
+
+        /// <summary>
+        /// Class fighting styles plus Fighting Initiate style (when that feat is selected).
+        /// </summary>
+        private IEnumerable<string> GetEffectiveFightingStyles()
+        {
+            if (CurrentCharacter?.FightingStyles != null)
+            {
+                foreach (var s in CurrentCharacter.FightingStyles)
+                {
+                    if (!string.IsNullOrWhiteSpace(s))
+                        yield return s.Trim();
+                }
+            }
+
+            if (IsFightingInitiateSelected() &&
+                !string.IsNullOrWhiteSpace(CurrentCharacter?.FightingInitiateStyle))
+            {
+                yield return CurrentCharacter.FightingInitiateStyle.Trim();
+            }
+        }
+
+        private bool CharacterHasFightingStyle(string styleName)
+        {
+            if (string.IsNullOrWhiteSpace(styleName)) return false;
+            return GetEffectiveFightingStyles()
+                .Any(s => s.Equals(styleName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Fighter fighting styles available for Fighting Initiate, excluding styles already
+        /// taken from class (feat requires a different style if you already have one).
+        /// </summary>
+        private List<ClassFeatureOption> GetFightingInitiateStyleOptions()
+        {
+            var already = new HashSet<string>(
+                CurrentCharacter?.FightingStyles?
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => s.Trim())
+                ?? Enumerable.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+
+            return ClassFeatureOptionData.GetFightingStylesForClass("Fighter")
+                .Where(o => !already.Contains(o.Name))
+                .OrderBy(o => o.Name)
+                .ToList();
+        }
+
+        private void SetupFightingInitiateChoices()
+        {
+            lblFeatStatChoiceHeader.Text = "CHOOSE FIGHTING STYLE (FIGHTER LIST)";
+
+            var options = GetFightingInitiateStyleOptions();
+            var names = options.Select(o => o.Name).ToList();
+
+            // If the saved pick was filtered out (now owned by class), keep it visible so the user can re-pick
+            string saved = CurrentCharacter?.FightingInitiateStyle?.Trim() ?? "";
+            if (!string.IsNullOrEmpty(saved) &&
+                !names.Contains(saved, StringComparer.OrdinalIgnoreCase) &&
+                ClassFeatureOptionData.GetFightingStylesForClass("Fighter")
+                    .Any(o => o.Name.Equals(saved, StringComparison.OrdinalIgnoreCase)))
+            {
+                names.Insert(0, saved);
+            }
+
+            cmbFeatStatChoice1.ItemsSource = names;
+            cmbFeatStatChoice1.Visibility = Visibility.Visible;
+            pnlFeatStatChoices.Visibility = Visibility.Visible;
+
+            int idx = 0;
+            if (!string.IsNullOrEmpty(saved))
+            {
+                int found = names.FindIndex(n => n.Equals(saved, StringComparison.OrdinalIgnoreCase));
+                if (found >= 0) idx = found;
+            }
+            if (names.Count > 0)
+                cmbFeatStatChoice1.SelectedIndex = idx;
+            else
+                ApplyFightingInitiateStyleFromUi(); // clears style text if list empty
+
+            // If SelectedIndex was already this value, SelectionChanged may not fire — re-apply once
+            if (names.Count > 0)
+                ApplyFightingInitiateStyleFromUi();
+        }
+
+        private void EnsureFightingInitiateStyleDefault()
+        {
+            if (CurrentCharacter == null) return;
+            if (!string.IsNullOrWhiteSpace(CurrentCharacter.FightingInitiateStyle)) return;
+
+            var options = GetFightingInitiateStyleOptions();
+            if (options.Count > 0)
+                CurrentCharacter.FightingInitiateStyle = options[0].Name;
+        }
+
+        private void ApplyFightingInitiateStyleFromUi()
+        {
+            if (CurrentCharacter == null) return;
+
+            string style = cmbFeatStatChoice1.SelectedItem as string ?? "";
+            CurrentCharacter.FightingInitiateStyle = style;
+
+            // Show style description under the feat text
+            if (!string.IsNullOrEmpty(style))
+            {
+                var opt = ClassFeatureOptionData.GetFightingStylesForClass("Fighter")
+                    .FirstOrDefault(o => o.Name.Equals(style, StringComparison.OrdinalIgnoreCase));
+                string desc = opt?.Description ?? "";
+                txtFeatDetails.Text = string.IsNullOrEmpty(desc)
+                    ? baseFeatDescription
+                    : $"{baseFeatDescription}\n\n———\nSelected style: {style}\n{desc}";
+            }
+            else
+            {
+                txtFeatDetails.Text = baseFeatDescription;
+            }
+
+            // Defense style (and any future style-based rules) need a live AC refresh
+            UpdateEquippedAC();
+        }
+
         private void PopulateMagicInitiateChoices(string className)
         {
             if (string.IsNullOrEmpty(className)) return;
@@ -6218,6 +6397,16 @@ namespace Nemo
             // Skip dynamic choice feats (they handle their own bonuses)
             if (feat.HasDynamicStatChoice)
                 return;
+
+            // === FIGHTING INITIATE ===
+            // Style pick lives on Character.FightingInitiateStyle (feat details combo).
+            // Ensure a default fighter style if the player selects the feat without opening details.
+            if (name == "fighting initiate")
+            {
+                EnsureFightingInitiateStyleDefault();
+                UpdateEquippedAC();
+                return;
+            }
 
             // === MOBILE FEAT ===
             if (name == "mobile")
@@ -6295,6 +6484,15 @@ namespace Nemo
                     resilientSaveAbility = "";
                     UpdateSavingThrows();
                 }
+                return;
+            }
+
+            // === FIGHTING INITIATE ===
+            if (name == "fighting initiate")
+            {
+                if (CurrentCharacter != null)
+                    CurrentCharacter.FightingInitiateStyle = "";
+                UpdateEquippedAC();
                 return;
             }
 
@@ -9128,6 +9326,12 @@ namespace Nemo
             CurrentCharacter.MetamagicOptions ??= new List<string>();
             CurrentCharacter.HitPointRolls ??= new List<int>();
             CurrentCharacter.BackgroundLanguages ??= new List<string>();
+
+            // Drop Fighting Initiate style if the feat is not selected
+            if (!IsFightingInitiateSelected())
+                CurrentCharacter.FightingInitiateStyle = "";
+            else if (string.IsNullOrWhiteSpace(CurrentCharacter.FightingInitiateStyle))
+                EnsureFightingInitiateStyleDefault();
 
             // === Save Foundry VTT–compatible actor JSON next to the .exe ===
             // Full Nemo state is embedded under flags.nemo.character for round-trip load.

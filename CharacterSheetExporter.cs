@@ -515,8 +515,24 @@ namespace Nemo
             }
 
             // Class feature selections (same extras the sheet may list under features)
-            if (character.FightingStyles != null && character.FightingStyles.Count > 0)
-                preview.ExtraSelections.Add("Fighting Style: " + string.Join(", ", character.FightingStyles));
+            {
+                var styleNames = new List<string>();
+                if (character.FightingStyles != null)
+                {
+                    foreach (var s in character.FightingStyles)
+                    {
+                        if (!string.IsNullOrWhiteSpace(s))
+                            styleNames.Add(s.Trim());
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(character.FightingInitiateStyle) &&
+                    !styleNames.Any(s => s.Equals(character.FightingInitiateStyle.Trim(), StringComparison.OrdinalIgnoreCase)))
+                {
+                    styleNames.Add(character.FightingInitiateStyle.Trim() + " (Fighting Initiate)");
+                }
+                if (styleNames.Count > 0)
+                    preview.ExtraSelections.Add("Fighting Style: " + string.Join(", ", styleNames));
+            }
             if (!string.IsNullOrWhiteSpace(character.WarlockPactBoon))
                 preview.ExtraSelections.Add("Pact Boon: " + character.WarlockPactBoon.Trim());
             if (character.EldritchInvocations != null && character.EldritchInvocations.Count > 0)
@@ -1746,7 +1762,13 @@ namespace Nemo
             if (!string.IsNullOrWhiteSpace(c.SelectedFeat))
             {
                 page1.AppendLine("— Feats —");
-                page1.AppendLine("• " + c.SelectedFeat);
+                string featLine = c.SelectedFeat;
+                if (featLine.Equals("Fighting Initiate", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(c.FightingInitiateStyle))
+                {
+                    featLine += " (" + c.FightingInitiateStyle.Trim() + ")";
+                }
+                page1.AppendLine("• " + featLine);
             }
 
             // ── Race / subrace ──

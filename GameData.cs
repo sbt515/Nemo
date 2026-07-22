@@ -2450,6 +2450,12 @@ public class Character
     public List<Nemo.AsiOrFeatDecision> AsiOrFeatDecisions { get; set; } = new();
     /// <summary>Fighter/Paladin/Ranger fighting style picks (names from ClassFeatureOptionData).</summary>
     public List<string> FightingStyles { get; set; } = new();
+    /// <summary>
+    /// Fighting style granted by the Fighting Initiate feat (fighter list).
+    /// Separate from class <see cref="FightingStyles"/> so non-fighters keep their pick
+    /// when class feature panels rebuild with zero class slots.
+    /// </summary>
+    public string FightingInitiateStyle { get; set; } = "";
     /// <summary>Warlock eldritch invocations known.</summary>
     public List<string> EldritchInvocations { get; set; } = new();
     /// <summary>Sorcerer metamagic options known.</summary>
