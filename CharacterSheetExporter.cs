@@ -4,11 +4,15 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Windows.Media.Imaging;
 using iText.Forms;
 using iText.Forms.Fields;
+using iText.IO.Image;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Action;
 using iText.Kernel.Pdf.Annot;
+using iText.Kernel.Pdf.Canvas;
+using iText.Kernel.Pdf.Xobject;
 using iTextRectangle = iText.Kernel.Geom.Rectangle;
 
 namespace Nemo
@@ -22,6 +26,12 @@ namespace Nemo
     public static class CharacterSheetExporter
     {
         public const string TemplateFileName = "5E_CharacterSheet_Fillable.pdf";
+
+        /// <summary>
+        /// Page-2 push-button field that holds the Character Appearance portrait
+        /// on the official multi-page fillable sheet.
+        /// </summary>
+        public const string CharacterImageFieldName = "CHARACTER IMAGE";
 
         /// <summary>
         /// Page 3 spell-list field names, in visual top-to-bottom order for the official sheet.
@@ -676,11 +686,138 @@ namespace Nemo
             // Overlay clickable wiki links on spell name fields (value stays the short display name).
             ApplySpellHyperlinks(pdf, fields, values.SpellHyperlinks);
 
+            // Embed uploaded portrait into page-2 Character Appearance (CHARACTER IMAGE button field).
+            ApplyCharacterAppearanceImage(pdf, fields, character);
+
             // Keep the form editable for the player
             // form.FlattenFields(); // intentionally NOT flattened
 
             pdf.Close();
         }
+
+        /// <summary>
+        /// Sets the official sheet's <c>CHARACTER IMAGE</c> push-button icon to the character's
+        /// uploaded avatar (<see cref="Character.AvatarBase64"/>), if present.
+        /// </summary>
+        private static void ApplyCharacterAppearanceImage(
+            PdfDocument pdf,
+            IDictionary<string, PdfFormField> fields,
+            Character character)
+        {
+            if (pdf == null || fields == null || character == null)
+                return;
+
+            if (string.IsNullOrWhiteSpace(character.AvatarBase64))
+                return;
+
+            if (!fields.TryGetValue(CharacterImageFieldName, out var field) || field == null)
+                return;
+
+            // Parent field is a push-button (Ff=65536); kids share the same appearance.
+            if (field is not PdfButtonFormField btn)
+                return;
+
+            byte[]? imageBytes = TryGetPdfCompatibleImageBytes(character.AvatarBase64);
+            if (imageBytes == null || imageBytes.Length == 0)
+                return;
+
+            try
+            {
+                ImageData imageData = ImageDataFactory.Create(imageBytes);
+                float imgW = imageData.GetWidth();
+                float imgH = imageData.GetHeight();
+                if (imgW <= 0 || imgH <= 0)
+                    return;
+
+                // Build a form XObject that paints the image, then assign it as the button icon.
+                // SetImageAsForm is more reliable with in-memory bytes than writing a temp file.
+                var formXObject = new PdfFormXObject(new iTextRectangle(imgW, imgH));
+                var canvas = new PdfCanvas(formXObject, pdf);
+                canvas.AddImageFittedIntoRectangle(
+                    imageData,
+                    new iTextRectangle(0, 0, imgW, imgH),
+                    false);
+
+                btn.SetImageAsForm(formXObject);
+            }
+            catch
+            {
+                // Corrupt / unsupported image should not fail the whole export.
+            }
+        }
+
+        /// <summary>
+        /// Decodes <see cref="Character.AvatarBase64"/> (raw or data-URL) into JPEG/PNG bytes
+        /// that iText can embed. Re-encodes GIF and other formats to PNG via WPF.
+        /// </summary>
+        private static byte[]? TryGetPdfCompatibleImageBytes(string? avatarBase64)
+        {
+            byte[]? raw = TryDecodeAvatarBytes(avatarBase64);
+            if (raw == null || raw.Length < 8)
+                return null;
+
+            if (IsJpeg(raw) || IsPng(raw))
+                return raw;
+
+            // GIF / BMP / etc. — re-encode to PNG so ImageDataFactory accepts them.
+            try
+            {
+                using var input = new MemoryStream(raw);
+                var decoder = BitmapDecoder.Create(
+                    input,
+                    BitmapCreateOptions.PreservePixelFormat,
+                    BitmapCacheOption.OnLoad);
+                if (decoder.Frames.Count == 0)
+                    return null;
+
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(decoder.Frames[0]));
+                using var output = new MemoryStream();
+                encoder.Save(output);
+                return output.ToArray();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static byte[]? TryDecodeAvatarBytes(string? avatarBase64)
+        {
+            if (string.IsNullOrWhiteSpace(avatarBase64))
+                return null;
+
+            string b64 = avatarBase64.Trim();
+            if (b64.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            {
+                int comma = b64.IndexOf(',');
+                if (comma < 0)
+                    return null;
+                b64 = b64[(comma + 1)..];
+            }
+
+            try
+            {
+                return Convert.FromBase64String(b64);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool IsPng(byte[] bytes) =>
+            bytes.Length >= 8
+            && bytes[0] == 0x89
+            && bytes[1] == 0x50
+            && bytes[2] == 0x4E
+            && bytes[3] == 0x47;
+
+        private static bool IsJpeg(byte[] bytes) =>
+            bytes.Length >= 3
+            && bytes[0] == 0xFF
+            && bytes[1] == 0xD8
+            && bytes[2] == 0xFF;
 
         private sealed class FieldPayload
         {
