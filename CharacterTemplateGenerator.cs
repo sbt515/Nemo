@@ -9,7 +9,9 @@ namespace Nemo
     {
         Optimized,
         General,
-        Random
+        Random,
+        /// <summary>User-authored builds saved on disk for reuse.</summary>
+        Custom
     }
 
     /// <summary>
@@ -212,12 +214,22 @@ namespace Nemo
 
         public static IReadOnlyList<CharacterBuildTemplate> AllTemplates => Templates.Value;
 
-        public static string[] CategoryNames { get; } = { "Optimized", "General", "Random" };
+        public static string[] CategoryNames { get; } = { "Optimized", "General", "Random", "Custom" };
 
         public static string[] RoleNames { get; } = { "Support", "Damage", "Tank" };
 
         public static string[] RandomRoleNames { get; } =
             { "Support", "Damage", "Tank", "True Random" };
+
+        /// <summary>
+        /// Categories shown in Quick Generate. Custom is only listed when the user has saved templates.
+        /// </summary>
+        public static IReadOnlyList<string> GetAvailableCategoryNames()
+        {
+            if (CustomTemplateStore.HasAny())
+                return CategoryNames;
+            return new[] { "Optimized", "General", "Random" };
+        }
 
         public static TemplateCategory ParseCategory(string? text) =>
             (text ?? "").Trim() switch
@@ -225,6 +237,7 @@ namespace Nemo
                 "Optimized" => TemplateCategory.Optimized,
                 "General" => TemplateCategory.General,
                 "Random" => TemplateCategory.Random,
+                "Custom" => TemplateCategory.Custom,
                 _ => TemplateCategory.General
             };
 
@@ -247,6 +260,8 @@ namespace Nemo
                     "General: solid thematic builds that work well without hard min-maxing.",
                 TemplateCategory.Random =>
                     "Random: rolls within a role (or pure chaos with True Random).",
+                TemplateCategory.Custom =>
+                    "Custom: your saved builds, captured from characters you created. Reuse them any time.",
                 _ => ""
             };
 
@@ -265,7 +280,7 @@ namespace Nemo
             };
 
         /// <summary>
-        /// Templates available for a category + role (Optimized / General pick lists).
+        /// Templates available for a category + role (Optimized / General / Custom pick lists).
         /// Ordered by name. Empty for Random (no fixed list).
         /// </summary>
         public static IReadOnlyList<CharacterBuildTemplate> GetTemplates(
@@ -275,6 +290,14 @@ namespace Nemo
             if (category == TemplateCategory.Random || role == TemplateRole.None)
                 return Array.Empty<CharacterBuildTemplate>();
 
+            if (category == TemplateCategory.Custom)
+            {
+                return CustomTemplateStore.GetAll()
+                    .Where(t => t.Role == role)
+                    .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
             var pool = Templates.Value
                 .Where(t => t.Category == category && t.Role == role)
                 .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
@@ -282,7 +305,7 @@ namespace Nemo
 
             if (pool.Count == 0)
             {
-                // Fall back to any templates for this role (e.g. if only one category filled)
+                // Fall back to any built-in templates for this role (e.g. if only one category filled)
                 pool = Templates.Value
                     .Where(t => t.Role == role)
                     .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
@@ -290,6 +313,97 @@ namespace Nemo
             }
 
             return pool;
+        }
+
+        /// <summary>
+        /// Build a Custom template from the current character sheet values.
+        /// Ability priority is derived from base scores (highest first).
+        /// </summary>
+        public static CharacterBuildTemplate CreateCustomTemplateFromCharacter(
+            Character character,
+            string name,
+            TemplateRole role,
+            string? description = null)
+        {
+            ArgumentNullException.ThrowIfNull(character);
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Template name is required.", nameof(name));
+            if (role == TemplateRole.None)
+                role = TemplateRole.Support;
+
+            string className = (character.Class ?? "").Trim();
+            string subclass = (character.Subclass ?? "").Trim();
+            string race = (character.Race ?? "").Trim();
+            string subrace = (character.Subrace ?? "").Trim();
+            string background = (character.Background ?? "").Trim();
+
+            var priority = DeriveAbilityPriority(character);
+            var skills = (character.Skills ?? new List<SkillEntry>())
+                .Where(s => s != null && s.IsProficient && !string.IsNullOrWhiteSpace(s.Name))
+                .Select(s => s.Name.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var cantrips = (character.Cantrips ?? new List<string>())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var spells = (character.Level1Spells ?? new List<string>())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            string desc = (description ?? "").Trim();
+            if (string.IsNullOrEmpty(desc))
+            {
+                desc = $"Saved custom build: {race}" +
+                       (string.IsNullOrEmpty(subrace) ? "" : $" ({subrace})") +
+                       $" {className}" +
+                       (string.IsNullOrEmpty(subclass) ? "" : $" ({subclass})") +
+                       (string.IsNullOrEmpty(background) ? "" : $" · {background}");
+            }
+
+            return new CharacterBuildTemplate
+            {
+                Name = name.Trim(),
+                Category = TemplateCategory.Custom,
+                Role = role,
+                Class = className,
+                Subclass = subclass,
+                Race = race,
+                Subrace = subrace,
+                Background = background,
+                AbilityPriority = priority,
+                PreferredSkills = skills,
+                PreferredCantrips = cantrips,
+                PreferredSpells = spells,
+                Description = desc
+            };
+        }
+
+        private static string[] DeriveAbilityPriority(Character character)
+        {
+            var block = character?.AbilityScores;
+            if (block == null)
+                return AllAbilities.ToArray();
+
+            var scored = new (string Name, int Base)[]
+            {
+                ("Strength", block.Strength?.Base ?? 0),
+                ("Dexterity", block.Dexterity?.Base ?? 0),
+                ("Constitution", block.Constitution?.Base ?? 0),
+                ("Intelligence", block.Intelligence?.Base ?? 0),
+                ("Wisdom", block.Wisdom?.Base ?? 0),
+                ("Charisma", block.Charisma?.Base ?? 0),
+            };
+
+            // Highest base first; stable order among ties via AllAbilities index
+            return scored
+                .OrderByDescending(x => x.Base)
+                .ThenBy(x => Array.IndexOf(AllAbilities, x.Name))
+                .Select(x => x.Name)
+                .ToArray();
         }
 
         /// <summary>
@@ -330,7 +444,11 @@ namespace Nemo
 
             var pool = GetTemplates(category, role).ToList();
             if (pool.Count == 0)
+            {
+                if (category == TemplateCategory.Custom)
+                    throw new InvalidOperationException("No custom templates saved for this role yet. Create one first.");
                 return GenerateRoleRandom(role == TemplateRole.None ? TemplateRole.Support : role, rng);
+            }
 
             var template = pool[rng.Next(pool.Count)];
             return BuildFromTemplate(template, category, rng);
@@ -384,7 +502,8 @@ namespace Nemo
                 ? template.AbilityPriority
                 : GetAbilityPriority(className, subclass, template.Role);
 
-            int[] scores = category == TemplateCategory.Optimized
+            // Custom and Optimized keep standard-array primaries so saved priorities stick.
+            int[] scores = category is TemplateCategory.Optimized or TemplateCategory.Custom
                 ? (int[])StandardArray.Clone()
                 : SoftShuffleArray(StandardArray, rng);
 

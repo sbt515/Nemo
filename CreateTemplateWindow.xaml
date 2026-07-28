@@ -1,0 +1,157 @@
+<Window x:Class="Nemo.CreateTemplateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Create Custom Template"
+        Height="480"
+        Width="520"
+        MinHeight="400"
+        MinWidth="420"
+        WindowStartupLocation="CenterOwner"
+        Background="#1E1E1E"
+        Foreground="#F0F0F0"
+        FontFamily="Segoe UI"
+        FontSize="13"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="Foreground" Value="#F0F0F0"/>
+            <Setter Property="BorderBrush" Value="#555"/>
+            <Setter Property="CaretBrush" Value="#F0F0F0"/>
+            <Setter Property="Padding" Value="8,6"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Create Custom Template"
+                   FontSize="18"
+                   FontWeight="Bold"
+                   Foreground="#7CFC00"
+                   Margin="0,0,0,4"/>
+
+        <TextBlock Grid.Row="1"
+                   Text="Save the current character's race, class, background, skills, and spells as a reusable build."
+                   FontSize="12"
+                   Foreground="#AAA"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,14"
+                   LineHeight="17"/>
+
+        <TextBlock Grid.Row="2"
+                   Text="TEMPLATE NAME"
+                   FontWeight="Bold"
+                   FontSize="12"
+                   Margin="0,0,0,4"/>
+        <TextBox x:Name="txtName"
+                 Grid.Row="3"
+                 Height="34"
+                 FontSize="14"
+                 Margin="0,0,0,12"/>
+
+        <Grid Grid.Row="4" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="160"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="DESCRIPTION (optional)"
+                           FontWeight="Bold"
+                           FontSize="12"
+                           Margin="0,0,0,4"/>
+                <TextBox x:Name="txtDescription"
+                         Height="72"
+                         FontSize="13"
+                         TextWrapping="Wrap"
+                         AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="ROLE"
+                           FontWeight="Bold"
+                           FontSize="12"
+                           Margin="0,0,0,4"/>
+                <ComboBox x:Name="cmbRole"
+                          Height="34"
+                          FontSize="14"
+                          Background="#1E1E1E"
+                          Foreground="#F0F0F0"
+                          BorderBrush="#555"
+                          Padding="8,4"/>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="5"
+                Background="#2A2A2A"
+                BorderBrush="#444"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,10"
+                VerticalAlignment="Top">
+            <StackPanel>
+                <TextBlock Text="BUILD PREVIEW"
+                           FontWeight="Bold"
+                           FontSize="11"
+                           Foreground="#8FCBE8"
+                           Margin="0,0,0,6"/>
+                <TextBlock x:Name="txtKitPreview"
+                           Text=""
+                           FontSize="13"
+                           Foreground="#F0F0F0"
+                           TextWrapping="Wrap"
+                           LineHeight="18"/>
+                <TextBlock x:Name="txtDetailsPreview"
+                           FontSize="12"
+                           Foreground="#CCC"
+                           TextWrapping="Wrap"
+                           Margin="0,8,0,0"
+                           LineHeight="17"/>
+            </StackPanel>
+        </Border>
+
+        <TextBlock x:Name="txtStatus"
+                   Grid.Row="6"
+                   Foreground="#E8A0A0"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   Margin="0,12,0,0"
+                   MinHeight="18"/>
+
+        <DockPanel Grid.Row="7" Margin="0,14,0,0" LastChildFill="False">
+            <StackPanel DockPanel.Dock="Right"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Content="Cancel"
+                        Width="100"
+                        Height="36"
+                        Margin="0,0,10,0"
+                        Style="{StaticResource Nemo.Button.Neutral}"
+                        Click="Cancel_Click"
+                        IsCancel="True"/>
+                <Button x:Name="btnSave"
+                        Content="Save Template"
+                        Width="140"
+                        Height="36"
+                        Style="{StaticResource Nemo.Button.Primary}"
+                        Click="Save_Click"
+                        IsDefault="True"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

@@ -38,11 +38,14 @@
     <Compile Include="RaceExtraData.cs" />
     <Compile Include="ClassFeatureOptionData.cs" />
     <Compile Include="CharacterTemplateGenerator.cs" />
+    <Compile Include="CustomTemplateStore.cs" />
     <Compile Include="AppSettings.cs" />
     <Compile Include="TemplatePickerWindow.xaml.cs" />
+    <Compile Include="CreateTemplateWindow.xaml.cs" />
     <Page Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
     <Page Include="TemplatePickerWindow.xaml" />
+    <Page Include="CreateTemplateWindow.xaml" />
   </ItemGroup>
 
   <ItemGroup>

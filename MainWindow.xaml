@@ -77,9 +77,7 @@
                                 Click="LoadCharacter_Click"
                                 Width="190"
                                 Height="42"
-                                Background="#5C8A6E"
-                                Foreground="White"
-                                FontWeight="SemiBold"
+                                Style="{StaticResource Nemo.Button.Success}"
                                 HorizontalAlignment="Left"
                                 Margin="0,0,12,0"/>
                     </StackPanel>
@@ -157,9 +155,7 @@
                                     Content="🎲 Generate Character"
                                     Click="GenerateCharacter_Click"
                                     Height="40"
-                                    Background="#3A7CA5"
-                                    Foreground="White"
-                                    FontWeight="SemiBold"
+                                    Style="{StaticResource Nemo.Button.Primary}"
                                     HorizontalAlignment="Left"
                                     Padding="16,0"
                                     MinWidth="200"/>
@@ -211,8 +207,7 @@
                                 Content="📤 Upload Image"
                                 Width="140"
                                 Height="36"
-                                Background="#2E7D32"
-                                Foreground="White"
+                                Style="{StaticResource Nemo.Button.Success}"
                                 Click="UploadAvatar_Click"
                                 Margin="0,0,20,0"/>
 
@@ -574,9 +569,7 @@
                             Width="170"
                             Height="36"
                             Click="btnRollStats_Click"
-                            Background="#5C8A6E"
-                            Foreground="White"
-                            FontWeight="SemiBold"
+                            Style="{StaticResource Nemo.Button.Success}"
                             Margin="0,0,0,18"
                             Visibility="Collapsed"/>
 
@@ -641,11 +634,7 @@
                                     Tag="Str"
                                     Click="PointBuyStat_Dec"
                                     ToolTip="Decrease base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                             <TextBox x:Name="txtStrBase"
                                      Width="42"
@@ -666,11 +655,7 @@
                                     Tag="Str"
                                     Click="PointBuyStat_Inc"
                                     ToolTip="Increase base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                         </StackPanel>
                         <TextBlock x:Name="lblStrRoll"
@@ -715,11 +700,7 @@
                                     Tag="Dex"
                                     Click="PointBuyStat_Dec"
                                     ToolTip="Decrease base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                             <TextBox x:Name="txtDexBase"
                                      Width="42"
@@ -740,11 +721,7 @@
                                     Tag="Dex"
                                     Click="PointBuyStat_Inc"
                                     ToolTip="Increase base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                         </StackPanel>
                         <TextBlock x:Name="lblDexRoll"
@@ -789,11 +766,7 @@
                                     Tag="Con"
                                     Click="PointBuyStat_Dec"
                                     ToolTip="Decrease base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                             <TextBox x:Name="txtConBase"
                                      Width="42"
@@ -814,11 +787,7 @@
                                     Tag="Con"
                                     Click="PointBuyStat_Inc"
                                     ToolTip="Increase base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                         </StackPanel>
                         <TextBlock x:Name="lblConRoll"
@@ -863,11 +832,7 @@
                                     Tag="Int"
                                     Click="PointBuyStat_Dec"
                                     ToolTip="Decrease base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                             <TextBox x:Name="txtIntBase"
                                      Width="42"
@@ -888,11 +853,7 @@
                                     Tag="Int"
                                     Click="PointBuyStat_Inc"
                                     ToolTip="Increase base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                         </StackPanel>
                         <TextBlock x:Name="lblIntRoll"
@@ -937,11 +898,7 @@
                                     Tag="Wis"
                                     Click="PointBuyStat_Dec"
                                     ToolTip="Decrease base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                             <TextBox x:Name="txtWisBase"
                                      Width="42"
@@ -962,11 +919,7 @@
                                     Tag="Wis"
                                     Click="PointBuyStat_Inc"
                                     ToolTip="Increase base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                         </StackPanel>
                         <TextBlock x:Name="lblWisRoll"
@@ -1011,11 +964,7 @@
                                     Tag="Cha"
                                     Click="PointBuyStat_Dec"
                                     ToolTip="Decrease base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                             <TextBox x:Name="txtChaBase"
                                      Width="42"
@@ -1036,11 +985,7 @@
                                     Tag="Cha"
                                     Click="PointBuyStat_Inc"
                                     ToolTip="Increase base score"
-                                    Background="#3A3A3A"
-                                    Foreground="White"
-                                    BorderBrush="#666"
-                                    Padding="0"
-                                    FontWeight="Bold"
+                                    Style="{StaticResource Nemo.Button.Subtle}"
                                     FontSize="14"/>
                         </StackPanel>
                         <TextBlock x:Name="lblChaRoll"
@@ -1084,9 +1029,7 @@
                                 Width="170"
                                 Height="36"
                                 Click="btnResetPointBuy_Click"
-                                Background="#E74C3C"
-                                Foreground="White"
-                                FontWeight="SemiBold"
+                                Style="{StaticResource Nemo.Button.Danger}"
                                 HorizontalAlignment="Left"
                                 Margin="0,30,0,0"
                                 Visibility="Collapsed"/>
@@ -1146,9 +1089,7 @@
                                     Padding="12,4"
                                     Margin="12,0,0,0"
                                     Click="btnAddClassLevel_Click"
-                                    Background="#3A7CA5"
-                                    Foreground="White"
-                                    FontWeight="SemiBold"/>
+                                    Style="{StaticResource Nemo.Button.Primary}"/>
                         </DockPanel>
 
                         <StackPanel x:Name="pnlClassLevelRows"
@@ -2361,19 +2302,23 @@
                                 Click="SaveCharacter_Click"
                                 Width="230"
                                 Height="42"
-                                Background="#4A7C59"
-                                Foreground="White"
-                                FontWeight="SemiBold"
+                                Style="{StaticResource Nemo.Button.Success}"
                                 Margin="8"
                                 ToolTip="Save as Foundry VTT D&amp;D 5e character JSON (Import Data on a Character actor). Also reloads fully in Nemo."/>
+                        <Button x:Name="btnSaveAsTemplate"
+                                Content="⭐ Save as Template"
+                                Click="SaveAsTemplate_Click"
+                                Width="200"
+                                Height="42"
+                                Style="{StaticResource Nemo.Button.Primary}"
+                                Margin="8"
+                                ToolTip="Save this character as a reusable Custom build for Quick Generate"/>
                         <Button Content="📋 Export 5e Sheet"
                                 Click="ExportOfficialSheet_Click"
                                 Width="190"
                                 Height="42"
                                 Margin="8"
-                                Background="#4CAF50"
-                                Foreground="White"
-                                FontWeight="SemiBold"
+                                Style="{StaticResource Nemo.Button.Success}"
                                 ToolTip="Fill the official 5e character sheet PDF with this character"/>
                     </StackPanel>
                 </Grid>

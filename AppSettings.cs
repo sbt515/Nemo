@@ -14,7 +14,7 @@ namespace Nemo
         public const string DefaultTemplateCategory = "General";
         public const string DefaultTemplateRole = "Support";
 
-        /// <summary>Quick Generate category: Optimized / General / Random.</summary>
+        /// <summary>Quick Generate category: Optimized / General / Random / Custom.</summary>
         public string TemplateCategory { get; set; } = DefaultTemplateCategory;
 
         /// <summary>Quick Generate role: Support / Damage / Tank / True Random.</summary>
@@ -135,6 +135,11 @@ namespace Nemo
             else
                 cat = CharacterTemplateGenerator.CategoryNames.First(c =>
                     c.Equals(cat, StringComparison.OrdinalIgnoreCase));
+
+            // Custom is only valid when the user has saved at least one template
+            if (cat.Equals("Custom", StringComparison.OrdinalIgnoreCase) &&
+                !CustomTemplateStore.HasAny())
+                cat = DefaultTemplateCategory;
 
             s.TemplateCategory = cat;
 

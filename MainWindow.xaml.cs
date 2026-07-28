@@ -76,17 +76,33 @@ namespace Nemo
         /// <summary>Backing collection for the spell-level combo (avoids WPF ItemsSource stickiness).</summary>
         private readonly ObservableCollection<string> spellLevelComboItems = new();
         private readonly Random _rng = new();
-        private readonly Brush AccentGreen = (Brush)new BrushConverter().ConvertFromString("#7CFC00");
-        private readonly Brush AccentGray = (Brush)new BrushConverter().ConvertFromString("#2A2A2A");
+        private readonly Brush AccentGreen = ThemeBrush("Nemo.Brush.Accent", "#7CFC00");
+        private readonly Brush AccentGray = ThemeBrush("Nemo.Brush.FieldBg", "#2A2A2A");
         private static readonly string[] AbilityNames =
             { "Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma" };
 
-        private static readonly Brush ComboBgBrush =
-            (Brush)new BrushConverter().ConvertFromString("#2A2A2A");
-        private static readonly Brush ComboFgBrush =
-            (Brush)new BrushConverter().ConvertFromString("#F0F0F0");
-        private static readonly Brush ComboBorderBrush =
-            (Brush)new BrushConverter().ConvertFromString("#555555");
+        private static readonly Brush ComboBgBrush = ThemeBrush("Nemo.Brush.FieldBg", "#2A2A2A");
+        private static readonly Brush ComboFgBrush = ThemeBrush("Nemo.Brush.TextPrimary", "#F0F0F0");
+        private static readonly Brush ComboBorderBrush = ThemeBrush("Nemo.Brush.Border", "#555555");
+        private static readonly Brush BrushPrimary = ThemeBrush("Nemo.Brush.Primary", "#3A7CA5");
+        private static readonly Brush BrushSuccess = ThemeBrush("Nemo.Brush.Success", "#4A7C59");
+        private static readonly Brush BrushDanger = ThemeBrush("Nemo.Brush.Danger", "#E74C3C");
+
+        /// <summary>Resolve a brush from App.xaml design tokens, with a hex fallback.</summary>
+        private static Brush ThemeBrush(string resourceKey, string fallbackHex)
+        {
+            try
+            {
+                if (Application.Current?.TryFindResource(resourceKey) is Brush fromApp)
+                    return fromApp;
+            }
+            catch
+            {
+                // design-time / early init
+            }
+
+            return (Brush)new BrushConverter().ConvertFromString(fallbackHex)!;
+        }
 
         /// <summary>
         /// Apply app-level ComboBox theme (dark field, light text, readable dropdown items).
@@ -155,22 +171,22 @@ namespace Nemo
 
             var prefs = AppSettings.Load();
             string category = prefs.TemplateCategory;
+            var available = CharacterTemplateGenerator.GetAvailableCategoryNames();
             if (string.IsNullOrWhiteSpace(category) ||
-                !CharacterTemplateGenerator.CategoryNames.Any(c =>
-                    c.Equals(category, StringComparison.OrdinalIgnoreCase)))
+                !available.Any(c => c.Equals(category, StringComparison.OrdinalIgnoreCase)))
             {
                 category = AppSettings.DefaultTemplateCategory; // General
             }
             else
             {
-                category = CharacterTemplateGenerator.CategoryNames.First(c =>
+                category = available.First(c =>
                     c.Equals(category, StringComparison.OrdinalIgnoreCase));
             }
 
             _suppressTemplateSettingsSave = true;
             try
             {
-                cmbTemplateCategory.ItemsSource = CharacterTemplateGenerator.CategoryNames.ToList();
+                cmbTemplateCategory.ItemsSource = available.ToList();
                 cmbTemplateCategory.SelectedItem = category;
                 RefreshTemplateRoleCombo(preferredRole: prefs.TemplateRole);
                 UpdateTemplateHintText();
@@ -178,6 +194,44 @@ namespace Nemo
             finally
             {
                 _suppressTemplateSettingsSave = false;
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds the category combo (e.g. after the first custom template is saved).
+        /// Preserves the current selection when still valid.
+        /// </summary>
+        private void RefreshTemplateCategoryCombo(string? preferredCategory = null)
+        {
+            if (cmbTemplateCategory == null) return;
+
+            string? previous = preferredCategory ?? cmbTemplateCategory.SelectedItem as string;
+            var available = CharacterTemplateGenerator.GetAvailableCategoryNames().ToList();
+
+            bool wasSuppressing = _suppressTemplateSettingsSave;
+            _suppressTemplateSettingsSave = true;
+            try
+            {
+                cmbTemplateCategory.ItemsSource = available;
+
+                if (previous != null &&
+                    available.Any(c => c.Equals(previous, StringComparison.OrdinalIgnoreCase)))
+                {
+                    cmbTemplateCategory.SelectedItem = available.First(c =>
+                        c.Equals(previous, StringComparison.OrdinalIgnoreCase));
+                }
+                else
+                {
+                    string fallback = AppSettings.DefaultTemplateCategory;
+                    if (available.Any(c => c.Equals(fallback, StringComparison.OrdinalIgnoreCase)))
+                        cmbTemplateCategory.SelectedItem = fallback;
+                    else if (available.Count > 0)
+                        cmbTemplateCategory.SelectedIndex = 0;
+                }
+            }
+            finally
+            {
+                _suppressTemplateSettingsSave = wasSuppressing;
             }
         }
 
@@ -268,9 +322,20 @@ namespace Nemo
 
                 GeneratedCharacterResult result;
 
-                // Optimized / General: pick from the themed build list
-                if (category == TemplateCategory.Optimized || category == TemplateCategory.General)
+                // Optimized / General / Custom: pick from the themed build list
+                if (category is TemplateCategory.Optimized or TemplateCategory.General or TemplateCategory.Custom)
                 {
+                    if (category == TemplateCategory.Custom &&
+                        CharacterTemplateGenerator.GetTemplates(category, role).Count == 0)
+                    {
+                        MessageBox.Show(
+                            "No custom templates for this role yet.\n\nUse Create Template to save the current character as a reusable build.",
+                            "Custom Templates",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                        return;
+                    }
+
                     var chosen = TemplatePickerWindow.Pick(this, category, role);
                     if (chosen == null)
                         return; // cancelled or empty list
@@ -319,7 +384,7 @@ namespace Nemo
 
                 CurrentCharacter = result.Character;
 
-                // Custom allows any rolled/array values without point-buy validation fighting us
+                // Custom method allows any rolled/array values without point-buy validation fighting us
                 if (rbCustom != null)
                     rbCustom.IsChecked = true;
                 else if (rbStandardArray != null && category != TemplateCategory.Random)
@@ -346,6 +411,61 @@ namespace Nemo
                 MessageBox.Show(
                     "Failed to generate character:\n" + ex.Message,
                     "Generate Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Save the current character as a reusable Custom Quick Generate template
+        /// (from Summary &amp; Export).
+        /// </summary>
+        private void SaveAsTemplate_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Sync UI → CurrentCharacter so race/class/skills/spells are up to date
+                AutoSaveCharacterToJson();
+
+                if (CurrentCharacter == null ||
+                    string.IsNullOrWhiteSpace(CurrentCharacter.Race) ||
+                    string.IsNullOrWhiteSpace(CurrentCharacter.Class))
+                {
+                    MessageBox.Show(
+                        "Set a race and class on the current character before saving a template.",
+                        "Save as Template",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
+
+                var saved = CreateTemplateWindow.Create(this, CurrentCharacter);
+                if (saved == null)
+                    return;
+
+                // Custom category becomes available once the first template exists
+                RefreshTemplateCategoryCombo(preferredCategory: "Custom");
+                RefreshTemplateRoleCombo(preferredRole: saved.Role == TemplateRole.None
+                    ? "Support"
+                    : saved.Role.ToString());
+                UpdateTemplateHintText();
+                PersistTemplateGenerateSelection();
+
+                if (txtGenerateResult != null)
+                    txtGenerateResult.Text = $"✅ Saved custom template \"{saved.Name}\" · Category: Custom · Role: {saved.Role}";
+
+                MessageBox.Show(
+                    $"Template \"{saved.Name}\" saved.\n\n" +
+                    "On Basic Info, choose Category: Custom and the matching role, then Generate Character to reuse it.",
+                    "Template Saved",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Failed to save template:\n" + ex.Message,
+                    "Save as Template",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
@@ -1172,11 +1292,11 @@ namespace Nemo
             Width = 32,
             Height = 28,
             Margin = content == "+" ? new Thickness(4, 0, 0, 0) : new Thickness(0, 0, 4, 0),
-            Background = (Brush)new BrushConverter().ConvertFromString("#3A7CA5"),
+            Background = BrushPrimary,
             Foreground = Brushes.White,
             FontWeight = FontWeights.Bold,
             FontSize = 14,
-            BorderBrush = (Brush)new BrushConverter().ConvertFromString("#555"),
+            BorderBrush = ThemeBrush("Nemo.Brush.Border", "#555555"),
             BorderThickness = new Thickness(1),
             Cursor = System.Windows.Input.Cursors.Hand,
             IsHitTestVisible = true,
@@ -1791,7 +1911,7 @@ namespace Nemo
                         Width = 56,
                         Height = 28,
                         Margin = new Thickness(8, 0, 0, 0),
-                        Background = (Brush)new BrushConverter().ConvertFromString("#5C8A6E"),
+                        Background = BrushSuccess,
                         Foreground = Brushes.White,
                         FontWeight = FontWeights.SemiBold,
                         Tag = rollIndex
@@ -2026,7 +2146,7 @@ namespace Nemo
                         lblMulticlassPrereqStatus.Text =
                             "Multiclass prerequisites not met (scores include racial/feat/ASI bonuses):\n• " +
                             string.Join("\n• ", fails);
-                        lblMulticlassPrereqStatus.Foreground = (Brush)new BrushConverter().ConvertFromString("#E74C3C");
+                        lblMulticlassPrereqStatus.Foreground = BrushDanger;
                     }
                 }
             }
@@ -2323,7 +2443,7 @@ namespace Nemo
                     pnlClassLevelRows.Children.Add(new TextBlock
                     {
                         Text = ok ? $"  ✓ {entry.ClassName} prereq ({req})" : $"  ✗ {entry.ClassName} needs {req}",
-                        Foreground = ok ? AccentGreen : (Brush)new BrushConverter().ConvertFromString("#E74C3C"),
+                        Foreground = ok ? AccentGreen : BrushDanger,
                         FontSize = 11,
                         Margin = new Thickness(4, -4, 0, 8)
                     });
@@ -2862,15 +2982,15 @@ namespace Nemo
         // ───────────────────────── Class & Subclass details panel ─────────────────────────
 
         private static readonly Brush ClassDetailBodyBrush =
-            (Brush)new BrushConverter().ConvertFromString("#DDD");
+            ThemeBrush("Nemo.Brush.TextPrimary", "#DDDDDD");
         private static readonly Brush ClassDetailHeaderBrush =
-            (Brush)new BrushConverter().ConvertFromString("#9CDCFE");
+            ThemeBrush("Nemo.Brush.Info", "#9CDCFE");
         private static readonly Brush ClassDetailMutedBrush =
-            (Brush)new BrushConverter().ConvertFromString("#AAA");
+            ThemeBrush("Nemo.Brush.TextMuted", "#AAAAAA");
         private static readonly Brush ClassDetailUsesBrush =
-            (Brush)new BrushConverter().ConvertFromString("#7CFC00");
+            ThemeBrush("Nemo.Brush.Accent", "#7CFC00");
         private static readonly Brush ClassDetailSectionBrush =
-            (Brush)new BrushConverter().ConvertFromString("#E8C36A");
+            ThemeBrush("Nemo.Brush.Warn", "#E8C36A");
 
         /// <summary>
         /// Filters progression features for the details panel.
@@ -5647,7 +5767,7 @@ namespace Nemo
             else if (percentage >= 80)
                 pbCarryingCapacity.Foreground = Brushes.Yellow;
             else
-                pbCarryingCapacity.Foreground = (Brush)new BrushConverter().ConvertFromString("#4A7C59");
+                pbCarryingCapacity.Foreground = BrushSuccess;
 
             lblCarryingCapacity.Text = $"{totalWeight:F1} / {carryingCapacity:F0} lbs";
             lblPushDragLift.Text = $"Push / Drag / Lift: {pushDragLift:F0} lbs";
@@ -8236,11 +8356,11 @@ namespace Nemo
         {
             pnlExportPreview.Children.Clear();
 
-            var accent = PreviewBrush("#7CFC00");
-            var muted = PreviewBrush("#AAA");
-            var bright = PreviewBrush("#F0F0F0");
-            var cyan = PreviewBrush("#9CDCFE");
-            var gold = PreviewBrush("#E8C36A");
+            var accent = ThemeBrush("Nemo.Brush.Accent", "#7CFC00");
+            var muted = ThemeBrush("Nemo.Brush.TextMuted", "#AAAAAA");
+            var bright = ThemeBrush("Nemo.Brush.TextPrimary", "#F0F0F0");
+            var cyan = ThemeBrush("Nemo.Brush.Info", "#9CDCFE");
+            var gold = ThemeBrush("Nemo.Brush.Warn", "#E8C36A");
 
             // ── Identity header ──
             string title = string.IsNullOrWhiteSpace(p.CharacterName) ? "(Unnamed Character)" : p.CharacterName;
