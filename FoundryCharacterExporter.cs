@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
 
 namespace Nemo
@@ -17,10 +18,18 @@ namespace Nemo
         public const string NemoFlagNamespace = "nemo";
         public const int NemoFlagVersion = 1;
 
-        private static readonly JsonSerializerOptions NemoOpts = new()
+        /// <summary>
+        /// Shared options for Character serialize/deserialize.
+        /// TypeInfoResolver is required on .NET 8+ before options are marked read-only
+        /// (e.g. after first Serialize/Deserialize use).
+        /// </summary>
+        private static readonly JsonSerializerOptions NemoOpts = CreateSerializerOptions(writeIndented: false);
+
+        private static JsonSerializerOptions CreateSerializerOptions(bool writeIndented) => new()
         {
-            WriteIndented = false,
-            PropertyNameCaseInsensitive = true
+            WriteIndented = writeIndented,
+            PropertyNameCaseInsensitive = true,
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
         };
 
         private static readonly Dictionary<string, string> SkillToKey = new(StringComparer.OrdinalIgnoreCase)
@@ -78,7 +87,8 @@ namespace Nemo
         public static string ToJson(Character character)
         {
             var actor = BuildActor(character);
-            return actor.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            // Fresh options each call — JsonNode.ToJsonString can lock options as read-only.
+            return actor.ToJsonString(CreateSerializerOptions(writeIndented: true));
         }
 
         /// <summary>

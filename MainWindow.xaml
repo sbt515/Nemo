@@ -67,17 +67,112 @@
 
             <!-- TAB 1: BASIC INFO -->
             <TabItem Header="1. Basic Info">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="25"
-                            MaxWidth="600">
-                    <Button Content="📂 Load Character"
-                            Click="LoadCharacter_Click"
-                            Width="190"
-                            Height="42"
-                            Background="#5C8A6E"
-                            Foreground="White"
-                            FontWeight="SemiBold"
-                            HorizontalAlignment="Left"
-                            Margin="0,0,0,18"/>
+                            MaxWidth="640">
+                    <StackPanel Orientation="Horizontal"
+                                Margin="0,0,0,18">
+                        <Button Content="📂 Load Character"
+                                Click="LoadCharacter_Click"
+                                Width="190"
+                                Height="42"
+                                Background="#5C8A6E"
+                                Foreground="White"
+                                FontWeight="SemiBold"
+                                HorizontalAlignment="Left"
+                                Margin="0,0,12,0"/>
+                    </StackPanel>
+
+                    <!-- QUICK GENERATE: themed templates + random -->
+                    <Border Background="#2A2A2A"
+                            BorderBrush="#3A7CA5"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="16"
+                            Margin="0,0,0,22">
+                        <StackPanel>
+                            <TextBlock Text="⚡ QUICK GENERATE"
+                                       FontSize="15"
+                                       FontWeight="Bold"
+                                       Foreground="#7CFC00"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock Text="Build a complete level-1 character from themed templates or pure randomness."
+                                       FontSize="12"
+                                       Foreground="#AAA"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,12"/>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Text="CATEGORY"
+                                           FontWeight="Bold"
+                                           FontSize="12"
+                                           Margin="0,0,0,4"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="ROLE / STYLE"
+                                           FontWeight="Bold"
+                                           FontSize="12"
+                                           Margin="0,0,0,4"/>
+
+                                <ComboBox x:Name="cmbTemplateCategory"
+                                          Grid.Row="1"
+                                          Height="34"
+                                          FontSize="14"
+                                          Background="#1E1E1E"
+                                          Foreground="#F0F0F0"
+                                          BorderBrush="#555"
+                                          Padding="8,4"
+                                          SelectionChanged="cmbTemplateCategory_SelectionChanged"/>
+                                <ComboBox x:Name="cmbTemplateRole"
+                                          Grid.Row="1"
+                                          Grid.Column="2"
+                                          Height="34"
+                                          FontSize="14"
+                                          Background="#1E1E1E"
+                                          Foreground="#F0F0F0"
+                                          BorderBrush="#555"
+                                          Padding="8,4"
+                                          SelectionChanged="cmbTemplateRole_SelectionChanged"/>
+                            </Grid>
+
+                            <TextBlock x:Name="txtTemplateHint"
+                                       Text=""
+                                       FontSize="12"
+                                       Foreground="#BBB"
+                                       TextWrapping="Wrap"
+                                       Margin="0,10,0,12"
+                                       LineHeight="17"/>
+
+                            <Button x:Name="btnGenerateCharacter"
+                                    Content="🎲 Generate Character"
+                                    Click="GenerateCharacter_Click"
+                                    Height="40"
+                                    Background="#3A7CA5"
+                                    Foreground="White"
+                                    FontWeight="SemiBold"
+                                    HorizontalAlignment="Left"
+                                    Padding="16,0"
+                                    MinWidth="200"/>
+
+                            <TextBlock x:Name="txtGenerateResult"
+                                       Text=""
+                                       FontSize="12"
+                                       Foreground="#8FDF8F"
+                                       TextWrapping="Wrap"
+                                       Margin="0,10,0,0"
+                                       LineHeight="17"/>
+                        </StackPanel>
+                    </Border>
 
                     <TextBlock Text="CHARACTER NAME"
                                FontSize="15"
@@ -150,6 +245,7 @@
                                FontSize="12"
                                Margin="0,8,0,0"/>
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- TAB 2: RACE -->

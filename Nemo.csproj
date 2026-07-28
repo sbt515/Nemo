@@ -37,8 +37,12 @@
     <Compile Include="RacialSpellData.cs" />
     <Compile Include="RaceExtraData.cs" />
     <Compile Include="ClassFeatureOptionData.cs" />
+    <Compile Include="CharacterTemplateGenerator.cs" />
+    <Compile Include="AppSettings.cs" />
+    <Compile Include="TemplatePickerWindow.xaml.cs" />
     <Page Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
+    <Page Include="TemplatePickerWindow.xaml" />
   </ItemGroup>
 
   <ItemGroup>

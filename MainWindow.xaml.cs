@@ -117,6 +117,7 @@ namespace Nemo
             this.Loaded += (s, e) => StatMethod_Changed(null, null);
             this.Loaded += MainWindow_Loaded;
             LoadAllCombos();
+            InitializeTemplateGenerateUi();
             InitializeSkills();
             // Bind spell-level combo to an ObservableCollection so level unlocks always refresh
             if (cmbSpellLevel != null)
@@ -142,6 +143,242 @@ namespace Nemo
             RefreshRaceComboForCategory("Common");
             cmbBackground.ItemsSource = GameData.AllBackgrounds;
             cmbClass.ItemsSource = GameData.ClassData.Keys.OrderBy(c => c).ToList();
+        }
+
+        /// <summary>When true, template combo changes do not write preferences (init / restore).</summary>
+        private bool _suppressTemplateSettingsSave;
+
+        /// <summary>Wire category / role combos for Quick Generate on the Basic Info tab.</summary>
+        private void InitializeTemplateGenerateUi()
+        {
+            if (cmbTemplateCategory == null || cmbTemplateRole == null) return;
+
+            var prefs = AppSettings.Load();
+            string category = prefs.TemplateCategory;
+            if (string.IsNullOrWhiteSpace(category) ||
+                !CharacterTemplateGenerator.CategoryNames.Any(c =>
+                    c.Equals(category, StringComparison.OrdinalIgnoreCase)))
+            {
+                category = AppSettings.DefaultTemplateCategory; // General
+            }
+            else
+            {
+                category = CharacterTemplateGenerator.CategoryNames.First(c =>
+                    c.Equals(category, StringComparison.OrdinalIgnoreCase));
+            }
+
+            _suppressTemplateSettingsSave = true;
+            try
+            {
+                cmbTemplateCategory.ItemsSource = CharacterTemplateGenerator.CategoryNames.ToList();
+                cmbTemplateCategory.SelectedItem = category;
+                RefreshTemplateRoleCombo(preferredRole: prefs.TemplateRole);
+                UpdateTemplateHintText();
+            }
+            finally
+            {
+                _suppressTemplateSettingsSave = false;
+            }
+        }
+
+        private void cmbTemplateCategory_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (cmbTemplateCategory == null) return;
+            // Avoid running before ItemsSource is ready
+            if (cmbTemplateCategory.SelectedItem == null && cmbTemplateCategory.Items.Count == 0)
+                return;
+
+            RefreshTemplateRoleCombo();
+            UpdateTemplateHintText();
+            PersistTemplateGenerateSelection();
+        }
+
+        private void cmbTemplateRole_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateTemplateHintText();
+            PersistTemplateGenerateSelection();
+        }
+
+        private void PersistTemplateGenerateSelection()
+        {
+            if (_suppressTemplateSettingsSave) return;
+            if (cmbTemplateCategory?.SelectedItem == null) return;
+
+            AppSettings.SaveTemplateSelection(
+                cmbTemplateCategory.SelectedItem as string,
+                cmbTemplateRole?.SelectedItem as string);
+        }
+
+        private void RefreshTemplateRoleCombo(string? preferredRole = null)
+        {
+            if (cmbTemplateRole == null) return;
+
+            string? previous = preferredRole ?? cmbTemplateRole.SelectedItem as string;
+            var category = CharacterTemplateGenerator.ParseCategory(cmbTemplateCategory?.SelectedItem as string);
+
+            bool wasSuppressing = _suppressTemplateSettingsSave;
+            _suppressTemplateSettingsSave = true;
+            try
+            {
+                cmbTemplateRole.ItemsSource = category == TemplateCategory.Random
+                    ? CharacterTemplateGenerator.RandomRoleNames.ToList()
+                    : CharacterTemplateGenerator.RoleNames.ToList();
+
+                if (previous != null &&
+                    cmbTemplateRole.Items.Cast<object>().Any(i =>
+                        string.Equals(i?.ToString(), previous, StringComparison.OrdinalIgnoreCase)))
+                {
+                    cmbTemplateRole.SelectedItem = previous;
+                }
+                else
+                {
+                    // Prefer Support as default role when previous is invalid for this category
+                    string fallback = AppSettings.DefaultTemplateRole;
+                    if (cmbTemplateRole.Items.Cast<object>().Any(i =>
+                            string.Equals(i?.ToString(), fallback, StringComparison.OrdinalIgnoreCase)))
+                        cmbTemplateRole.SelectedItem = fallback;
+                    else
+                        cmbTemplateRole.SelectedIndex = 0;
+                }
+            }
+            finally
+            {
+                _suppressTemplateSettingsSave = wasSuppressing;
+            }
+        }
+
+        private void UpdateTemplateHintText()
+        {
+            if (txtTemplateHint == null) return;
+
+            var category = CharacterTemplateGenerator.ParseCategory(cmbTemplateCategory?.SelectedItem as string);
+            var role = CharacterTemplateGenerator.ParseRole(cmbTemplateRole?.SelectedItem as string);
+
+            txtTemplateHint.Text =
+                CharacterTemplateGenerator.DescribeCategory(category) + "\n" +
+                CharacterTemplateGenerator.DescribeRole(role);
+        }
+
+        private void GenerateCharacter_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var category = CharacterTemplateGenerator.ParseCategory(cmbTemplateCategory?.SelectedItem as string);
+                var role = CharacterTemplateGenerator.ParseRole(cmbTemplateRole?.SelectedItem as string);
+
+                GeneratedCharacterResult result;
+
+                // Optimized / General: pick from the themed build list
+                if (category == TemplateCategory.Optimized || category == TemplateCategory.General)
+                {
+                    var chosen = TemplatePickerWindow.Pick(this, category, role);
+                    if (chosen == null)
+                        return; // cancelled or empty list
+
+                    bool hasProgress =
+                        !string.IsNullOrWhiteSpace(txtCharacterName?.Text) ||
+                        cmbRace?.SelectedItem != null ||
+                        cmbClass?.SelectedItem != null ||
+                        cmbBackground?.SelectedItem != null;
+
+                    if (hasProgress)
+                    {
+                        var confirm = MessageBox.Show(
+                            $"Generate \"{chosen.Name}\"?\n\nThis will replace your current race, class, background, stats, skills, and spells on all tabs.",
+                            "Generate Character",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Question);
+                        if (confirm != MessageBoxResult.Yes)
+                            return;
+                    }
+
+                    result = CharacterTemplateGenerator.GenerateFromTemplate(chosen, _rng);
+                }
+                else
+                {
+                    // Random / True Random: no picker — roll immediately
+                    bool hasProgress =
+                        !string.IsNullOrWhiteSpace(txtCharacterName?.Text) ||
+                        cmbRace?.SelectedItem != null ||
+                        cmbClass?.SelectedItem != null ||
+                        cmbBackground?.SelectedItem != null;
+
+                    if (hasProgress)
+                    {
+                        var confirm = MessageBox.Show(
+                            "Generate a new character? This will replace your current race, class, background, stats, skills, and spells on all tabs.",
+                            "Generate Character",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Question);
+                        if (confirm != MessageBoxResult.Yes)
+                            return;
+                    }
+
+                    result = CharacterTemplateGenerator.Generate(category, role, _rng);
+                }
+
+                CurrentCharacter = result.Character;
+
+                // Custom allows any rolled/array values without point-buy validation fighting us
+                if (rbCustom != null)
+                    rbCustom.IsChecked = true;
+                else if (rbStandardArray != null && category != TemplateCategory.Random)
+                    rbStandardArray.IsChecked = true;
+
+                ApplyCharacterToUI(fromPdf: false);
+                AutoSelectEquipmentDefaults();
+                UpdateStatDisplays();
+
+                if (cmbClass.SelectedItem is string className)
+                    UpdateSkillChoices(className);
+
+                if (txtGenerateResult != null)
+                    txtGenerateResult.Text = "✅ " + result.Summary.Replace("\n", " · ");
+
+                MessageBox.Show(
+                    result.Summary + "\n\nReview the other tabs to tweak skills, equipment, and spells.",
+                    "Character Generated",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Failed to generate character:\n" + ex.Message,
+                    "Generate Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// After generation, pick the first radio option in each equipment choice group
+        /// so the starting kit is fully filled without manual clicks.
+        /// </summary>
+        private void AutoSelectEquipmentDefaults()
+        {
+            if (pnlEquipmentChoices == null) return;
+
+            try
+            {
+                var groupsSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var child in pnlEquipmentChoices.Children)
+                {
+                    if (child is not StackPanel groupPanel) continue;
+                    foreach (var inner in groupPanel.Children.OfType<RadioButton>())
+                    {
+                        string group = inner.GroupName ?? "";
+                        if (string.IsNullOrEmpty(group) || !groupsSeen.Add(group))
+                            continue;
+                        if (inner.IsChecked != true)
+                            inner.IsChecked = true;
+                    }
+                }
+            }
+            catch
+            {
+                // Equipment UI is best-effort; character is still playable without auto-picks.
+            }
         }
 
         private void cmbRaceCategory_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -9385,9 +9622,43 @@ namespace Nemo
                 skill.IsBackgroundProficiency = false;
             }
 
+            // Skills granted by race/background are locked and do NOT count toward class slots.
+            // Class (and other) picks stay proficient but toggleable / countable.
+            var granted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            string bg = CurrentCharacter.Background ?? cmbBackground?.SelectedItem?.ToString() ?? "";
+            if (!string.IsNullOrWhiteSpace(bg))
+            {
+                foreach (var s in GetBackgroundSkillList(bg))
+                    granted.Add(s);
+            }
+
+            if (currentRaceAutomaticSkills != null)
+            {
+                foreach (var s in currentRaceAutomaticSkills)
+                    if (!string.IsNullOrWhiteSpace(s))
+                        granted.Add(s);
+            }
+
+            string race = CurrentCharacter.Race ?? cmbRace?.SelectedItem?.ToString() ?? "";
+            if (!string.IsNullOrWhiteSpace(race) &&
+                GameData.RaceData.TryGetValue(race, out var raceData) &&
+                raceData.SkillProficiencies != null)
+            {
+                foreach (var s in raceData.SkillProficiencies)
+                    granted.Add(s);
+            }
+
+            if (!string.IsNullOrWhiteSpace(raceGrantedSkill))
+                granted.Add(raceGrantedSkill);
+            if (!string.IsNullOrWhiteSpace(CurrentCharacter.RaceGrantedSkill))
+                granted.Add(CurrentCharacter.RaceGrantedSkill);
+
             // Apply saved proficiencies + expertise
             foreach (var savedSkill in CurrentCharacter.Skills)
             {
+                if (string.IsNullOrWhiteSpace(savedSkill.Name)) continue;
+
                 var skill = allSkills.FirstOrDefault(s =>
                     s.SkillName.Equals(savedSkill.Name, StringComparison.OrdinalIgnoreCase));
 
@@ -9395,7 +9666,9 @@ namespace Nemo
                 {
                     skill.IsProficient = true;
                     skill.SetExpertiseQuiet(savedSkill.IsExpertise);
-                    skill.IsBackgroundProficiency = true; // Treat loaded skills as granted
+                    // Only true race/background grants are locked — class picks must remain
+                    // countable for "X / Y class skills selected".
+                    skill.IsBackgroundProficiency = granted.Contains(skill.SkillName);
                 }
             }
 
@@ -9405,7 +9678,29 @@ namespace Nemo
 
         private void RestoreSelectedFeat()
         {
-            if (string.IsNullOrEmpty(CurrentCharacter.SelectedFeat) || dgFeats.ItemsSource == null)
+            // Always clear first so a prior feat does not stick when the new character has none
+            EnsureFeatsLoaded();
+            if (GameData.AllFeats != null)
+            {
+                foreach (var feat in GameData.AllFeats)
+                {
+                    if (feat != null)
+                        feat.IsSelected = false;
+                }
+            }
+            if (dgFeats != null)
+                dgFeats.SelectedItem = null;
+
+            if (string.IsNullOrEmpty(CurrentCharacter?.SelectedFeat))
+            {
+                currentFeatSpellSource = "";
+                currentFeatSpells = new List<string>();
+                UpdateFeatSpellsLabel();
+                dgFeats?.Items.Refresh();
+                return;
+            }
+
+            if (dgFeats?.ItemsSource == null)
                 return;
 
             foreach (Feat feat in dgFeats.ItemsSource)
@@ -9428,28 +9723,36 @@ namespace Nemo
                     .Where(s => !string.IsNullOrWhiteSpace(s))
                     .Select(s => s.Trim())
                     .ToList();
-                UpdateFeatSpellsLabel();
             }
+            else
+            {
+                currentFeatSpellSource = "";
+                currentFeatSpells = new List<string>();
+            }
+
+            UpdateFeatSpellsLabel();
+            dgFeats.Items.Refresh();
         }
 
         private void RestoreCantrips()
         {
-            if (CurrentCharacter.Cantrips == null || cantripOptions == null) return;
+            if (cantripOptions == null) return;
 
-            var preferred = CurrentCharacter.CantripClassAssignments ??
+            var selected = CurrentCharacter?.Cantrips ?? new List<string>();
+            var preferred = CurrentCharacter?.CantripClassAssignments ??
                             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var option in cantripOptions)
             {
-                bool selected = CurrentCharacter.Cantrips.Contains(option.Name, StringComparer.OrdinalIgnoreCase);
-                option.IsChecked = selected;
-                if (selected && preferred.TryGetValue(option.Name, out var classKey) &&
+                bool isOn = selected.Contains(option.Name, StringComparer.OrdinalIgnoreCase);
+                option.IsChecked = isOn;
+                if (isOn && preferred.TryGetValue(option.Name, out var classKey) &&
                     !string.IsNullOrWhiteSpace(classKey))
                 {
                     option.AssignedClassKey = classKey;
                     // Display filled during rebalance
                 }
-                else if (!selected)
+                else
                 {
                     ClearCantripAssignment(option);
                 }
@@ -9466,11 +9769,12 @@ namespace Nemo
 
         private void RestoreLevel1Spells()
         {
-            if (CurrentCharacter.Level1Spells == null || spell1Options == null) return;
+            if (spell1Options == null) return;
 
+            var selected = CurrentCharacter?.Level1Spells ?? new List<string>();
             foreach (var option in spell1Options)
             {
-                option.IsChecked = CurrentCharacter.Level1Spells.Contains(option.Name, StringComparer.OrdinalIgnoreCase);
+                option.IsChecked = selected.Contains(option.Name, StringComparer.OrdinalIgnoreCase);
             }
 
             dgSpells1.Items.Refresh();
@@ -9626,12 +9930,193 @@ namespace Nemo
         }
 
         /// <summary>
+        /// Clears session/UI state that would otherwise leak from a previous character
+        /// when generate/load applies a new one. Combo selections are blanked so
+        /// SelectionChanged re-fires even if the next race/class matches the previous.
+        /// </summary>
+        private void ClearUiStateForCharacterReplace()
+        {
+            // Race / background session fields
+            raceGrantedSkill = "";
+            highElfCantrip = "";
+            currentRaceAutomaticSkills = new List<string>();
+            racialBonuses = new Dictionary<string, int>();
+            backgroundLanguage1 = "";
+            backgroundLanguage2 = "";
+            currentBackgroundEquipmentAdded = "";
+
+            // Feat session fields
+            featStatBonuses = new Dictionary<string, int>();
+            featInitiativeBonus = 0;
+            currentFeatAbilityChoice = "";
+            resilientSaveAbility = "";
+            featSelectedSpell = "";
+            baseFeatDescription = "";
+            featSpeedBonus = 0;
+            magicInitiateClass = "";
+            magicInitiateCantrips = new List<string>();
+            magicInitiateSpell = "";
+            currentFeatSpellSource = "";
+            currentFeatSpells = new List<string>();
+
+            try { ResetFeatChoiceUi(); } catch { /* UI may not be ready */ }
+
+            EnsureFeatsLoaded();
+            if (GameData.AllFeats != null)
+            {
+                foreach (var feat in GameData.AllFeats)
+                {
+                    if (feat != null)
+                        feat.IsSelected = false;
+                }
+            }
+            if (dgFeats != null)
+            {
+                dgFeats.SelectedItem = null;
+                dgFeats.Items.Refresh();
+            }
+            if (txtFeatDetails != null)
+                txtFeatDetails.Text = "";
+            try { UpdateFeatSpellsLabel(); } catch { /* ignore */ }
+
+            // Skills / expertise
+            if (allSkills != null)
+            {
+                foreach (var skill in allSkills)
+                {
+                    skill.IsProficient = false;
+                    skill.SetExpertiseQuiet(false);
+                    skill.IsBackgroundProficiency = false;
+                }
+                dgSkills?.Items.Refresh();
+            }
+
+            // Spells — uncheck everything; restore methods re-check from character
+            if (cantripOptions != null)
+            {
+                foreach (var c in cantripOptions)
+                {
+                    c.IsChecked = false;
+                    ClearCantripAssignment(c);
+                }
+                try
+                {
+                    dgCantrips?.Items.Refresh();
+                    UpdateCantripCounter();
+                }
+                catch { /* ignore */ }
+            }
+            if (spell1Options != null)
+            {
+                foreach (var s in spell1Options)
+                    s.IsChecked = false;
+                try
+                {
+                    dgSpells1?.Items.Refresh();
+                    UpdateSpellCounter();
+                }
+                catch { /* ignore */ }
+            }
+
+            // Equipment / wealth UI leftovers
+            pickedWeapons.Clear();
+            activeWeaponChoices.Clear();
+            _lastStartingWealthClass = "";
+            try
+            {
+                pnlEquipmentChoices?.Children.Clear();
+                if (pnlWeaponChoices != null)
+                    pnlWeaponChoices.Visibility = Visibility.Collapsed;
+                if (txtBackgroundEquipment != null)
+                    txtBackgroundEquipment.Text = "";
+                if (txtLevel1GoldResult != null)
+                    txtLevel1GoldResult.Text = "";
+                if (txtHigherLevelGoldResult != null)
+                    txtHigherLevelGoldResult.Text = "";
+                if (txtCustomGoldGp != null)
+                {
+                    txtCustomGoldGp.TextChanged -= TxtCustomGoldGp_TextChanged;
+                    txtCustomGoldGp.Text = "";
+                    txtCustomGoldGp.TextChanged += TxtCustomGoldGp_TextChanged;
+                }
+            }
+            catch { /* ignore */ }
+
+            // Optional panels that may stick from the previous race
+            if (pnlFlexibleBonuses != null)
+                pnlFlexibleBonuses.Visibility = Visibility.Collapsed;
+            if (pnlRaceSkillChoice != null)
+                pnlRaceSkillChoice.Visibility = Visibility.Collapsed;
+            if (pnlHighElfCantrip != null)
+                pnlHighElfCantrip.Visibility = Visibility.Collapsed;
+            if (pnlHighElfCantripPreview != null)
+                pnlHighElfCantripPreview.Visibility = Visibility.Collapsed;
+            if (pnlBackgroundLanguages != null)
+                pnlBackgroundLanguages.Visibility = Visibility.Collapsed;
+
+            // Force combos empty so re-select always raises SelectionChanged
+            _suppressRaceCategoryEvents = true;
+            _suppressLevelTabRebuild = true;
+            try
+            {
+                if (cmbSubrace != null)
+                {
+                    cmbSubrace.SelectedIndex = -1;
+                    cmbSubrace.ItemsSource = null;
+                    cmbSubrace.IsEnabled = false;
+                }
+                if (cmbSubclass != null)
+                {
+                    cmbSubclass.SelectedIndex = -1;
+                    cmbSubclass.ItemsSource = null;
+                    cmbSubclass.IsEnabled = false;
+                }
+                if (cmbRace != null)
+                    cmbRace.SelectedIndex = -1;
+                if (cmbBackground != null)
+                    cmbBackground.SelectedIndex = -1;
+                if (cmbClass != null)
+                    cmbClass.SelectedIndex = -1;
+                if (cmbFlexibleBonus1 != null)
+                    cmbFlexibleBonus1.SelectedIndex = -1;
+                if (cmbFlexibleBonus2 != null)
+                    cmbFlexibleBonus2.SelectedIndex = -1;
+                if (cmbRaceSkillChoice != null)
+                    cmbRaceSkillChoice.SelectedIndex = -1;
+                if (cmbHighElfCantrip != null)
+                    cmbHighElfCantrip.SelectedIndex = -1;
+                if (cmbBackgroundLanguage1 != null)
+                    cmbBackgroundLanguage1.SelectedIndex = -1;
+                if (cmbBackgroundLanguage2 != null)
+                    cmbBackgroundLanguage2.SelectedIndex = -1;
+            }
+            finally
+            {
+                _suppressRaceCategoryEvents = false;
+                _suppressLevelTabRebuild = false;
+            }
+
+            // Avatar only when the incoming character has none
+            if (string.IsNullOrEmpty(CurrentCharacter?.AvatarBase64))
+            {
+                avatarBase64 = "";
+                if (imgAvatar != null)
+                    imgAvatar.Source = null;
+                if (lblAvatarStatus != null)
+                    lblAvatarStatus.Text = "";
+            }
+        }
+
+        /// <summary>
         /// Pushes <see cref="CurrentCharacter"/> into the UI controls.
         /// When <paramref name="fromPdf"/> is true, ability score bases are reverse-engineered
         /// so that base + racial ≈ the PDF's final scores.
         /// </summary>
         private void ApplyCharacterToUI(bool fromPdf = false)
         {
+            // Drop previous character UI leftovers before applying the new one
+            ClearUiStateForCharacterReplace();
+
             // Custom method allows free editing of base scores after import
             if (rbCustom != null)
                 rbCustom.IsChecked = true;
@@ -9664,6 +10149,14 @@ namespace Nemo
                     // ignore bad avatar data
                 }
             }
+            else
+            {
+                avatarBase64 = "";
+                if (imgAvatar != null)
+                    imgAvatar.Source = null;
+                if (lblAvatarStatus != null)
+                    lblAvatarStatus.Text = "";
+            }
 
             // Race category first so the race dropdown contains the saved race
             if (!string.IsNullOrEmpty(CurrentCharacter.Race))
@@ -9693,7 +10186,7 @@ namespace Nemo
                     cmbRace.SelectedItem = raceMatch;
             }
 
-            // Subrace after race populates the list
+            // Subrace after race populates the list (clear already done if empty)
             if (!string.IsNullOrEmpty(CurrentCharacter.Subrace) && cmbSubrace != null && cmbSubrace.Items.Count > 0)
             {
                 string? subMatch = cmbSubrace.Items.Cast<object>()
@@ -9739,6 +10232,18 @@ namespace Nemo
                 if (subcMatch != null)
                     cmbSubclass.SelectedItem = subcMatch;
             }
+            else if (cmbSubclass != null && string.IsNullOrEmpty(CurrentCharacter.Subclass))
+            {
+                // Leave locked/placeholder state from PopulateSubclassDropdown; ensure no stale pick
+                string? first = cmbSubclass.Items.Cast<object>().Select(o => o?.ToString()).FirstOrDefault();
+                if (first != null &&
+                    (first.Contains("Requires Level", StringComparison.OrdinalIgnoreCase) ||
+                     first.StartsWith("(No", StringComparison.OrdinalIgnoreCase) ||
+                     first.StartsWith("(Unlocks", StringComparison.OrdinalIgnoreCase)))
+                {
+                    cmbSubclass.SelectedIndex = 0;
+                }
+            }
 
             // Level / multiclass tab from ClassLevels (PDF and JSON imports)
             if (CurrentCharacter.ClassLevels != null && CurrentCharacter.ClassLevels.Count > 0)
@@ -9757,8 +10262,32 @@ namespace Nemo
                 RestoreAbilityScores();
             }
 
+            // Race-granted skill from saved character (after race change handlers)
+            if (!string.IsNullOrEmpty(CurrentCharacter.RaceGrantedSkill))
+            {
+                raceGrantedSkill = CurrentCharacter.RaceGrantedSkill;
+                if (cmbRaceSkillChoice != null &&
+                    cmbRaceSkillChoice.Items.Cast<object>().Any(i =>
+                        string.Equals(i?.ToString(), raceGrantedSkill, StringComparison.OrdinalIgnoreCase)))
+                {
+                    cmbRaceSkillChoice.SelectedItem = raceGrantedSkill;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(CurrentCharacter.HighElfCantrip))
+            {
+                highElfCantrip = CurrentCharacter.HighElfCantrip;
+                if (cmbHighElfCantrip != null &&
+                    cmbHighElfCantrip.Items.Cast<object>().Any(i =>
+                        string.Equals(i?.ToString(), highElfCantrip, StringComparison.OrdinalIgnoreCase)))
+                {
+                    cmbHighElfCantrip.SelectedItem = highElfCantrip;
+                }
+            }
+
             RestoreSkills();
             RestoreSelectedFeat();
+            // Spells grids may have been rebuilt on class change — re-apply after that
             RestoreCantrips();
             RestoreLevel1Spells();
             RestoreEquipment();
@@ -9766,10 +10295,15 @@ namespace Nemo
             // HP / AC / Initiative from imported values (after UpdateStatDisplays may overwrite HP)
             UpdateStatDisplays();
             UpdateSkillTabLabels();
+            UpdateFeatsTabVisibility();
+            try { UpdateRacialSpellsLabel(); } catch { /* ignore */ }
+            try { UpdateSubclassSpellsLabel(); } catch { /* ignore */ }
 
             // Re-apply imported HP/AC/initiative so PDF values win over recalculated ones
             if (CurrentCharacter.HitPoints > 0 && txtHitPoints != null)
                 txtHitPoints.Text = CurrentCharacter.HitPoints.ToString();
+            else
+                UpdateHitPoints();
 
             if (CurrentCharacter.ArmorClass > 0)
             {
@@ -9779,21 +10313,23 @@ namespace Nemo
                     txtEquippedAC.Visibility = Visibility.Visible;
                 }
             }
+            else if (txtEquippedAC != null)
+            {
+                txtEquippedAC.Text = "";
+                // Recalc from current equipment / AC rules
+                try { UpdateEquippedAC(); } catch { /* ignore */ }
+            }
 
             if (txtInitiative != null)
             {
                 int init = CurrentCharacter.Initiative;
-                txtInitiative.Text = init >= 0 ? $"+{init}" : init.ToString();
+                // Prefer live recalculation when imported initiative is default-ish empty
+                if (fromPdf || CurrentCharacter.Initiative != 0)
+                    txtInitiative.Text = init >= 0 ? $"+{init}" : init.ToString();
             }
 
             if (cmbClass.SelectedItem is string className)
                 UpdateSkillChoices(className);
-
-            // High elf cantrip / race granted skill
-            if (!string.IsNullOrEmpty(CurrentCharacter.HighElfCantrip))
-                highElfCantrip = CurrentCharacter.HighElfCantrip;
-            if (!string.IsNullOrEmpty(CurrentCharacter.RaceGrantedSkill))
-                raceGrantedSkill = CurrentCharacter.RaceGrantedSkill;
         }
 
         /// <summary>

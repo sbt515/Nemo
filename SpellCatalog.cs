@@ -24,7 +24,9 @@ namespace Nemo
         {
             PropertyNameCaseInsensitive = true,
             ReadCommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true
+            AllowTrailingCommas = true,
+            // Required on .NET 8+ so options can be marked read-only after first use
+            TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver()
         };
 
         /// <summary>All spells (cantrips through 9th), sorted by level then name.</summary>

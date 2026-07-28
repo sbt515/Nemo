@@ -1,0 +1,144 @@
+<Window x:Class="Nemo.TemplatePickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Choose Character Build"
+        Height="640"
+        Width="780"
+        MinHeight="480"
+        MinWidth="560"
+        WindowStartupLocation="CenterOwner"
+        Background="#1E1E1E"
+        Foreground="#F0F0F0"
+        FontFamily="Segoe UI"
+        FontSize="13"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd"
+                                Background="#2A2A2A"
+                                BorderBrush="#444"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="12,10"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#5A8A9E"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#303838"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#3A7CA5"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#2A4050"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="txtHeader"
+                   Text="Choose a build"
+                   FontSize="18"
+                   FontWeight="Bold"
+                   Foreground="#7CFC00"
+                   Margin="0,0,0,4"/>
+
+        <TextBlock x:Name="txtSubheader"
+                   Grid.Row="1"
+                   Text=""
+                   FontSize="12"
+                   Foreground="#AAA"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,12"
+                   LineHeight="17"/>
+
+        <ListBox x:Name="lstBuilds"
+                 Grid.Row="2"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 MouseDoubleClick="lstBuilds_MouseDoubleClick"
+                 SelectionChanged="lstBuilds_SelectionChanged">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   Foreground="#F0F0F0"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding KitLine}"
+                                   FontSize="12"
+                                   Foreground="#8FCBE8"
+                                   Margin="0,3,0,0"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Playstyle}"
+                                   FontSize="12"
+                                   Foreground="#CCC"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap"
+                                   LineHeight="17"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <DockPanel Grid.Row="3" Margin="0,14,0,0" LastChildFill="False">
+            <TextBlock x:Name="txtSelectionHint"
+                       DockPanel.Dock="Left"
+                       VerticalAlignment="Center"
+                       Foreground="#888"
+                       FontSize="12"
+                       Text="Select a build to continue."
+                       TextWrapping="Wrap"
+                       MaxWidth="420"/>
+            <StackPanel DockPanel.Dock="Right"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Content="Cancel"
+                        Width="100"
+                        Height="36"
+                        Margin="0,0,10,0"
+                        Background="#444"
+                        Foreground="White"
+                        Click="Cancel_Click"
+                        IsCancel="True"/>
+                <Button x:Name="btnSelect"
+                        Content="Use This Build"
+                        Width="140"
+                        Height="36"
+                        Background="#3A7CA5"
+                        Foreground="White"
+                        FontWeight="SemiBold"
+                        Click="Select_Click"
+                        IsDefault="True"
+                        IsEnabled="False"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>
