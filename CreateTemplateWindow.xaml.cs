@@ -65,6 +65,10 @@ namespace Nemo
 
             txtKitPreview.Text = CharacterTemplateGenerator.FormatKitLine(draft);
 
+            int level = CharacterTemplateGenerator.GetTemplateTotalLevel(draft);
+            string classLine = CharacterTemplateGenerator.FormatClassLevelsLine(
+                draft.ClassLevels, draft.Class, draft.Subclass, level);
+
             var skillLine = draft.PreferredSkills is { Length: > 0 }
                 ? string.Join(", ", draft.PreferredSkills)
                 : "(none marked)";
@@ -74,10 +78,30 @@ namespace Nemo
             if (draft.PreferredSpells is { Length: > 0 })
                 spellBits.Add("Spells: " + string.Join(", ", draft.PreferredSpells));
 
+            int asiCount = draft.AsiOrFeatDecisions?.Length ?? 0;
+            string asiLine = asiCount > 0
+                ? $"ASI/feat slots: {asiCount}"
+                : (level >= 4 ? "ASI/feat slots: (auto on generate)" : "");
+
+            var featureBits = new System.Collections.Generic.List<string>();
+            if (draft.PreferredFightingStyles is { Length: > 0 })
+                featureBits.Add("Fighting styles: " + string.Join(", ", draft.PreferredFightingStyles));
+            if (!string.IsNullOrWhiteSpace(draft.PreferredFightingInitiateStyle))
+                featureBits.Add("Fighting Initiate: " + draft.PreferredFightingInitiateStyle);
+            if (!string.IsNullOrWhiteSpace(draft.PreferredPactBoon))
+                featureBits.Add("Pact Boon: " + draft.PreferredPactBoon);
+            if (draft.PreferredEldritchInvocations is { Length: > 0 })
+                featureBits.Add("Invocations: " + string.Join(", ", draft.PreferredEldritchInvocations));
+            if (draft.PreferredMetamagic is { Length: > 0 })
+                featureBits.Add("Metamagic: " + string.Join(", ", draft.PreferredMetamagic));
+
             txtDetailsPreview.Text =
+                $"Level {level}" + (string.IsNullOrEmpty(classLine) ? "" : $" · {classLine}") + "\n" +
                 "Skills: " + skillLine +
                 (spellBits.Count > 0 ? "\n" + string.Join("\n", spellBits) : "") +
-                "\nAbility priority: " + string.Join(" → ", draft.AbilityPriority ?? Array.Empty<string>());
+                (featureBits.Count > 0 ? "\n" + string.Join("\n", featureBits) : "") +
+                "\nAbility priority: " + string.Join(" → ", draft.AbilityPriority ?? Array.Empty<string>()) +
+                (string.IsNullOrEmpty(asiLine) ? "" : "\n" + asiLine);
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)

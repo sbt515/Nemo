@@ -13,12 +13,16 @@ namespace Nemo
     {
         public const string DefaultTemplateCategory = "General";
         public const string DefaultTemplateRole = "Support";
+        public const int DefaultTemplateRandomLevel = 1;
 
         /// <summary>Quick Generate category: Optimized / General / Random / Custom.</summary>
         public string TemplateCategory { get; set; } = DefaultTemplateCategory;
 
         /// <summary>Quick Generate role: Support / Damage / Tank / True Random.</summary>
         public string TemplateRole { get; set; } = DefaultTemplateRole;
+
+        /// <summary>Target character level for Random / True Random generation (1–20).</summary>
+        public int TemplateRandomLevel { get; set; } = DefaultTemplateRandomLevel;
 
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
@@ -116,13 +120,15 @@ namespace Nemo
         }
 
         /// <summary>Update only the Quick Generate selections and persist.</summary>
-        public static void SaveTemplateSelection(string? category, string? role)
+        public static void SaveTemplateSelection(string? category, string? role, int? randomLevel = null)
         {
             var s = Load();
             if (!string.IsNullOrWhiteSpace(category))
                 s.TemplateCategory = category.Trim();
             if (!string.IsNullOrWhiteSpace(role))
                 s.TemplateRole = role.Trim();
+            if (randomLevel.HasValue)
+                s.TemplateRandomLevel = Math.Clamp(randomLevel.Value, 1, 20);
             Save(s);
         }
 
@@ -165,6 +171,9 @@ namespace Nemo
             }
 
             s.TemplateRole = role;
+            s.TemplateRandomLevel = Math.Clamp(
+                s.TemplateRandomLevel <= 0 ? DefaultTemplateRandomLevel : s.TemplateRandomLevel,
+                1, 20);
         }
     }
 }

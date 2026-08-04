@@ -58,6 +58,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <TextBlock x:Name="txtHeader"
@@ -108,7 +109,48 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <DockPanel Grid.Row="3" Margin="0,14,0,0" LastChildFill="False">
+        <!-- Shown only when the selected kit supports multiple character levels -->
+        <Border x:Name="pnlLevelPick"
+                Grid.Row="3"
+                Background="#2A2A2A"
+                BorderBrush="#444"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,10"
+                Margin="0,12,0,0"
+                Visibility="Collapsed">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="LEVEL"
+                           FontWeight="Bold"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="#8FCBE8"/>
+                <ComboBox x:Name="cmbTemplateLevel"
+                          Grid.Column="2"
+                          Height="32"
+                          FontSize="14"
+                          Background="#1E1E1E"
+                          Foreground="#F0F0F0"
+                          BorderBrush="#555"
+                          Padding="8,4"/>
+                <TextBlock x:Name="txtLevelHint"
+                           Grid.Column="3"
+                           Margin="14,0,0,0"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Foreground="#AAA"
+                           TextWrapping="Wrap"
+                           Text="This build can be generated at several common campaign tiers."/>
+            </Grid>
+        </Border>
+
+        <DockPanel Grid.Row="4" Margin="0,14,0,0" LastChildFill="False">
             <TextBlock x:Name="txtSelectionHint"
                        DockPanel.Dock="Left"
                        VerticalAlignment="Center"

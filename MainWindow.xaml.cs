@@ -164,7 +164,7 @@ namespace Nemo
         /// <summary>When true, template combo changes do not write preferences (init / restore).</summary>
         private bool _suppressTemplateSettingsSave;
 
-        /// <summary>Wire category / role combos for Quick Generate on the Basic Info tab.</summary>
+        /// <summary>Wire category / role / random-level combos for Quick Generate on the Basic Info tab.</summary>
         private void InitializeTemplateGenerateUi()
         {
             if (cmbTemplateCategory == null || cmbTemplateRole == null) return;
@@ -189,12 +189,52 @@ namespace Nemo
                 cmbTemplateCategory.ItemsSource = available.ToList();
                 cmbTemplateCategory.SelectedItem = category;
                 RefreshTemplateRoleCombo(preferredRole: prefs.TemplateRole);
+                InitializeTemplateRandomLevelCombo(prefs.TemplateRandomLevel);
+                UpdateTemplateRandomLevelVisibility();
                 UpdateTemplateHintText();
             }
             finally
             {
                 _suppressTemplateSettingsSave = false;
             }
+        }
+
+        private void InitializeTemplateRandomLevelCombo(int preferredLevel = AppSettings.DefaultTemplateRandomLevel)
+        {
+            if (cmbTemplateRandomLevel == null) return;
+
+            int level = Math.Clamp(preferredLevel <= 0 ? 1 : preferredLevel, 1, 20);
+            var levels = Enumerable.Range(1, 20).ToList();
+            cmbTemplateRandomLevel.ItemsSource = levels;
+            cmbTemplateRandomLevel.SelectedItem = level;
+        }
+
+        private void UpdateTemplateRandomLevelVisibility()
+        {
+            bool isRandom = CharacterTemplateGenerator.ParseCategory(
+                    cmbTemplateCategory?.SelectedItem as string) == TemplateCategory.Random;
+
+            var vis = isRandom ? Visibility.Visible : Visibility.Collapsed;
+            if (cmbTemplateRandomLevel != null)
+                cmbTemplateRandomLevel.Visibility = vis;
+            if (lblTemplateRandomLevel != null)
+                lblTemplateRandomLevel.Visibility = vis;
+        }
+
+        private int GetSelectedRandomTargetLevel()
+        {
+            if (cmbTemplateRandomLevel?.SelectedItem is int n)
+                return Math.Clamp(n, 1, 20);
+            if (cmbTemplateRandomLevel?.SelectedItem != null &&
+                int.TryParse(cmbTemplateRandomLevel.SelectedItem.ToString(), out int parsed))
+                return Math.Clamp(parsed, 1, 20);
+            return AppSettings.DefaultTemplateRandomLevel;
+        }
+
+        private void cmbTemplateRandomLevel_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateTemplateHintText();
+            PersistTemplateGenerateSelection();
         }
 
         /// <summary>
@@ -243,6 +283,7 @@ namespace Nemo
                 return;
 
             RefreshTemplateRoleCombo();
+            UpdateTemplateRandomLevelVisibility();
             UpdateTemplateHintText();
             PersistTemplateGenerateSelection();
         }
@@ -260,7 +301,8 @@ namespace Nemo
 
             AppSettings.SaveTemplateSelection(
                 cmbTemplateCategory.SelectedItem as string,
-                cmbTemplateRole?.SelectedItem as string);
+                cmbTemplateRole?.SelectedItem as string,
+                GetSelectedRandomTargetLevel());
         }
 
         private void RefreshTemplateRoleCombo(string? preferredRole = null)
@@ -308,9 +350,20 @@ namespace Nemo
             var category = CharacterTemplateGenerator.ParseCategory(cmbTemplateCategory?.SelectedItem as string);
             var role = CharacterTemplateGenerator.ParseRole(cmbTemplateRole?.SelectedItem as string);
 
-            txtTemplateHint.Text =
+            string text =
                 CharacterTemplateGenerator.DescribeCategory(category) + "\n" +
                 CharacterTemplateGenerator.DescribeRole(role);
+
+            if (category == TemplateCategory.Random)
+            {
+                int lvl = GetSelectedRandomTargetLevel();
+                text += $"\nTarget level: {lvl} — random race/class/stats at that character level" +
+                        (role == TemplateRole.None && lvl >= 3
+                            ? " (True Random may multiclass)."
+                            : ".");
+            }
+
+            txtTemplateHint.Text = text;
         }
 
         private void GenerateCharacter_Click(object sender, RoutedEventArgs e)
@@ -348,8 +401,12 @@ namespace Nemo
 
                     if (hasProgress)
                     {
+                        int chosenLevel = CharacterTemplateGenerator.GetTemplateTotalLevel(chosen);
+                        string levelNote = chosenLevel > 1
+                            ? $" at level {chosenLevel}"
+                            : "";
                         var confirm = MessageBox.Show(
-                            $"Generate \"{chosen.Name}\"?\n\nThis will replace your current race, class, background, stats, skills, and spells on all tabs.",
+                            $"Generate \"{chosen.Name}\"{levelNote}?\n\nThis will replace your current race, class levels, background, stats, skills, and spells on all tabs.",
                             "Generate Character",
                             MessageBoxButton.YesNo,
                             MessageBoxImage.Question);
@@ -361,7 +418,9 @@ namespace Nemo
                 }
                 else
                 {
-                    // Random / True Random: no picker — roll immediately
+                    // Random / True Random: no picker — roll immediately at chosen target level
+                    int randomLevel = GetSelectedRandomTargetLevel();
+
                     bool hasProgress =
                         !string.IsNullOrWhiteSpace(txtCharacterName?.Text) ||
                         cmbRace?.SelectedItem != null ||
@@ -371,7 +430,7 @@ namespace Nemo
                     if (hasProgress)
                     {
                         var confirm = MessageBox.Show(
-                            "Generate a new character? This will replace your current race, class, background, stats, skills, and spells on all tabs.",
+                            $"Generate a new level {randomLevel} character?\n\nThis will replace your current race, class levels, background, stats, skills, and spells on all tabs.",
                             "Generate Character",
                             MessageBoxButton.YesNo,
                             MessageBoxImage.Question);
@@ -379,7 +438,7 @@ namespace Nemo
                             return;
                     }
 
-                    result = CharacterTemplateGenerator.Generate(category, role, _rng);
+                    result = CharacterTemplateGenerator.Generate(category, role, _rng, randomLevel);
                 }
 
                 CurrentCharacter = result.Character;

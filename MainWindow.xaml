@@ -95,7 +95,7 @@
                                        FontWeight="Bold"
                                        Foreground="#7CFC00"
                                        Margin="0,0,0,4"/>
-                            <TextBlock Text="Build a complete level-1 character from themed templates or pure randomness."
+                            <TextBlock Text="Build a complete character from themed templates or pure randomness. Optimized &amp; General: pick a build, then L1/3/5/8. Random: set target level below. Custom keeps saved level and multiclass."
                                        FontSize="12"
                                        Foreground="#AAA"
                                        TextWrapping="Wrap"
@@ -106,6 +106,8 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="12"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
@@ -121,6 +123,13 @@
                                            FontWeight="Bold"
                                            FontSize="12"
                                            Margin="0,0,0,4"/>
+                                <TextBlock x:Name="lblTemplateRandomLevel"
+                                           Grid.Column="4"
+                                           Text="LEVEL"
+                                           FontWeight="Bold"
+                                           FontSize="12"
+                                           Margin="0,0,0,4"
+                                           Visibility="Collapsed"/>
 
                                 <ComboBox x:Name="cmbTemplateCategory"
                                           Grid.Row="1"
@@ -141,6 +150,19 @@
                                           BorderBrush="#555"
                                           Padding="8,4"
                                           SelectionChanged="cmbTemplateRole_SelectionChanged"/>
+                                <ComboBox x:Name="cmbTemplateRandomLevel"
+                                          Grid.Row="1"
+                                          Grid.Column="4"
+                                          Width="72"
+                                          Height="34"
+                                          FontSize="14"
+                                          Background="#1E1E1E"
+                                          Foreground="#F0F0F0"
+                                          BorderBrush="#555"
+                                          Padding="8,4"
+                                          Visibility="Collapsed"
+                                          ToolTip="Target character level for Random / True Random generation (1–20)"
+                                          SelectionChanged="cmbTemplateRandomLevel_SelectionChanged"/>
                             </Grid>
 
                             <TextBlock x:Name="txtTemplateHint"

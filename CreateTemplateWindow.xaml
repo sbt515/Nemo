@@ -46,7 +46,7 @@
                    Margin="0,0,0,4"/>
 
         <TextBlock Grid.Row="1"
-                   Text="Save the current character's race, class, background, skills, and spells as a reusable build."
+                   Text="Save the current character's race, class levels (including multiclass), background, skills, spells, fighting styles, invocations, metamagic, and ASI choices as a reusable build."
                    FontSize="12"
                    Foreground="#AAA"
                    TextWrapping="Wrap"
