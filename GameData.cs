@@ -1680,7 +1680,7 @@ namespace Nemo
         public static readonly List<string> AllBackgrounds = new()
 {
     "Acolyte", "Athlete", "City Watch", "Courtier", "Criminal", "Entertainer",
-    "Faction Agent", "Far Traveler", "Feylost", "Folk Hero", "Gladiator", "Hermit",
+    "Faction Agent", "Far Traveler", "Feylost", "Folk Hero", "Giant Foundling", "Gladiator", "Hermit",
     "Inheritor", "Knight", "Marine", "Noble", "Outlander", "Pirate", "Rune Carver",
     "Sage", "Sailor", "Shipwright", "Smuggler", "Soldier", "Spy",
     "Urban Bounty Hunter", "Urchin"
@@ -1708,6 +1708,7 @@ namespace Nemo
             ["Far Traveler"] = new() { "Insight", "Perception" },
             ["Feylost"] = new() { "Deception", "Survival" },
             ["Folk Hero"] = new() { "Animal Handling", "Survival" },
+            ["Giant Foundling"] = new() { "Intimidation", "Survival" },
             ["Gladiator"] = new() { "Acrobatics", "Performance" },
             ["Hermit"] = new() { "Medicine", "Religion" },
             // Inheritor: Survival + one of Arcana, History, or Religion (only Survival auto-granted)
@@ -1834,6 +1835,15 @@ namespace Nemo
                 "EQUIPMENT: A set of artisan's tools (one of your choice), a shovel, an iron pot, a set of common clothes, and a pouch containing 10 gp\n\n" +
                 "FEATURE — Rustic Hospitality:\n" +
                 "Since you come from the ranks of the common folk, you fit in among them with ease. You can find a place to hide, rest, or recuperate among other commoners, unless you have shown yourself to be a danger to them. They will shield you from the law or anyone else searching for you, though they will not risk their lives for you.",
+
+            ["Giant Foundling"] =
+                "SOURCE: Bigby Presents: Glory of the Giants\n\n" +
+                "SKILL PROFICIENCIES: Intimidation, Survival\n" +
+                "TOOL PROFICIENCIES: None\n" +
+                "LANGUAGES: Giant and one other language of your choice\n" +
+                "EQUIPMENT: A backpack, a set of traveler's clothes, a small stone or sprig that reminds you of home, and a pouch containing 10 gp\n\n" +
+                "FEATURE — Strike of the Giants:\n" +
+                "You gain the Strike of the Giants feat (select it on the Feats tab; this background satisfies the feat's prerequisite).",
 
             ["Gladiator"] =
                 "SOURCE: Player's Handbook (Entertainer variant)\n\n" +
@@ -2008,6 +2018,7 @@ namespace Nemo
             ["Far Traveler"] = "Traveler's clothes, musical instrument or gaming set, poorly wrought homeland maps, jewelry worth 10 gp, pouch with 5 gp",
             ["Feylost"] = "Musical instrument, traveler's clothes, three Feywild trinkets, pouch with 8 gp",
             ["Folk Hero"] = "Artisan's tools (one of your choice), shovel, iron pot, common clothes, pouch with 10 gp",
+            ["Giant Foundling"] = "Backpack, traveler's clothes, small stone or sprig that reminds you of home, pouch with 10 gp",
             ["Gladiator"] = "Unusual inexpensive weapon (e.g. trident or net) or musical instrument, favor of an admirer, costume, pouch with 15 gp",
             ["Hermit"] = "Scroll case of notes, winter blanket, common clothes, herbalism kit, 5 gp",
             ["Inheritor"] = "Your inheritance, traveler's clothes, gaming set or musical instrument, pouch with 15 gp",
@@ -2158,6 +2169,15 @@ namespace Nemo
             FullDescription = "You have 3 luck points. Whenever you make an attack roll, an ability check, or a saving throw, you can spend one luck point to roll an additional d20. You can choose to spend one of your luck points after you roll the die, but before the outcome is determined.\n\nYou regain your expended luck points when you finish a long rest."
         },
         new Feat {
+            Name = "Mage Slayer",
+            ShortDescription = "You have practiced techniques in melee combat against spellcasters.",
+            Prerequisites = "None",
+            FullDescription = "You have practiced techniques in melee combat against spellcasters, gaining the following benefits.\n\n" +
+                              "When a creature within 5 feet of you casts a spell, you can use your reaction to make a melee weapon attack against that creature.\n\n" +
+                              "When you damage a creature that is concentrating on a spell, that creature has disadvantage on the saving throw it makes to maintain its concentration.\n\n" +
+                              "You have advantage on saving throws against spells cast by creatures within 5 feet of you."
+        },
+        new Feat {
             Name = "Mobile",
             ShortDescription = "You are exceptionally speedy and agile.",
             Prerequisites = "None",
@@ -2303,31 +2323,58 @@ namespace Nemo
         new Feat
         {
             Name = "Gift of the Metallic Dragon",
-            ShortDescription = "You have been blessed by a metallic dragon.",
+            ShortDescription = "Cast cure wounds and shield allies with spectral wings.",
             Prerequisites = "None",
-            FullDescription = "You learn the *cure wounds* spell. You can cast it once per long rest without expending a spell slot.\n\n" +
-                              "You can also cast *detect magic* and *cure wounds* using spell slots you have of the appropriate level.\n\n" +
-                              "Increase your Charisma, Intelligence, or Wisdom score by 1, to a maximum of 20."
+            FullDescription = "You've manifested some of the power of metallic dragons, granting you the following benefits:\n\n" +
+                              "Draconic Healing. You learn the cure wounds spell. You can cast this spell without expending a spell slot. Once you cast this spell in this way, you can't do so again until you finish a long rest. You can also cast this spell using spell slots you have. The spell's spellcasting ability is Intelligence, Wisdom, or Charisma when you cast it with this feat (choose when you gain the feat).\n\n" +
+                              "Protective Wings. When you or another creature you can see within 5 feet of you is hit by an attack roll, you can use your reaction to manifest spectral wings and grant a bonus to the target's AC equal to your proficiency bonus against that attack, potentially causing it to miss. You can use this reaction a number of times equal to your proficiency bonus, and you regain all expended uses when you finish a long rest."
         },
 
         new Feat
         {
             Name = "Gift of the Chromatic Dragon",
-            ShortDescription = "You have been blessed by a chromatic dragon.",
+            ShortDescription = "Infuse a weapon with elemental damage and resist chromatic damage.",
             Prerequisites = "None",
-            FullDescription = "You learn the *chromatic orb* spell. You can cast it once per long rest without expending a spell slot.\n\n" +
-                              "You can also cast *chromatic orb* using spell slots you have of 1st level or higher.\n\n" +
-                              "Increase your Charisma, Intelligence, or Wisdom score by 1, to a maximum of 20."
+            FullDescription = "You've manifested some of the power of chromatic dragons, granting you the following benefits:\n\n" +
+                              "Chromatic Infusion. As a bonus action, you can touch a simple or martial weapon and infuse it with acid, cold, fire, lightning, or poison. For the next minute, the weapon deals an extra 1d4 damage of the chosen type when it hits. After you use this bonus action, you can't do so again until you finish a long rest.\n\n" +
+                              "Reactive Resistance. When you take acid, cold, fire, lightning, or poison damage, you can use your reaction to give yourself resistance to that instance of damage. You can use this reaction a number of times equal to your proficiency bonus, and you regain all expended uses when you finish a long rest."
         },
 
         new Feat
         {
             Name = "Gift of the Gem Dragon",
-            ShortDescription = "You have been blessed by a gem dragon.",
+            ShortDescription = "Increase a mental score and retaliate with telekinetic force.",
             Prerequisites = "None",
-            FullDescription = "You learn the *detect thoughts* spell. You can cast it once per long rest without expending a spell slot.\n\n" +
-                              "You can also cast *detect thoughts* using spell slots you have of 2nd level or higher.\n\n" +
-                              "Increase your Charisma, Intelligence, or Wisdom score by 1, to a maximum of 20."
+            HasDynamicStatChoice = true,
+            FullDescription = "You've manifested some of the power of gem dragons, granting you the following benefits:\n\n" +
+                              "Ability Score Increase. Increase your Intelligence, Wisdom, or Charisma score by 1, to a maximum of 20.\n\n" +
+                              "Telekinetic Reprisal. When you take damage from a creature that is within 10 feet of you, you can use your reaction to emanate telekinetic energy. The creature must make a Strength saving throw (DC = 8 + your proficiency bonus + the ability modifier of the score increased by this feat). On a failed save, it takes 2d8 force damage and is pushed up to 10 feet away from you. On a successful save, it takes half as much damage and isn't pushed. You can use this reaction a number of times equal to your proficiency bonus, and you regain all expended uses when you finish a long rest."
+        },
+
+        new Feat
+        {
+            Name = "Strike of the Giants",
+            ShortDescription = "Imbue a weapon attack with giant magic (Cloud, Fire, Frost, Hill, Stone, or Storm).",
+            Prerequisites = "Proficiency with a martial weapon or Giant Foundling background",
+            FullDescription = "You have absorbed primeval magic that gives you an echo of the might of giants. When you take this feat, choose one of the benefits listed below. Once per turn, when you hit a target with a melee weapon attack or a ranged weapon attack using a thrown weapon, you can imbue the attack with an additional effect depending on the benefit you chose:\n\n" +
+                              "Cloud Strike. Extra 1d4 thunder damage. If the target is a creature, it must succeed on a Wisdom saving throw or you become invisible to it until the start of your next turn, or until immediately after you make an attack roll or cast a spell.\n\n" +
+                              "Fire Strike. Extra 1d10 fire damage.\n\n" +
+                              "Frost Strike. Extra 1d6 cold damage. If the target is a creature, it must succeed on a Constitution saving throw or its speed is reduced to 0 until the start of your next turn.\n\n" +
+                              "Hill Strike. Extra 1d6 damage of the weapon's type. If the target is a creature, it must succeed on a Strength saving throw or have the prone condition.\n\n" +
+                              "Stone Strike. Extra 1d6 force damage. If the target is a creature, it must succeed on a Strength saving throw or be pushed 10 feet from you in a straight line.\n\n" +
+                              "Storm Strike. Extra 1d6 lightning damage. If the target is a creature, it must succeed on a Constitution saving throw or it has disadvantage on attack rolls until the start of your next turn.\n\n" +
+                              "The saving throw DC equals 8 + your proficiency bonus + your Strength or Constitution modifier.\n\n" +
+                              "You can use this feat a number of times equal to your proficiency bonus, and you regain all expended uses when you finish a long rest."
+        },
+
+        new Feat
+        {
+            Name = "Martial Adept",
+            ShortDescription = "Learn two Battle Master maneuvers and gain a superiority die (d6).",
+            Prerequisites = "None",
+            FullDescription = "You have martial training that allows you to perform special combat maneuvers. You gain the following benefits.\n\n" +
+                              "You learn two maneuvers of your choice from among those available to the Battle Master archetype in the fighter class. If a maneuver you use requires your target to make a saving throw to resist the maneuver's effects, the saving throw DC equals 8 + your proficiency bonus + your Strength or Dexterity modifier (your choice).\n\n" +
+                              "You gain one superiority die, which is a d6 (this die is added to any superiority dice you have from another source). This die is used to fuel your maneuvers. A superiority die is expended when you use it. You regain your expended superiority dice when you finish a short or long rest."
         },
         new Feat
         {
@@ -2456,6 +2503,18 @@ public class Character
     /// when class feature panels rebuild with zero class slots.
     /// </summary>
     public string FightingInitiateStyle { get; set; } = "";
+    /// <summary>
+    /// Two Battle Master maneuvers granted by the Martial Adept feat.
+    /// </summary>
+    public List<string> MartialAdeptManeuvers { get; set; } = new();
+    /// <summary>
+    /// Intelligence, Wisdom, or Charisma — spellcasting ability for Gift of the Metallic Dragon's Cure Wounds.
+    /// </summary>
+    public string MetallicDragonSpellAbility { get; set; } = "";
+    /// <summary>
+    /// Chosen Strike of the Giants benefit (Cloud, Fire, Frost, Hill, Stone, or Storm Strike).
+    /// </summary>
+    public string StrikeOfTheGiantsBenefit { get; set; } = "";
     /// <summary>Warlock eldritch invocations known.</summary>
     public List<string> EldritchInvocations { get; set; } = new();
     /// <summary>Sorcerer metamagic options known.</summary>
@@ -2788,6 +2847,8 @@ public class Feat : INotifyPropertyChanged
                         mainWindow.RemoveFeatBonus(this);
                     }
 
+                    // Always follow the checkbox, never the DataGrid row highlight.
+                    mainWindow.SyncSelectedFeatFromUi();
                     mainWindow.UpdateFeatSelectionLimitLabel();
                     mainWindow.UpdateStatDisplays();
                     mainWindow.UpdateInitiative();

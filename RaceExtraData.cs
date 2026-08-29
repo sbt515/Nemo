@@ -193,18 +193,21 @@ namespace Nemo
 
             d["Harengon"] = new RaceData
             {
+                // WBtW p.13 / MPMM p.22 — Tasha-style floating ASI, no subraces
                 Category = "Exotic",
                 AbilityBonuses = new(),
+                Speed = 30,
                 Traits = new()
                 {
                     "Creature Type: You are a Humanoid.",
-                    "Size: Small or Medium (your choice)",
-                    "Speed: 30 feet",
-                    "Ability Score Increase (Tasha-style): Increase one score by 2 and another by 1, or three different scores by 1.",
+                    "Life Span: Harengons have a life span of about a century.",
+                    "Size: You are Medium or Small. You choose the size when you select this race.",
+                    "Speed: Your walking speed is 30 feet.",
+                    "Ability Score Increase: When determining your character's ability scores, increase one score by 2 and increase a different score by 1, or increase three different scores by 1. You can't raise any of your scores above 20.",
                     "Hare-Trigger: You can add your proficiency bonus to your initiative rolls.",
                     "Leporine Senses: You have proficiency in the Perception skill.",
                     "Lucky Footwork: When you fail a Dexterity saving throw, you can use your reaction to roll a d4 and add it to the save, potentially turning the failure into a success. You can't use this reaction if you're prone or your speed is 0.",
-                    "Rabbit Hop: As a bonus action, you can jump a number of feet equal to five times your proficiency bonus, without provoking opportunity attacks. You can use this trait only if your speed is greater than 0. You can use it a number of times equal to your proficiency bonus, and you regain all expended uses when you finish a long rest."
+                    "Rabbit Hop: As a bonus action, you can jump a number of feet equal to five times your proficiency bonus without provoking opportunity attacks. You can use this trait only if your speed is greater than 0. You can use it a number of times equal to your proficiency bonus, and you regain all expended uses when you finish a long rest."
                 },
                 Languages = new() { "Common", "One other language of your choice" },
                 SkillProficiencies = new() { "Perception" }

@@ -602,6 +602,9 @@ namespace Nemo
             if (text.Contains("half", StringComparison.OrdinalIgnoreCase) &&
                 text.Contains("orc", StringComparison.OrdinalIgnoreCase))
                 return ("Half-Orc", "");
+            if (text.Contains("harengon", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("rabbitfolk", StringComparison.OrdinalIgnoreCase))
+                return ("Harengon", "");
 
             return (text, "");
         }
@@ -1060,6 +1063,34 @@ namespace Nemo
                 {
                     character.WarlockPactBoon = boon.Name;
                     break;
+                }
+            }
+
+            // Martial Adept maneuvers
+            if (!string.IsNullOrWhiteSpace(character.SelectedFeat) &&
+                character.SelectedFeat.Contains("Martial Adept", StringComparison.OrdinalIgnoreCase))
+            {
+                character.MartialAdeptManeuvers ??= new List<string>();
+                foreach (var mv in ClassFeatureOptionData.AllManeuvers.OrderByDescending(m => m.Name.Length))
+                {
+                    if (character.MartialAdeptManeuvers.Count >= 2) break;
+                    if (featuresText.Contains(mv.Name, StringComparison.OrdinalIgnoreCase) &&
+                        !character.MartialAdeptManeuvers.Contains(mv.Name, StringComparer.OrdinalIgnoreCase))
+                        character.MartialAdeptManeuvers.Add(mv.Name);
+                }
+            }
+
+            // Strike of the Giants benefit
+            if (!string.IsNullOrWhiteSpace(character.SelectedFeat) &&
+                character.SelectedFeat.Contains("Strike of the Giants", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var gs in ClassFeatureOptionData.AllGiantStrikes.OrderByDescending(g => g.Name.Length))
+                {
+                    if (featuresText.Contains(gs.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        character.StrikeOfTheGiantsBenefit = gs.Name;
+                        break;
+                    }
                 }
             }
         }

@@ -1082,6 +1082,13 @@ namespace Nemo
                 : SoftShuffleArray(StandardArray, rng);
 
             var abilityBases = AssignScores(priority, scores);
+            if (classLevels.Count >= 2)
+            {
+                EnsureMulticlassAbilityMinimums(
+                    classLevels.Select(e => e.ClassName),
+                    abilityBases,
+                    GetRacialAbilityBonuses(race, subrace));
+            }
 
             var skills = PickSkills(className, background, template.PreferredSkills, template.Role, rng);
             var (cantrips, spells, cantripAssign) = PickSpellsForLevels(
@@ -1190,16 +1197,6 @@ namespace Nemo
         {
             int level = Math.Clamp(targetLevel <= 0 ? 1 : targetLevel, 1, 20);
 
-            var classes = GameData.ClassData.Keys.ToList();
-            string className = PickRandom(classes, rng) ?? "Fighter";
-            var subclassNames = GameData.GetSubclassNames(className);
-            string subclass = subclassNames.Count > 0
-                ? subclassNames[rng.Next(subclassNames.Count)]
-                : "";
-
-            // At higher levels, true random may multiclass for extra chaos
-            var classLevels = BuildTrueRandomClassLevels(className, subclass, level, rng);
-
             var races = GameData.RaceData.Keys.ToList();
             string race = PickRandom(races, rng) ?? "Human";
             string subrace = "";
@@ -1208,10 +1205,37 @@ namespace Nemo
 
             string background = PickRandom(GameData.AllBackgrounds, rng) ?? "Folk Hero";
 
-            // Fully random ability scores + random assignment
+            // Fully random ability scores + random assignment. Race/scores first so a
+            // later multiclass dip can be filtered against PHB ability prerequisites.
             int[] scores = Roll4d6DropLowest(rng);
             var shuffledAbilities = AllAbilities.OrderBy(_ => rng.Next()).ToArray();
             var abilityBases = AssignScores(shuffledAbilities, scores);
+            var effectiveScores = CombineScoresWithRacial(
+                abilityBases, GetRacialAbilityBonuses(race, subrace));
+
+            var classes = GameData.ClassData.Keys.ToList();
+            string className = PickRandom(classes, rng) ?? "Fighter";
+            var subclassNames = GameData.GetSubclassNames(className);
+            string subclass = subclassNames.Count > 0
+                ? subclassNames[rng.Next(subclassNames.Count)]
+                : "";
+
+            // At higher levels, true random may multiclass for extra chaos — only into
+            // classes whose PHB ability minimums the rolled scores actually meet.
+            var classLevels = BuildTrueRandomClassLevels(
+                className, subclass, level, rng, effectiveScores);
+
+            // Never emit an illegal multiclass: if scores still fail, stay single-class.
+            if (classLevels.Count >= 2 &&
+                !LevelUpCalculator.MeetsAllMulticlassPrerequisites(
+                    classLevels.Select(e => e.ClassName),
+                    ab => effectiveScores.GetValueOrDefault(ab, 10)))
+            {
+                classLevels = new List<ClassLevelEntry>
+                {
+                    new(classLevels[0].ClassName, level, classLevels[0].Subclass ?? "")
+                };
+            }
 
             // Skills from starting (first) class
             string primaryClass = classLevels[0].ClassName;
@@ -1246,39 +1270,46 @@ namespace Nemo
 
         /// <summary>
         /// True Random class split: usually single-class; at L3+ sometimes a chaotic multiclass.
+        /// A second class is only added when <paramref name="abilityScores"/> (base + racial)
+        /// meet PHB multiclass prerequisites for both the starting class and the new class.
         /// </summary>
         private static List<ClassLevelEntry> BuildTrueRandomClassLevels(
             string primaryClass,
             string primarySubclass,
             int totalLevel,
-            Random rng)
+            Random rng,
+            IReadOnlyDictionary<string, int>? abilityScores = null)
         {
             int level = Math.Clamp(totalLevel, 1, 20);
             primaryClass = string.IsNullOrWhiteSpace(primaryClass) ? "Fighter" : primaryClass.Trim();
             primarySubclass = NormalizeSubclass(primaryClass, primarySubclass ?? "");
 
+            List<ClassLevelEntry> Single() => new()
+            {
+                new(primaryClass, level, primarySubclass)
+            };
+
             // L1–2 always single-class; L3+ ~35% chance to multiclass
             bool multiclass = level >= 3 && rng.NextDouble() < 0.35;
             if (!multiclass)
-            {
-                return new List<ClassLevelEntry>
-                {
-                    new(primaryClass, level, primarySubclass)
-                };
-            }
+                return Single();
 
-            var otherClasses = GameData.ClassData.Keys
-                .Where(c => !c.Equals(primaryClass, StringComparison.OrdinalIgnoreCase))
+            int Score(string ab) =>
+                abilityScores != null && abilityScores.TryGetValue(ab, out int v) ? v : 10;
+
+            // PHB: you must already qualify for your current class before taking another
+            if (!LevelUpCalculator.MeetsMulticlassPrerequisites(primaryClass, Score, out _))
+                return Single();
+
+            var eligible = GameData.ClassData.Keys
+                .Where(c => !c.Equals(primaryClass, StringComparison.OrdinalIgnoreCase)
+                            && LevelUpCalculator.MeetsAllMulticlassPrerequisites(
+                                new[] { primaryClass, c }, Score))
                 .ToList();
-            if (otherClasses.Count == 0)
-            {
-                return new List<ClassLevelEntry>
-                {
-                    new(primaryClass, level, primarySubclass)
-                };
-            }
+            if (eligible.Count == 0)
+                return Single();
 
-            string second = PickRandom(otherClasses, rng) ?? "Rogue";
+            string second = PickRandom(eligible, rng) ?? eligible[0];
             var secondSubs = GameData.GetSubclassNames(second);
             string secondSub = secondSubs.Count > 0
                 ? secondSubs[rng.Next(secondSubs.Count)]
@@ -1723,6 +1754,97 @@ namespace Nemo
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Race + subrace ability bonuses, matching the UI (subrace stacks unless
+        /// <see cref="SubraceData.ReplacesAbilityBonuses"/>). Floating player-choice
+        /// ASIs (Variant Human, Custom Lineage extra +1s) are not assigned here.
+        /// </summary>
+        private static Dictionary<string, int> GetRacialAbilityBonuses(string race, string subrace)
+        {
+            var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (GameData.RaceData.TryGetValue(race ?? "", out var data) && data.AbilityBonuses != null)
+            {
+                foreach (var kv in data.AbilityBonuses)
+                    result[kv.Key] = kv.Value;
+            }
+
+            if (string.IsNullOrWhiteSpace(subrace) ||
+                !GameData.RaceSubraces.TryGetValue(race ?? "", out var subs))
+                return result;
+
+            var sub = subs.FirstOrDefault(s =>
+                s.Name.Equals(subrace, StringComparison.OrdinalIgnoreCase));
+            if (sub == null)
+                return result;
+
+            if (sub.ReplacesAbilityBonuses)
+                result.Clear();
+
+            if (sub.AbilityBonus != null)
+            {
+                foreach (var kv in sub.AbilityBonus)
+                    result[kv.Key] = result.GetValueOrDefault(kv.Key) + kv.Value;
+            }
+
+            return result;
+        }
+
+        private static Dictionary<string, int> CombineScoresWithRacial(
+            Dictionary<string, int> bases,
+            Dictionary<string, int> racial)
+        {
+            var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var ab in AllAbilities)
+            {
+                result[ab] = (bases?.GetValueOrDefault(ab, 10) ?? 10)
+                           + (racial?.GetValueOrDefault(ab, 0) ?? 0);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Raise base scores just enough that every class on a multiclass sheet meets
+        /// PHB 13+ ability minimums (base + racial). Used for templates whose chosen
+        /// classes are fixed; True Random filters ineligible classes instead.
+        /// </summary>
+        private static void EnsureMulticlassAbilityMinimums(
+            IEnumerable<string> classNames,
+            Dictionary<string, int> bases,
+            Dictionary<string, int> racial)
+        {
+            if (bases == null || classNames == null)
+                return;
+
+            racial ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            int Effective(string ab) =>
+                bases.GetValueOrDefault(ab, 10) + racial.GetValueOrDefault(ab, 0);
+
+            var names = classNames
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (names.Count < 2)
+                return;
+
+            foreach (var cls in names)
+            {
+                foreach (var group in LevelUpCalculator.GetMulticlassPrerequisiteGroups(cls))
+                {
+                    if (group == null || group.Length == 0)
+                        continue;
+                    if (group.Any(ab => Effective(ab) >= 13))
+                        continue;
+
+                    string raise = group.OrderByDescending(Effective).First();
+                    int need = 13 - Effective(raise);
+                    if (need > 0)
+                        bases[raise] = bases.GetValueOrDefault(raise, 10) + need;
+                }
+            }
         }
 
         private static int[] SoftShuffleArray(int[] source, Random rng)

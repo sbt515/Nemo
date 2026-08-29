@@ -73,6 +73,8 @@ namespace Nemo
         private bool _suppressSpellLevelEvent;
         private bool _suppressLevelTabRebuild;
         private bool _suppressHpRollEvents;
+        /// <summary>Skip writing SelectedFeat while bulk-clearing feats during load/replace.</summary>
+        private bool _suppressFeatGrantSync;
         /// <summary>Backing collection for the spell-level combo (avoids WPF ItemsSource stickiness).</summary>
         private readonly ObservableCollection<string> spellLevelComboItems = new();
         private readonly Random _rng = new();
@@ -359,7 +361,7 @@ namespace Nemo
                 int lvl = GetSelectedRandomTargetLevel();
                 text += $"\nTarget level: {lvl} — random race/class/stats at that character level" +
                         (role == TemplateRole.None && lvl >= 3
-                            ? " (True Random may multiclass)."
+                            ? " (True Random may multiclass when ability-score prerequisites are met)."
                             : ".");
             }
 
@@ -628,14 +630,16 @@ namespace Nemo
                 cmbSubrace.IsEnabled = false;
             }
 
-            // Standard Human has no skill/feat choices (PHB) — only Variant Human, Custom Lineage, and Half-Elf have pickers
-            if (race == "Custom Lineage" || race == "Variant Human" || race == "Half-Elf")
+            // Standard Human has no skill/feat choices (PHB) — Variant Human, Custom Lineage,
+            // Half-Elf, and Tasha-style races (Harengon) have pickers.
+            if (race == "Custom Lineage" || race == "Variant Human" || race == "Half-Elf" || race == "Harengon")
             {
                 if (race == "Variant Human")
                 {
                     pnlRaceSkillChoice.Visibility = Visibility.Visible;
                     lblRaceSkillHeader.Text = "VARIANT HUMAN CHOICES";
                     pnlFlexibleBonuses.Visibility = Visibility.Visible;
+                    SetFlexibleBonusesHeader("VARIANT HUMAN ABILITY SCORE INCREASE (+1 / +1)");
                     rbRaceDarkvision.Visibility = Visibility.Collapsed;
                     rbRaceSkill.Visibility = Visibility.Visible;
                     rbRaceSkill.IsChecked = true;
@@ -662,6 +666,16 @@ namespace Nemo
                     // Half-Elf: +2 Cha (base) and +1 to two other abilities; Skill Versatility is free-form (noted in traits)
                     pnlRaceSkillChoice.Visibility = Visibility.Collapsed;
                     pnlFlexibleBonuses.Visibility = Visibility.Visible;
+                    SetFlexibleBonusesHeader("HALF-ELF FLEXIBLE +1s (not Charisma)");
+                    SetupFlexibleBonusPickers(race);
+                    FlexibleBonus_Changed(null, null);
+                }
+                else if (race == "Harengon")
+                {
+                    // MPMM/WBtW: +2 to one score and +1 to a different score (or three +1s; UI uses +2/+1)
+                    pnlRaceSkillChoice.Visibility = Visibility.Collapsed;
+                    pnlFlexibleBonuses.Visibility = Visibility.Visible;
+                    SetFlexibleBonusesHeader("HARENGON ABILITY SCORE INCREASE (+2 / +1)");
                     SetupFlexibleBonusPickers(race);
                     FlexibleBonus_Changed(null, null);
                 }
@@ -670,6 +684,7 @@ namespace Nemo
                     pnlRaceSkillChoice.Visibility = Visibility.Visible;
                     lblRaceSkillHeader.Text = "CUSTOM LINEAGE CHOICES";
                     pnlFlexibleBonuses.Visibility = Visibility.Visible;
+                    SetFlexibleBonusesHeader("CUSTOM LINEAGE ABILITY SCORE INCREASE (+2)");
                     rbRaceDarkvision.Visibility = Visibility.Visible;
                     rbRaceSkill.Visibility = Visibility.Visible;
                     rbRaceDarkvision.IsChecked = true;   // Default to Darkvision
@@ -692,6 +707,8 @@ namespace Nemo
                 pnlRaceSkillChoice.Visibility = Visibility.Collapsed;
                 pnlFlexibleBonuses.Visibility = Visibility.Collapsed;
             }
+
+            UpdateInitiative();
 
             // Feats tab: origin race and/or ASI→Feat picks
             EnsureFeatsLoaded();
@@ -721,6 +738,12 @@ namespace Nemo
             UpdateRacialSpellsLabel();
         }
 
+        private void SetFlexibleBonusesHeader(string text)
+        {
+            if (lblFlexibleBonusesHeader != null)
+                lblFlexibleBonusesHeader.Text = text;
+        }
+
         private void SetupFlexibleBonusPickers(string race)
         {
             var abilities = new List<string> { "Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma" };
@@ -731,11 +754,20 @@ namespace Nemo
             cmbFlexibleBonus1.ItemsSource = abilities;
             cmbFlexibleBonus2.ItemsSource = abilities;
 
-            cmbFlexibleBonus1.SelectedIndex = 0;
-            cmbFlexibleBonus2.SelectedIndex = 1;
-
             cmbFlexibleBonus1.SelectionChanged -= FlexibleBonus_Changed;
             cmbFlexibleBonus2.SelectionChanged -= FlexibleBonus_Changed;
+
+            if (race == "Harengon")
+            {
+                cmbFlexibleBonus1.SelectedItem = "Dexterity";
+                cmbFlexibleBonus2.SelectedItem = "Constitution";
+            }
+            else
+            {
+                cmbFlexibleBonus1.SelectedIndex = 0;
+                cmbFlexibleBonus2.SelectedIndex = 1;
+            }
+
             cmbFlexibleBonus1.SelectionChanged += FlexibleBonus_Changed;
             cmbFlexibleBonus2.SelectionChanged += FlexibleBonus_Changed;
         }
@@ -761,6 +793,16 @@ namespace Nemo
             if (race == "Custom Lineage")
             {
                 ApplyRaceFlexibleBonus();
+            }
+            else if (race == "Harengon")
+            {
+                racialBonuses = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                if (cmbFlexibleBonus1.SelectedItem is string plusTwo)
+                    racialBonuses[plusTwo] = 2;
+                if (cmbFlexibleBonus2.SelectedItem is string plusOne &&
+                    !plusOne.Equals(cmbFlexibleBonus1.SelectedItem?.ToString(), StringComparison.OrdinalIgnoreCase))
+                    racialBonuses[plusOne] = racialBonuses.GetValueOrDefault(plusOne) + 1;
+                ApplyRacialBonuses();
             }
             else if (race == "Half-Elf" || race == "Variant Human")
             {
@@ -4759,8 +4801,6 @@ namespace Nemo
                 cmbFeatStatChoice1.SelectedIndex = 0;
                 lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY (+1 SCORE & SAVE PROFICIENCY)";
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
-                // Ensure default Strength pick applies +1 and save proficiency even if SelectionChanged is skipped
-                FeatStatChoice_Changed(cmbFeatStatChoice1, null);
             }
             // === 2. SPELL SNIPER → Only cantrip with attack roll (cmb2) ===
             else if (name == "spell sniper")
@@ -4833,35 +4873,30 @@ namespace Nemo
 
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
             }
-            // === GIFT OF THE DRAGON FEATS (mental +1 and fixed spells) ===
-            // Check specific dragon gifts before the generic mental-stat branch.
-            else if (name == "gift of the chromatic dragon" ||
-                     name == "gift of the gem dragon" ||
-                     name == "gift of the metallic dragon")
+            // === GIFT OF THE CHROMATIC DRAGON (Fizban: no ASI, no spells, no picks) ===
+            else if (name == "gift of the chromatic dragon")
+            {
+                // Chromatic Infusion + Reactive Resistance are always-on; nothing to choose.
+            }
+            // === GIFT OF THE GEM DRAGON → +1 Int/Wis/Cha (Telekinetic Reprisal DC) ===
+            else if (name == "gift of the gem dragon")
             {
                 lblFeatStatChoiceHeader.Text = "CHOOSE ABILITY SCORE TO INCREASE";
                 var mentalStats = new List<string> { "Intelligence", "Wisdom", "Charisma" };
                 cmbFeatStatChoice1.ItemsSource = mentalStats;
-                cmbFeatStatChoice1.SelectedIndex = 0;
+                RestoreOrSelectCombo(cmbFeatStatChoice1, currentFeatAbilityChoice, 0);
                 cmbFeatStatChoice1.Visibility = Visibility.Visible;
                 pnlFeatStatChoices.Visibility = Visibility.Visible;
-
-                if (name == "gift of the chromatic dragon")
-                {
-                    currentFeatSpellSource = "Gift of the Chromatic Dragon";
-                    currentFeatSpells = new List<string> { "Chromatic Orb" };
-                }
-                else if (name == "gift of the gem dragon")
-                {
-                    currentFeatSpellSource = "Gift of the Gem Dragon";
-                    currentFeatSpells = new List<string> { "Detect Thoughts" };
-                }
-                else
-                {
-                    currentFeatSpellSource = "Gift of the Metallic Dragon";
-                    currentFeatSpells = new List<string> { "Cure Wounds", "Detect Magic" };
-                }
-                UpdateFeatSpellsLabel();
+            }
+            // === GIFT OF THE METALLIC DRAGON → spellcasting ability for Cure Wounds (not an ASI) ===
+            else if (name == "gift of the metallic dragon")
+            {
+                lblFeatStatChoiceHeader.Text = "CHOOSE SPELLCASTING ABILITY FOR CURE WOUNDS";
+                var mentalStats = new List<string> { "Intelligence", "Wisdom", "Charisma" };
+                cmbFeatStatChoice1.ItemsSource = mentalStats;
+                RestoreOrSelectCombo(cmbFeatStatChoice1, CurrentCharacter?.MetallicDragonSpellAbility, 0);
+                cmbFeatStatChoice1.Visibility = Visibility.Visible;
+                pnlFeatStatChoices.Visibility = Visibility.Visible;
             }
             // === MENTAL STATS ONLY (Int / Wis / Cha) ===
             // Used by: Telekinetic, Telepathic
@@ -4904,6 +4939,16 @@ namespace Nemo
             else if (name == "fighting initiate")
             {
                 SetupFightingInitiateChoices();
+            }
+            // === MARTIAL ADEPT → 2 Battle Master maneuvers (cmb1 + cmb2) ===
+            else if (name == "martial adept")
+            {
+                SetupMartialAdeptChoices();
+            }
+            // === STRIKE OF THE GIANTS → Cloud/Fire/Frost/Hill/Stone/Storm (cmb1) ===
+            else if (name == "strike of the giants")
+            {
+                SetupStrikeOfTheGiantsChoices();
             }
             // === 5. Physical feats (Slasher, Piercer, Dual Wielder, Weapon Master) → cmb1 only ===
             // Exact names: "weapon master" must not match "Great Weapon Master".
@@ -4951,6 +4996,11 @@ namespace Nemo
                 // Feats with no choices (e.g. Great Weapon Master, Alert, …)
                 pnlFeatStatChoices.Visibility = Visibility.Collapsed;
             }
+
+            // Apply picks only if this feat is actually taken — browsing a row (or
+            // changing Magic Initiate cantrips) must not grant the feat.
+            if (selectedFeat.IsSelected && pnlFeatStatChoices.Visibility == Visibility.Visible)
+                FeatStatChoice_Changed(cmbFeatStatChoice1, null);
         }
 
         public void UpdateStatDisplays()
@@ -6033,6 +6083,15 @@ namespace Nemo
         {
             if (dgFeats.SelectedItem is not Feat selectedFeat) return;
 
+            // Only apply choices when the choices panel is actually shown for this feat
+            if (pnlFeatStatChoices.Visibility != Visibility.Visible)
+                return;
+
+            // Row selection / combo browsing must not grant the feat. The checkbox
+            // (Feat.IsSelected) is the only way onto the character.
+            if (!selectedFeat.IsSelected)
+                return;
+
             string name = selectedFeat.Name.ToLowerInvariant();
 
             // === RESET PREVIOUS ABILITY BONUS ===
@@ -6046,10 +6105,6 @@ namespace Nemo
             if (!string.IsNullOrEmpty(resilientSaveAbility))
                 resilientSaveAbility = "";
 
-            // Only apply choices when the choices panel is actually shown for this feat
-            if (pnlFeatStatChoices.Visibility != Visibility.Visible)
-                return;
-
             // ===================== FIGHTING INITIATE =====================
             if (name == "fighting initiate")
             {
@@ -6057,23 +6112,44 @@ namespace Nemo
                 return;
             }
 
+            // ===================== MARTIAL ADEPT =====================
+            if (name == "martial adept")
+            {
+                ApplyMartialAdeptFromUi();
+                return;
+            }
+
+            // ===================== STRIKE OF THE GIANTS =====================
+            if (name == "strike of the giants")
+            {
+                ApplyStrikeOfTheGiantsFromUi();
+                return;
+            }
+
+            // ===================== GIFT OF THE METALLIC DRAGON =====================
+            // Spellcasting-ability pick is not an ASI.
+            if (name == "gift of the metallic dragon")
+            {
+                ApplyMetallicDragonFromUi();
+                return;
+            }
+
             // ===================== MAGIC INITIATE =====================
             if (name == "magic initiate")
             {
-                currentFeatSpellSource = "Magic Initiate";
+                ApplyMagicInitiateFromUi();
+                return;
+            }
+
+            // ===================== ARTIFICER INITIATE =====================
+            if (name == "artificer initiate")
+            {
+                currentFeatSpellSource = "Artificer Initiate";
                 currentFeatSpells.Clear();
-
-                magicInitiateClass = cmbFeatStatChoice1.SelectedItem?.ToString() ?? "";
-
-                string c1 = cmbFeatStatChoice2.SelectedItem as string;
-                if (!string.IsNullOrEmpty(c1)) currentFeatSpells.Add(c1);
-
-                string c2 = cmbFeatStatChoice3.SelectedItem as string;
-                if (!string.IsNullOrEmpty(c2) && c2 != c1) currentFeatSpells.Add(c2);
-
-                if (!string.IsNullOrEmpty(cmbFeatStatChoice4.SelectedItem as string))
-                    currentFeatSpells.Add(cmbFeatStatChoice4.SelectedItem as string);
-
+                if (cmbFeatStatChoice1.SelectedItem is string artCantrip)
+                    currentFeatSpells.Add(artCantrip);
+                if (cmbFeatStatChoice2.SelectedItem is string artSpell)
+                    currentFeatSpells.Add(artSpell);
                 UpdateFeatSpellsLabel();
                 return;
             }
@@ -6282,6 +6358,10 @@ namespace Nemo
             // Fighting Initiate: martial weapon OR unarmed strike (everyone is proficient with unarmed strikes)
             if (prereqLower.Contains("martial weapon") && prereqLower.Contains("unarmed"))
                 return HasMartialWeaponProficiency() || HasUnarmedStrikeProficiency();
+
+            // Strike of the Giants: martial weapon OR Giant Foundling background
+            if (prereqLower.Contains("martial weapon") && prereqLower.Contains("giant foundling"))
+                return HasMartialWeaponProficiency() || HasGiantFoundlingBackground();
 
             if (prereqLower.Contains("martial weapon"))
                 return HasMartialWeaponProficiency();
@@ -6746,6 +6826,192 @@ namespace Nemo
             UpdateEquippedAC();
         }
 
+        /// <summary>True if Martial Adept is checked on the Feats tab.</summary>
+        private bool IsMartialAdeptSelected()
+        {
+            return GameData.AllFeats?.Any(f =>
+                       f != null &&
+                       f.IsSelected &&
+                       f.Name.Equals("Martial Adept", StringComparison.OrdinalIgnoreCase)) == true;
+        }
+
+        private static List<string> GetBattleMasterManeuverNames()
+        {
+            return ClassFeatureOptionData.AllManeuvers
+                .Select(o => o.Name)
+                .OrderBy(n => n)
+                .ToList();
+        }
+
+        private void SetupMartialAdeptChoices()
+        {
+            lblFeatStatChoiceHeader.Text = "CHOOSE 2 BATTLE MASTER MANEUVERS";
+
+            var names = GetBattleMasterManeuverNames();
+            var saved = CurrentCharacter?.MartialAdeptManeuvers?
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim())
+                .ToList() ?? new List<string>();
+
+            cmbFeatStatChoice1.ItemsSource = names;
+            cmbFeatStatChoice2.ItemsSource = names;
+            cmbFeatStatChoice1.Visibility = Visibility.Visible;
+            cmbFeatStatChoice2.Visibility = Visibility.Visible;
+            pnlFeatStatChoices.Visibility = Visibility.Visible;
+
+            string pick1 = saved.Count > 0 ? saved[0] : "";
+            string pick2 = saved.Count > 1 ? saved[1] : "";
+            RestoreOrSelectCombo(cmbFeatStatChoice1, pick1, 0);
+            int fallback2 = names.Count > 1 ? 1 : 0;
+            if (!string.IsNullOrEmpty(pick1) &&
+                pick2.Equals(pick1, StringComparison.OrdinalIgnoreCase))
+                pick2 = "";
+            RestoreOrSelectCombo(cmbFeatStatChoice2, pick2, fallback2);
+
+            ApplyMartialAdeptFromUi();
+        }
+
+        private void EnsureMartialAdeptDefaults()
+        {
+            if (CurrentCharacter == null) return;
+            CurrentCharacter.MartialAdeptManeuvers ??= new List<string>();
+            var valid = CurrentCharacter.MartialAdeptManeuvers
+                .Where(s => !string.IsNullOrWhiteSpace(s) &&
+                            ClassFeatureOptionData.AllManeuvers.Any(m =>
+                                m.Name.Equals(s.Trim(), StringComparison.OrdinalIgnoreCase)))
+                .Select(s => s.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var names = GetBattleMasterManeuverNames();
+            foreach (var n in names)
+            {
+                if (valid.Count >= 2) break;
+                if (!valid.Any(v => v.Equals(n, StringComparison.OrdinalIgnoreCase)))
+                    valid.Add(n);
+            }
+            CurrentCharacter.MartialAdeptManeuvers = valid.Take(2).ToList();
+        }
+
+        private void ApplyMartialAdeptFromUi()
+        {
+            string m1 = cmbFeatStatChoice1.SelectedItem as string ?? "";
+            string m2 = cmbFeatStatChoice2.SelectedItem as string ?? "";
+            var picks = new List<string>();
+            if (!string.IsNullOrWhiteSpace(m1)) picks.Add(m1.Trim());
+            if (!string.IsNullOrWhiteSpace(m2) &&
+                !picks.Any(p => p.Equals(m2.Trim(), StringComparison.OrdinalIgnoreCase)))
+                picks.Add(m2.Trim());
+
+            if (IsMartialAdeptSelected() && CurrentCharacter != null)
+                CurrentCharacter.MartialAdeptManeuvers = picks;
+
+            var parts = new List<string>();
+            foreach (var name in picks)
+            {
+                var opt = ClassFeatureOptionData.AllManeuvers
+                    .FirstOrDefault(o => o.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                if (opt == null) continue;
+                parts.Add($"{opt.Name}\n{opt.Description}");
+            }
+
+            txtFeatDetails.Text = parts.Count == 0
+                ? baseFeatDescription
+                : $"{baseFeatDescription}\n\n———\n{string.Join("\n\n", parts)}\n\nSuperiority die: 1d6 (short or long rest).";
+        }
+
+        private bool HasGiantFoundlingBackground()
+        {
+            string bg = cmbBackground?.SelectedItem?.ToString()
+                        ?? CurrentCharacter?.Background
+                        ?? "";
+            return bg.Equals("Giant Foundling", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsStrikeOfTheGiantsSelected()
+        {
+            return GameData.AllFeats?.Any(f =>
+                       f != null &&
+                       f.IsSelected &&
+                       f.Name.Equals("Strike of the Giants", StringComparison.OrdinalIgnoreCase)) == true;
+        }
+
+        private static List<string> GetGiantStrikeNames()
+        {
+            return ClassFeatureOptionData.AllGiantStrikes
+                .Select(o => o.Name)
+                .ToList();
+        }
+
+        private void SetupStrikeOfTheGiantsChoices()
+        {
+            lblFeatStatChoiceHeader.Text = "CHOOSE GIANT STRIKE";
+
+            var names = GetGiantStrikeNames();
+            cmbFeatStatChoice1.ItemsSource = names;
+            cmbFeatStatChoice1.Visibility = Visibility.Visible;
+            pnlFeatStatChoices.Visibility = Visibility.Visible;
+
+            RestoreOrSelectCombo(cmbFeatStatChoice1, CurrentCharacter?.StrikeOfTheGiantsBenefit, 0);
+            ApplyStrikeOfTheGiantsFromUi();
+        }
+
+        private void EnsureStrikeOfTheGiantsDefault()
+        {
+            if (CurrentCharacter == null) return;
+            if (!string.IsNullOrWhiteSpace(CurrentCharacter.StrikeOfTheGiantsBenefit) &&
+                ClassFeatureOptionData.AllGiantStrikes.Any(o =>
+                    o.Name.Equals(CurrentCharacter.StrikeOfTheGiantsBenefit.Trim(),
+                        StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            var names = GetGiantStrikeNames();
+            if (names.Count > 0)
+                CurrentCharacter.StrikeOfTheGiantsBenefit = names[0];
+        }
+
+        private void ApplyStrikeOfTheGiantsFromUi()
+        {
+            string strike = cmbFeatStatChoice1.SelectedItem as string ?? "";
+            if (IsStrikeOfTheGiantsSelected() && CurrentCharacter != null)
+                CurrentCharacter.StrikeOfTheGiantsBenefit = strike;
+
+            var opt = ClassFeatureOptionData.AllGiantStrikes
+                .FirstOrDefault(o => o.Name.Equals(strike, StringComparison.OrdinalIgnoreCase));
+            string desc = opt?.Description ?? "";
+            txtFeatDetails.Text = string.IsNullOrEmpty(desc)
+                ? baseFeatDescription
+                : $"{baseFeatDescription}\n\n———\nSelected strike: {strike}\n{desc}\n\nSave DC = 8 + PB + Strength or Constitution modifier. Uses = proficiency bonus / long rest.";
+        }
+
+        private void EnsureMetallicDragonDefault()
+        {
+            if (CurrentCharacter == null) return;
+            if (string.IsNullOrWhiteSpace(CurrentCharacter.MetallicDragonSpellAbility))
+                CurrentCharacter.MetallicDragonSpellAbility = "Intelligence";
+
+            currentFeatSpellSource = "Gift of the Metallic Dragon";
+            currentFeatSpells = new List<string> { "Cure Wounds" };
+            UpdateFeatSpellsLabel();
+        }
+
+        private void ApplyMetallicDragonFromUi()
+        {
+            if (CurrentCharacter == null) return;
+
+            string ability = cmbFeatStatChoice1.SelectedItem as string ?? "";
+            if (string.IsNullOrWhiteSpace(ability))
+                ability = "Intelligence";
+            CurrentCharacter.MetallicDragonSpellAbility = ability;
+
+            currentFeatSpellSource = "Gift of the Metallic Dragon";
+            currentFeatSpells = new List<string> { "Cure Wounds" };
+            UpdateFeatSpellsLabel();
+
+            txtFeatDetails.Text =
+                $"{baseFeatDescription}\n\n———\nCure Wounds spellcasting ability: {ability}";
+        }
+
         private void PopulateMagicInitiateChoices(string className)
         {
             if (string.IsNullOrEmpty(className)) return;
@@ -6810,9 +7076,44 @@ namespace Nemo
 
             string name = feat.Name.ToLowerInvariant();
 
-            // Skip dynamic choice feats (they handle their own bonuses)
-            if (feat.HasDynamicStatChoice)
+            // Spell-granting / choice feats: apply from the details panel only when this
+            // feat is the one currently displayed. Checking the box (not browsing a row
+            // or picking a Magic Initiate cantrip) is what puts the feat on the character.
+            if (name == "magic initiate" || name == "artificer initiate")
+            {
+                ApplyDisplayedFeatChoicesIfCurrent(feat);
                 return;
+            }
+
+            if (name == "gift of the metallic dragon")
+            {
+                if (!ApplyDisplayedFeatChoicesIfCurrent(feat))
+                    EnsureMetallicDragonDefault();
+                return;
+            }
+
+            if (name == "martial adept")
+            {
+                if (!ApplyDisplayedFeatChoicesIfCurrent(feat))
+                    EnsureMartialAdeptDefaults();
+                return;
+            }
+
+            if (name == "strike of the giants")
+            {
+                if (!ApplyDisplayedFeatChoicesIfCurrent(feat))
+                    EnsureStrikeOfTheGiantsDefault();
+                return;
+            }
+
+            if (name == "gift of the chromatic dragon")
+                return;
+
+            if (feat.HasDynamicStatChoice)
+            {
+                ApplyDisplayedFeatChoicesIfCurrent(feat);
+                return;
+            }
 
             // === FIGHTING INITIATE ===
             // Style pick lives on Character.FightingInitiateStyle (feat details combo).
@@ -6880,11 +7181,113 @@ namespace Nemo
             }
         }
 
+        private string GetCheckedFeatNamesJoined()
+        {
+            if (GameData.AllFeats == null)
+                return "";
+            return string.Join(", ",
+                GameData.AllFeats.Where(f => f != null && f.IsSelected).Select(f => f.Name));
+        }
+
+        /// <summary>
+        /// Writes checked feat names onto the character. Row highlight is ignored so
+        /// browsing Magic Initiate (or unchecking it) cannot leave the feat stuck.
+        /// </summary>
+        public void SyncSelectedFeatFromUi()
+        {
+            if (_suppressFeatGrantSync) return;
+            if (CurrentCharacter == null) return;
+            CurrentCharacter.SelectedFeat = GetCheckedFeatNamesJoined();
+        }
+
+        /// <returns>True if the feat's details panel is showing and choices were applied.</returns>
+        private bool ApplyDisplayedFeatChoicesIfCurrent(Feat feat)
+        {
+            if (feat == null) return false;
+            if (dgFeats?.SelectedItem is not Feat shown || !ReferenceEquals(shown, feat))
+                return false;
+            if (pnlFeatStatChoices?.Visibility != Visibility.Visible)
+                return false;
+            FeatStatChoice_Changed(cmbFeatStatChoice1, null);
+            return true;
+        }
+
+        private void ApplyMagicInitiateFromUi()
+        {
+            currentFeatSpellSource = "Magic Initiate";
+            currentFeatSpells.Clear();
+
+            magicInitiateClass = cmbFeatStatChoice1.SelectedItem?.ToString() ?? "";
+
+            string c1 = cmbFeatStatChoice2.SelectedItem as string;
+            if (!string.IsNullOrEmpty(c1)) currentFeatSpells.Add(c1);
+
+            string c2 = cmbFeatStatChoice3.SelectedItem as string;
+            if (!string.IsNullOrEmpty(c2) && c2 != c1) currentFeatSpells.Add(c2);
+
+            if (!string.IsNullOrEmpty(cmbFeatStatChoice4.SelectedItem as string))
+                currentFeatSpells.Add(cmbFeatStatChoice4.SelectedItem as string);
+
+            magicInitiateCantrips = currentFeatSpells.Take(2).ToList();
+            magicInitiateSpell = currentFeatSpells.Count > 2 ? currentFeatSpells[2] : "";
+
+            UpdateFeatSpellsLabel();
+        }
+
+        private static void RestoreOrSelectCombo(ComboBox cmb, string? preferred, int fallbackIndex)
+        {
+            if (cmb == null) return;
+            var items = cmb.Items.Cast<object>().Select(o => o?.ToString() ?? "").ToList();
+            int idx = fallbackIndex;
+            if (!string.IsNullOrWhiteSpace(preferred))
+            {
+                int found = items.FindIndex(n => n.Equals(preferred, StringComparison.OrdinalIgnoreCase));
+                if (found >= 0) idx = found;
+            }
+            if (items.Count == 0)
+            {
+                cmb.SelectedIndex = -1;
+                return;
+            }
+            cmb.SelectedIndex = Math.Clamp(idx, 0, items.Count - 1);
+        }
+
+        private void ClearFeatSpellGrants()
+        {
+            currentFeatSpellSource = "";
+            currentFeatSpells = new List<string>();
+            magicInitiateClass = "";
+            magicInitiateCantrips = new List<string>();
+            magicInitiateSpell = "";
+            UpdateFeatSpellsLabel();
+        }
+
         public void RemoveFeatBonus(Feat feat)
         {
             if (feat == null) return;
 
             string name = feat.Name.ToLowerInvariant();
+
+            // Only drop spells this feat actually granted (don't wipe Fey Touched
+            // just because Magic Initiate is unchecked).
+            if (!string.IsNullOrEmpty(currentFeatSpellSource) &&
+                feat.Name.Equals(currentFeatSpellSource, StringComparison.OrdinalIgnoreCase))
+            {
+                ClearFeatSpellGrants();
+            }
+            else if (name == "magic initiate")
+            {
+                magicInitiateClass = "";
+                magicInitiateCantrips = new List<string>();
+                magicInitiateSpell = "";
+            }
+
+            if (name == "martial adept" && CurrentCharacter != null)
+                CurrentCharacter.MartialAdeptManeuvers = new List<string>();
+            if (name == "strike of the giants" && CurrentCharacter != null)
+                CurrentCharacter.StrikeOfTheGiantsBenefit = "";
+            if (name == "gift of the metallic dragon" && CurrentCharacter != null)
+                CurrentCharacter.MetallicDragonSpellAbility = "";
 
             if (feat.HasDynamicStatChoice)
             {
@@ -6985,12 +7388,29 @@ namespace Nemo
 
         public void UpdateInitiative()
         {
+            if (txtInitiative == null) return;
+
+            RefreshProficiencyBonus();
             int dexMod = GetModifierFromText(txtDexMod?.Text);
             // Initiative is a Dexterity ability check — Jack of All Trades applies
             bool joat = LevelUpCalculator.HasJackOfAllTrades(GetActiveClassLevels());
             int joatBonus = joat ? proficiencyBonus / 2 : 0;
-            int total = dexMod + featInitiativeBonus + joatBonus;
+            int hareTrigger = 0;
+            if (cmbRace?.SelectedItem is string race &&
+                race.Equals("Harengon", StringComparison.OrdinalIgnoreCase))
+                hareTrigger = proficiencyBonus;
+
+            int total = dexMod + featInitiativeBonus + joatBonus + hareTrigger;
             txtInitiative.Text = total >= 0 ? $"+{total}" : total.ToString();
+
+            var tipParts = new List<string> { $"Dex { (dexMod >= 0 ? "+" : "") }{dexMod}" };
+            if (hareTrigger != 0)
+                tipParts.Add($"Hare-Trigger +{hareTrigger}");
+            if (featInitiativeBonus != 0)
+                tipParts.Add($"Alert {(featInitiativeBonus >= 0 ? "+" : "")}{featInitiativeBonus}");
+            if (joatBonus != 0)
+                tipParts.Add($"Jack of All Trades +{joatBonus}");
+            txtInitiative.ToolTip = string.Join("  ·  ", tipParts);
         }
 
         private void InitializeSkills()
@@ -9581,8 +10001,9 @@ namespace Nemo
             else if (CurrentCharacter.Level <= 0)
                 CurrentCharacter.Level = 1;
 
-            if (dgFeats.SelectedItem is Feat feat)
-                CurrentCharacter.SelectedFeat = feat.Name;
+            // Checked feats only — highlighting Magic Initiate (or picking its cantrips)
+            // must not write the feat onto the character.
+            CurrentCharacter.SelectedFeat = GetCheckedFeatNamesJoined();
 
             PopulateAbilityScores();
             RefreshProficiencyBonus();
@@ -9749,6 +10170,25 @@ namespace Nemo
             else if (string.IsNullOrWhiteSpace(CurrentCharacter.FightingInitiateStyle))
                 EnsureFightingInitiateStyleDefault();
 
+            CurrentCharacter.MartialAdeptManeuvers ??= new List<string>();
+            if (!IsMartialAdeptSelected())
+                CurrentCharacter.MartialAdeptManeuvers = new List<string>();
+            else if (CurrentCharacter.MartialAdeptManeuvers.Count == 0)
+                EnsureMartialAdeptDefaults();
+
+            if (!IsStrikeOfTheGiantsSelected())
+                CurrentCharacter.StrikeOfTheGiantsBenefit = "";
+            else if (string.IsNullOrWhiteSpace(CurrentCharacter.StrikeOfTheGiantsBenefit))
+                EnsureStrikeOfTheGiantsDefault();
+
+            bool metallicSelected = GameData.AllFeats?.Any(f =>
+                f != null && f.IsSelected &&
+                f.Name.Equals("Gift of the Metallic Dragon", StringComparison.OrdinalIgnoreCase)) == true;
+            if (!metallicSelected)
+                CurrentCharacter.MetallicDragonSpellAbility = "";
+            else if (string.IsNullOrWhiteSpace(CurrentCharacter.MetallicDragonSpellAbility))
+                EnsureMetallicDragonDefault();
+
             // === Save Foundry VTT–compatible actor JSON next to the .exe ===
             // Full Nemo state is embedded under flags.nemo.character for round-trip load.
             try
@@ -9859,13 +10299,30 @@ namespace Nemo
         {
             // Always clear first so a prior feat does not stick when the new character has none
             EnsureFeatsLoaded();
-            if (GameData.AllFeats != null)
+
+            // Snapshot before unchecking so a prior session's grants cannot leak in,
+            // and so RemoveFeatBonus cannot drop the saved list mid-restore.
+            var savedSpells = CurrentCharacter?.FeatSpells?
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim())
+                .ToList() ?? new List<string>();
+            string savedSource = CurrentCharacter?.FeatSpellSource ?? "";
+
+            _suppressFeatGrantSync = true;
+            try
             {
-                foreach (var feat in GameData.AllFeats)
+                if (GameData.AllFeats != null)
                 {
-                    if (feat != null)
-                        feat.IsSelected = false;
+                    foreach (var feat in GameData.AllFeats)
+                    {
+                        if (feat != null)
+                            feat.IsSelected = false;
+                    }
                 }
+            }
+            finally
+            {
+                _suppressFeatGrantSync = false;
             }
             if (dgFeats != null)
                 dgFeats.SelectedItem = null;
@@ -9882,26 +10339,29 @@ namespace Nemo
             if (dgFeats?.ItemsSource == null)
                 return;
 
+            var selectedNames = new HashSet<string>(
+                (CurrentCharacter.SelectedFeat ?? "")
+                    .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                StringComparer.OrdinalIgnoreCase);
+
+            Feat? firstRestored = null;
             foreach (Feat feat in dgFeats.ItemsSource)
             {
-                if (feat.Name.Equals(CurrentCharacter.SelectedFeat, StringComparison.OrdinalIgnoreCase))
-                {
-                    feat.IsSelected = true;
-                    dgFeats.SelectedItem = feat;
-                    break;
-                }
+                if (feat == null || !selectedNames.Contains(feat.Name))
+                    continue;
+                feat.IsSelected = true;
+                firstRestored ??= feat;
             }
+            if (firstRestored != null)
+                dgFeats.SelectedItem = firstRestored;
 
             // Restore feat-granted spells for labels / re-export after load
-            if (CurrentCharacter.FeatSpells != null && CurrentCharacter.FeatSpells.Count > 0)
+            if (savedSpells.Count > 0)
             {
-                currentFeatSpellSource = CurrentCharacter.FeatSpellSource
-                    ?? CurrentCharacter.SelectedFeat
-                    ?? "";
-                currentFeatSpells = CurrentCharacter.FeatSpells
-                    .Where(s => !string.IsNullOrWhiteSpace(s))
-                    .Select(s => s.Trim())
-                    .ToList();
+                currentFeatSpellSource = string.IsNullOrWhiteSpace(savedSource)
+                    ? CurrentCharacter.SelectedFeat
+                    : savedSource;
+                currentFeatSpells = savedSpells;
             }
             else
             {
@@ -9909,8 +10369,31 @@ namespace Nemo
                 currentFeatSpells = new List<string>();
             }
 
+            SanitizeDragonFeatSpells();
             UpdateFeatSpellsLabel();
             dgFeats.Items.Refresh();
+        }
+
+        /// <summary>
+        /// Fizban dragon gifts no longer grant Chromatic Orb / Detect Thoughts / Detect Magic.
+        /// Strip those leftover grants from older saves.
+        /// </summary>
+        private void SanitizeDragonFeatSpells()
+        {
+            if (string.IsNullOrEmpty(currentFeatSpellSource))
+                return;
+
+            if (currentFeatSpellSource.Equals("Gift of the Chromatic Dragon", StringComparison.OrdinalIgnoreCase) ||
+                currentFeatSpellSource.Equals("Gift of the Gem Dragon", StringComparison.OrdinalIgnoreCase))
+            {
+                ClearFeatSpellGrants();
+                return;
+            }
+
+            if (currentFeatSpellSource.Equals("Gift of the Metallic Dragon", StringComparison.OrdinalIgnoreCase))
+            {
+                currentFeatSpells = new List<string> { "Cure Wounds" };
+            }
         }
 
         private void RestoreCantrips()
@@ -10141,13 +10624,21 @@ namespace Nemo
             try { ResetFeatChoiceUi(); } catch { /* UI may not be ready */ }
 
             EnsureFeatsLoaded();
-            if (GameData.AllFeats != null)
+            _suppressFeatGrantSync = true;
+            try
             {
-                foreach (var feat in GameData.AllFeats)
+                if (GameData.AllFeats != null)
                 {
-                    if (feat != null)
-                        feat.IsSelected = false;
+                    foreach (var feat in GameData.AllFeats)
+                    {
+                        if (feat != null)
+                            feat.IsSelected = false;
+                    }
                 }
+            }
+            finally
+            {
+                _suppressFeatGrantSync = false;
             }
             if (dgFeats != null)
             {

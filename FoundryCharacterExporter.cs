@@ -229,6 +229,24 @@ namespace Nemo
                 items.Add(BuildFeatItem(NewId(), c.FightingInitiateStyle.Trim(), "feat",
                     "Fighting Style from Fighting Initiate.", requirements: "Fighting Initiate"));
             }
+            foreach (var maneuver in c.MartialAdeptManeuvers ?? Enumerable.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(maneuver)) continue;
+                var opt = ClassFeatureOptionData.AllManeuvers
+                    .FirstOrDefault(o => o.Name.Equals(maneuver.Trim(), StringComparison.OrdinalIgnoreCase));
+                items.Add(BuildFeatItem(NewId(), maneuver.Trim(), "feat",
+                    opt?.Description ?? "Battle Master maneuver from Martial Adept.",
+                    requirements: "Martial Adept"));
+            }
+            if (!string.IsNullOrWhiteSpace(c.StrikeOfTheGiantsBenefit))
+            {
+                var gs = ClassFeatureOptionData.AllGiantStrikes
+                    .FirstOrDefault(o => o.Name.Equals(c.StrikeOfTheGiantsBenefit.Trim(),
+                        StringComparison.OrdinalIgnoreCase));
+                items.Add(BuildFeatItem(NewId(), c.StrikeOfTheGiantsBenefit.Trim(), "feat",
+                    gs?.Description ?? "Giant strike from Strike of the Giants.",
+                    requirements: "Strike of the Giants"));
+            }
             foreach (var inv in c.EldritchInvocations ?? Enumerable.Empty<string>())
             {
                 if (!string.IsNullOrWhiteSpace(inv))

@@ -549,6 +549,16 @@ namespace Nemo
                 preview.ExtraSelections.Add("Invocations: " + string.Join(", ", character.EldritchInvocations));
             if (character.MetamagicOptions != null && character.MetamagicOptions.Count > 0)
                 preview.ExtraSelections.Add("Metamagic: " + string.Join(", ", character.MetamagicOptions));
+            if (character.MartialAdeptManeuvers != null &&
+                character.MartialAdeptManeuvers.Any(s => !string.IsNullOrWhiteSpace(s)))
+            {
+                preview.ExtraSelections.Add("Martial Adept: " +
+                    string.Join(", ", character.MartialAdeptManeuvers.Where(s => !string.IsNullOrWhiteSpace(s))));
+            }
+            if (!string.IsNullOrWhiteSpace(character.StrikeOfTheGiantsBenefit))
+                preview.ExtraSelections.Add("Strike of the Giants: " + character.StrikeOfTheGiantsBenefit.Trim());
+            if (!string.IsNullOrWhiteSpace(character.MetallicDragonSpellAbility))
+                preview.ExtraSelections.Add("Metallic Dragon (Cure Wounds): " + character.MetallicDragonSpellAbility.Trim());
             if (!string.IsNullOrWhiteSpace(character.HighElfCantrip))
                 preview.ExtraSelections.Add("High Elf Cantrip: " + character.HighElfCantrip.Trim());
             if (!string.IsNullOrWhiteSpace(character.RaceGrantedSkill))
@@ -1867,6 +1877,40 @@ namespace Nemo
             return sb.ToString().Trim();
         }
 
+        private static string FormatFeatLine(Character c)
+        {
+            string raw = c.SelectedFeat ?? "";
+            var names = raw.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (names.Length == 0)
+                return raw.Trim();
+
+            var formatted = new List<string>();
+            foreach (var name in names)
+            {
+                string line = name;
+                if (name.Equals("Fighting Initiate", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(c.FightingInitiateStyle))
+                    line += " (" + c.FightingInitiateStyle.Trim() + ")";
+                else if (name.Equals("Martial Adept", StringComparison.OrdinalIgnoreCase))
+                {
+                    var maneuvers = (c.MartialAdeptManeuvers ?? new List<string>())
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .Select(s => s.Trim())
+                        .ToList();
+                    if (maneuvers.Count > 0)
+                        line += " (" + string.Join(", ", maneuvers) + ")";
+                }
+                else if (name.Equals("Strike of the Giants", StringComparison.OrdinalIgnoreCase) &&
+                         !string.IsNullOrWhiteSpace(c.StrikeOfTheGiantsBenefit))
+                    line += " (" + c.StrikeOfTheGiantsBenefit.Trim() + ")";
+                else if (name.Equals("Gift of the Metallic Dragon", StringComparison.OrdinalIgnoreCase) &&
+                         !string.IsNullOrWhiteSpace(c.MetallicDragonSpellAbility))
+                    line += " (" + c.MetallicDragonSpellAbility.Trim() + ")";
+                formatted.Add(line);
+            }
+            return string.Join("; ", formatted);
+        }
+
         private sealed class FeaturesSplit
         {
             public string Page1 { get; init; } = "";
@@ -1899,12 +1943,7 @@ namespace Nemo
             if (!string.IsNullOrWhiteSpace(c.SelectedFeat))
             {
                 page1.AppendLine("— Feats —");
-                string featLine = c.SelectedFeat;
-                if (featLine.Equals("Fighting Initiate", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrWhiteSpace(c.FightingInitiateStyle))
-                {
-                    featLine += " (" + c.FightingInitiateStyle.Trim() + ")";
-                }
+                string featLine = FormatFeatLine(c);
                 page1.AppendLine("• " + featLine);
             }
 

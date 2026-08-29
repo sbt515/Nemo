@@ -10,7 +10,9 @@ namespace Nemo
         FightingStyle = 0,
         EldritchInvocation = 1,
         Metamagic = 2,
-        PactBoon = 3
+        PactBoon = 3,
+        Maneuver = 4,
+        GiantStrike = 5
     }
 
     /// <summary>One selectable option (fighting style, invocation, metamagic, …).</summary>
@@ -88,6 +90,10 @@ namespace Nemo
         public static IReadOnlyList<ClassFeatureOption> AllMetamagic { get; } = BuildMetamagic();
         public static IReadOnlyList<ClassFeatureOption> AllInvocations { get; } = BuildInvocations();
         public static IReadOnlyList<ClassFeatureOption> AllPactBoons { get; } = BuildPactBoons();
+        /// <summary>Battle Master maneuvers (PHB + Tasha's), used by Martial Adept and Combat Superiority.</summary>
+        public static IReadOnlyList<ClassFeatureOption> AllManeuvers { get; } = BuildManeuvers();
+        /// <summary>Strike of the Giants feat benefits (Bigby Presents: Glory of the Giants).</summary>
+        public static IReadOnlyList<ClassFeatureOption> AllGiantStrikes { get; } = BuildGiantStrikes();
 
         public static IReadOnlyList<ClassFeatureOption> GetFightingStylesForClass(string className)
         {
@@ -359,6 +365,89 @@ namespace Nemo
             Inv("Witch Sight", 15, "",
                 "See the true form of any shapechanger or creature concealed by illusion or transmutation magic " +
                 "while within 30 feet and within line of sight."),
+        };
+
+        private static List<ClassFeatureOption> BuildManeuvers() => new()
+        {
+            Mv("Ambush",
+                "When you make a Dexterity (Stealth) check or an initiative roll, expend one superiority die and add it to the roll (you can't be incapacitated)."),
+            Mv("Bait and Switch",
+                "When you're within 5 feet of a willing creature, expend one superiority die and switch places (costs 5 feet of movement; no opportunity attacks). You or the other creature gains a bonus to AC equal to the die until the start of your next turn."),
+            Mv("Brace",
+                "When a creature you can see moves into your melee reach, use your reaction to expend one superiority die and make one attack with that weapon. On a hit, add the die to the damage."),
+            Mv("Commander's Strike",
+                "When you take the Attack action, forgo one attack and use a bonus action to direct a friendly creature who can see or hear you. Expend one superiority die; that creature uses its reaction to make one weapon attack, adding the die to the damage."),
+            Mv("Commanding Presence",
+                "When you make a Charisma (Intimidation, Performance, or Persuasion) check, expend one superiority die and add it to the check."),
+            Mv("Disarming Attack",
+                "When you hit with a weapon attack, expend one superiority die to add it to the damage. The target makes a Strength save or drops one item you choose."),
+            Mv("Distracting Strike",
+                "When you hit with a weapon attack, expend one superiority die to add it to the damage. The next attack roll against the target by someone other than you has advantage if made before the start of your next turn."),
+            Mv("Evasive Footwork",
+                "When you move, expend one superiority die and add it to your AC until you stop moving."),
+            Mv("Feinting Attack",
+                "As a bonus action, expend one superiority die to feint against a creature within 5 feet. You have advantage on your next attack roll against it this turn; on a hit, add the die to the damage."),
+            Mv("Goading Attack",
+                "When you hit with a weapon attack, expend one superiority die to add it to the damage. The target makes a Wisdom save or has disadvantage on attack rolls against anyone but you until the end of your next turn."),
+            Mv("Grappling Strike",
+                "Immediately after you hit with a melee attack on your turn, expend one superiority die and try to grapple as a bonus action, adding the die to your Strength (Athletics) check."),
+            Mv("Lunging Attack",
+                "When you make a melee weapon attack on your turn, expend one superiority die to increase your reach by 5 feet. On a hit, add the die to the damage."),
+            Mv("Maneuvering Attack",
+                "When you hit with a weapon attack, expend one superiority die to add it to the damage. A friendly creature who can see or hear you can use its reaction to move up to half its speed without provoking opportunity attacks from that target."),
+            Mv("Menacing Attack",
+                "When you hit with a weapon attack, expend one superiority die to add it to the damage. The target makes a Wisdom save or is frightened of you until the end of your next turn."),
+            Mv("Parry",
+                "When another creature damages you with a melee attack, use your reaction and expend one superiority die to reduce the damage by the die + your Dexterity modifier."),
+            Mv("Precision Attack",
+                "When you make a weapon attack roll, expend one superiority die and add it to the roll (before or after the roll, but before the attack's effects)."),
+            Mv("Pushing Attack",
+                "When you hit with a weapon attack, expend one superiority die to add it to the damage. If the target is Large or smaller, it makes a Strength save or is pushed up to 15 feet away."),
+            Mv("Quick Toss",
+                "As a bonus action, expend one superiority die and make a ranged attack with a thrown weapon (you can draw it as part of the attack). On a hit, add the die to the damage."),
+            Mv("Rally",
+                "As a bonus action, expend one superiority die to give a friendly creature who can see or hear you temporary hit points equal to the die + your Charisma modifier."),
+            Mv("Riposte",
+                "When a creature misses you with a melee attack, use your reaction and expend one superiority die to make a melee weapon attack against it. On a hit, add the die to the damage."),
+            Mv("Sweeping Attack",
+                "When you hit with a melee weapon attack, expend one superiority die to damage another creature within 5 feet of the original target and within your reach. If the original attack roll would hit it, it takes damage equal to the die (same type)."),
+            Mv("Tactical Assessment",
+                "When you make an Intelligence (Investigation or History) or Wisdom (Insight) check, expend one superiority die and add it to the check."),
+            Mv("Trip Attack",
+                "When you hit with a weapon attack, expend one superiority die to add it to the damage. If the target is Large or smaller, it makes a Strength save or is knocked prone."),
+        };
+
+        private static List<ClassFeatureOption> BuildGiantStrikes() => new()
+        {
+            Gs("Cloud Strike",
+                "The target takes an extra 1d4 thunder damage. If it is a creature, it must succeed on a Wisdom saving throw or you become invisible to it until the start of your next turn, or until immediately after you make an attack roll or cast a spell."),
+            Gs("Fire Strike",
+                "The target takes an extra 1d10 fire damage."),
+            Gs("Frost Strike",
+                "The target takes an extra 1d6 cold damage. If it is a creature, it must succeed on a Constitution saving throw or its speed is reduced to 0 until the start of your next turn."),
+            Gs("Hill Strike",
+                "The target takes an extra 1d6 damage of the weapon's type. If it is a creature, it must succeed on a Strength saving throw or have the prone condition."),
+            Gs("Stone Strike",
+                "The target takes an extra 1d6 force damage. If it is a creature, it must succeed on a Strength saving throw or be pushed 10 feet from you in a straight line."),
+            Gs("Storm Strike",
+                "The target takes an extra 1d6 lightning damage. If it is a creature, it must succeed on a Constitution saving throw or it has disadvantage on attack rolls until the start of your next turn."),
+        };
+
+        private static ClassFeatureOption Gs(string name, string desc) => new()
+        {
+            Name = name,
+            Kind = ClassFeatureOptionKind.GiantStrike,
+            MinClassLevel = 1,
+            Description = desc
+        };
+
+        private static ClassFeatureOption Mv(string name, string desc) => new()
+        {
+            Name = name,
+            Kind = ClassFeatureOptionKind.Maneuver,
+            MinClassLevel = 1,
+            Description = desc,
+            Classes = new[] { "Fighter" }
         };
 
         private static ClassFeatureOption FS(string name, string classesCsv, string desc) => new()

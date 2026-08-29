@@ -921,10 +921,31 @@ namespace Nemo
         // ═══════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// PHB multiclass minimums. Returns empty list if the class has no special prereq (or unknown).
-        /// Each inner list is an OR group of ability names that must all be ≥ 13 within that option;
-        /// outer list is AND of groups, except Fighter uses OR between Str and Dex (encoded specially).
-        /// Simpler API: <see cref="MeetsMulticlassPrerequisites"/>.
+        /// PHB multiclass minimums as AND-of-OR groups: every group needs at least one
+        /// listed ability at 13+. Fighter is a single OR group (Str or Dex); Monk/Paladin/Ranger
+        /// are two AND groups. Empty for unknown classes (no special prereq).
+        /// </summary>
+        public static IReadOnlyList<string[]> GetMulticlassPrerequisiteGroups(string className) =>
+            (className ?? "").Trim() switch
+            {
+                "Barbarian" => new[] { new[] { "Strength" } },
+                "Bard" => new[] { new[] { "Charisma" } },
+                "Cleric" => new[] { new[] { "Wisdom" } },
+                "Druid" => new[] { new[] { "Wisdom" } },
+                "Fighter" => new[] { new[] { "Strength", "Dexterity" } },
+                "Monk" => new[] { new[] { "Dexterity" }, new[] { "Wisdom" } },
+                "Paladin" => new[] { new[] { "Strength" }, new[] { "Charisma" } },
+                "Ranger" => new[] { new[] { "Dexterity" }, new[] { "Wisdom" } },
+                "Rogue" => new[] { new[] { "Dexterity" } },
+                "Sorcerer" => new[] { new[] { "Charisma" } },
+                "Warlock" => new[] { new[] { "Charisma" } },
+                "Wizard" => new[] { new[] { "Intelligence" } },
+                "Artificer" => new[] { new[] { "Intelligence" } },
+                _ => Array.Empty<string[]>()
+            };
+
+        /// <summary>
+        /// PHB multiclass ability minimums (13+). Simpler API: <see cref="MeetsAllMulticlassPrerequisites"/>.
         /// </summary>
         public static bool MeetsMulticlassPrerequisites(
             string className,
@@ -935,25 +956,54 @@ namespace Nemo
             if (string.IsNullOrWhiteSpace(className) || getAbilityScore == null)
                 return true;
 
-            int Score(string ab) => getAbilityScore(ab);
-
-            return (className ?? "").Trim() switch
+            foreach (var group in GetMulticlassPrerequisiteGroups(className))
             {
-                "Barbarian" => Score("Strength") >= 13,
-                "Bard" => Score("Charisma") >= 13,
-                "Cleric" => Score("Wisdom") >= 13,
-                "Druid" => Score("Wisdom") >= 13,
-                "Fighter" => Score("Strength") >= 13 || Score("Dexterity") >= 13,
-                "Monk" => Score("Dexterity") >= 13 && Score("Wisdom") >= 13,
-                "Paladin" => Score("Strength") >= 13 && Score("Charisma") >= 13,
-                "Ranger" => Score("Dexterity") >= 13 && Score("Wisdom") >= 13,
-                "Rogue" => Score("Dexterity") >= 13,
-                "Sorcerer" => Score("Charisma") >= 13,
-                "Warlock" => Score("Charisma") >= 13,
-                "Wizard" => Score("Intelligence") >= 13,
-                "Artificer" => Score("Intelligence") >= 13,
-                _ => true
-            };
+                if (group == null || group.Length == 0)
+                    continue;
+                bool any = false;
+                foreach (var ab in group)
+                {
+                    if (getAbilityScore(ab) >= 13)
+                    {
+                        any = true;
+                        break;
+                    }
+                }
+                if (!any)
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// PHB: to take a second (or later) class you must meet the ability minimums for
+        /// every class on the character, including the starting class. Single-class lists
+        /// always pass — 1st-level character creation has no multiclass prerequisites.
+        /// </summary>
+        public static bool MeetsAllMulticlassPrerequisites(
+            IEnumerable<string> classNames,
+            Func<string, int> getAbilityScore)
+        {
+            if (classNames == null || getAbilityScore == null)
+                return true;
+
+            var names = classNames
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (names.Count < 2)
+                return true;
+
+            foreach (var cls in names)
+            {
+                if (!MeetsMulticlassPrerequisites(cls, getAbilityScore, out _))
+                    return false;
+            }
+
+            return true;
         }
 
         public static string GetMulticlassPrerequisiteText(string className) =>
