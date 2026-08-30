@@ -1662,11 +1662,33 @@ namespace Nemo
                 CurrentCharacter.MetamagicOptions = new List<string>();
             }
 
+            // ── Samurai Bonus Proficiency (level 3, alongside Fighting Spirit) ──
+            int samuraiLv = LevelUpCalculator.GetSamuraiFighterLevel(entries);
+            if (samuraiLv >= 3)
+            {
+                any = true;
+                BuildSamuraiBonusSkillCard();
+            }
+            else
+            {
+                ClearSamuraiBonusSkillGrant();
+            }
+
+            if (samuraiLv >= 7)
+            {
+                any = true;
+                BuildElegantCourtierCard();
+            }
+            else if (CurrentCharacter != null)
+            {
+                CurrentCharacter.ElegantCourtierSave = "";
+            }
+
             if (lblClassOptionHint != null)
             {
                 lblClassOptionHint.Text = any
                     ? "Choose options for each open slot. Duplicates of the same option are not allowed within a category."
-                    : "Fighting Styles (Fighter 1+ / Paladin·Ranger 2+), Eldritch Invocations (Warlock 2+), and Metamagic (Sorcerer 3+) appear here as you gain levels.";
+                    : "Fighting Styles (Fighter 1+ / Paladin·Ranger 2+), Eldritch Invocations (Warlock 2+), Metamagic (Sorcerer 3+), and Samurai picks appear here as you gain levels.";
             }
 
             if (!any)
@@ -1743,6 +1765,247 @@ namespace Nemo
             stack.Children.Add(desc);
             border.Child = stack;
             pnlClassFeatureOptions.Children.Add(border);
+        }
+
+        private void BuildSamuraiBonusSkillCard()
+        {
+            if (CurrentCharacter == null) return;
+
+            var options = LevelUpCalculator.SamuraiBonusSkillOptions.ToList();
+            string current = CurrentCharacter.SamuraiBonusSkill?.Trim() ?? "";
+            if (string.IsNullOrEmpty(current) ||
+                !options.Contains(current, StringComparer.OrdinalIgnoreCase))
+            {
+                current = options.FirstOrDefault(o =>
+                              allSkills?.Any(s =>
+                                  s.SkillName.Equals(o, StringComparison.OrdinalIgnoreCase) &&
+                                  s.IsProficient) != true)
+                          ?? options[0];
+            }
+
+            ApplySamuraiBonusSkill(current);
+
+            var border = MakeFeaturePickBorder();
+            var stack = new StackPanel();
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Samurai — Bonus Proficiency (level 3)",
+                FontWeight = FontWeights.SemiBold,
+                Foreground = ClassDetailSectionBrush,
+                Margin = new Thickness(0, 0, 0, 2)
+            });
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Gained with Fighting Spirit. Choose History, Insight, Performance, or Persuasion.",
+                Foreground = ClassDetailMutedBrush,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            var cmb = new ComboBox
+            {
+                ItemsSource = options,
+                Height = 30,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            StyleAppComboBox(cmb);
+            cmb.SelectedItem = options.First(o => o.Equals(current, StringComparison.OrdinalIgnoreCase));
+            cmb.SelectionChanged += (s, e) =>
+            {
+                if (_suppressLevelTabRebuild) return;
+                if (cmb.SelectedItem is not string pick) return;
+                ApplySamuraiBonusSkill(pick);
+            };
+
+            stack.Children.Add(cmb);
+            border.Child = stack;
+            pnlClassFeatureOptions.Children.Add(border);
+        }
+
+        private void BuildElegantCourtierCard()
+        {
+            if (CurrentCharacter == null) return;
+
+            List<string> classSaves = GetStartingClassSaveProficiencies();
+            bool wisAlready = HasClassOrResilientSave("Wisdom", classSaves);
+            string granted = GetElegantCourtierGrantedSave(classSaves);
+            if (!string.IsNullOrEmpty(granted) && wisAlready)
+                CurrentCharacter.ElegantCourtierSave = granted;
+            else if (!wisAlready)
+                CurrentCharacter.ElegantCourtierSave = "Wisdom";
+
+            var border = MakeFeaturePickBorder();
+            var stack = new StackPanel();
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Samurai — Elegant Courtier (level 7)",
+                FontWeight = FontWeights.SemiBold,
+                Foreground = ClassDetailSectionBrush,
+                Margin = new Thickness(0, 0, 0, 2)
+            });
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Add your Wisdom modifier to Charisma (Persuasion) checks. Gain proficiency in Wisdom saving throws.",
+                Foreground = ClassDetailMutedBrush,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            if (wisAlready)
+            {
+                var alts = LevelUpCalculator.ElegantCourtierAlternateSaves
+                    .Where(a => !HasClassOrResilientSave(a, classSaves))
+                    .ToList();
+                if (alts.Count == 0)
+                {
+                    alts = new[] { "Intelligence", "Charisma", "Dexterity", "Strength", "Constitution" }
+                        .Where(a => !HasClassOrResilientSave(a, classSaves))
+                        .ToList();
+                }
+
+                stack.Children.Add(new TextBlock
+                {
+                    Text = "You already have Wisdom saves. Choose another saving throw proficiency:",
+                    Foreground = ClassDetailBodyBrush,
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 6)
+                });
+
+                if (alts.Count > 0)
+                {
+                    var cmb = new ComboBox
+                    {
+                        ItemsSource = alts,
+                        Height = 30
+                    };
+                    StyleAppComboBox(cmb);
+                    string cur = CurrentCharacter.ElegantCourtierSave?.Trim() ?? "";
+                    int idx = alts.FindIndex(a => a.Equals(cur, StringComparison.OrdinalIgnoreCase));
+                    cmb.SelectedIndex = idx >= 0 ? idx : 0;
+                    if (cmb.SelectedItem is string sel0)
+                        CurrentCharacter.ElegantCourtierSave = sel0;
+
+                    cmb.SelectionChanged += (s, e) =>
+                    {
+                        if (_suppressLevelTabRebuild) return;
+                        if (cmb.SelectedItem is not string pick || CurrentCharacter == null) return;
+                        CurrentCharacter.ElegantCourtierSave = pick;
+                        UpdateSavingThrows();
+                    };
+                    stack.Children.Add(cmb);
+                }
+            }
+            else
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = "Wisdom saving throws: proficient. Persuasion includes your Wisdom modifier.",
+                    Foreground = ClassDetailBodyBrush,
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+
+            border.Child = stack;
+            pnlClassFeatureOptions.Children.Add(border);
+            UpdateSavingThrows();
+            UpdateSkillBonuses();
+        }
+
+        private Border MakeFeaturePickBorder() =>
+            new Border
+            {
+                Background = (Brush)new BrushConverter().ConvertFromString("#252525"),
+                BorderBrush = (Brush)new BrushConverter().ConvertFromString("#555"),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 10),
+                CornerRadius = new CornerRadius(3)
+            };
+
+        private List<string> GetStartingClassSaveProficiencies()
+        {
+            string? className = null;
+            var levels = GetActiveClassLevels();
+            if (levels.Count > 0)
+                className = levels[0].ClassName;
+            if (string.IsNullOrWhiteSpace(className))
+                className = cmbClass?.SelectedItem as string ?? CurrentCharacter?.Class;
+            if (!string.IsNullOrWhiteSpace(className) &&
+                GameData.ClassData.TryGetValue(className, out var data) &&
+                data.SavingThrowProficiencies != null)
+                return data.SavingThrowProficiencies;
+            return new List<string>();
+        }
+
+        private void ApplySamuraiBonusSkill(string skillName)
+        {
+            if (CurrentCharacter == null || allSkills == null) return;
+
+            string next = (skillName ?? "").Trim();
+            if (!LevelUpCalculator.SamuraiBonusSkillOptions.Contains(next, StringComparer.OrdinalIgnoreCase))
+                next = "";
+
+            string previous = CurrentCharacter.SamuraiBonusSkill?.Trim() ?? "";
+            if (!previous.Equals(next, StringComparison.OrdinalIgnoreCase))
+                ReleaseSamuraiBonusSkill(previous);
+
+            CurrentCharacter.SamuraiBonusSkill = next;
+            if (string.IsNullOrEmpty(next)) return;
+
+            var skill = allSkills.FirstOrDefault(s =>
+                s.SkillName.Equals(next, StringComparison.OrdinalIgnoreCase));
+            if (skill != null)
+            {
+                skill.IsProficient = true;
+                skill.IsBackgroundProficiency = true;
+            }
+
+            dgSkills?.Items.Refresh();
+            if (cmbClass.SelectedItem is string cn)
+                UpdateSkillChoices(cn);
+            UpdateSkillBonuses();
+        }
+
+        private void ClearSamuraiBonusSkillGrant()
+        {
+            if (CurrentCharacter == null) return;
+            string previous = CurrentCharacter.SamuraiBonusSkill?.Trim() ?? "";
+            CurrentCharacter.SamuraiBonusSkill = "";
+            ReleaseSamuraiBonusSkill(previous);
+            if (cmbClass.SelectedItem is string cn)
+                UpdateSkillChoices(cn);
+            UpdateSkillBonuses();
+        }
+
+        private void ReleaseSamuraiBonusSkill(string skillName)
+        {
+            if (string.IsNullOrWhiteSpace(skillName) || allSkills == null) return;
+
+            var skill = allSkills.FirstOrDefault(s =>
+                s.SkillName.Equals(skillName, StringComparison.OrdinalIgnoreCase));
+            if (skill == null) return;
+
+            bool keep = (currentRaceAutomaticSkills != null &&
+                         currentRaceAutomaticSkills.Contains(skill.SkillName, StringComparer.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(raceGrantedSkill) &&
+                         skill.SkillName.Equals(raceGrantedSkill, StringComparison.OrdinalIgnoreCase));
+            if (!keep && cmbBackground?.SelectedItem is string bg)
+                keep = GetBackgroundSkillList(bg).Contains(skill.SkillName, StringComparer.OrdinalIgnoreCase);
+
+            if (keep)
+            {
+                skill.IsProficient = true;
+                skill.IsBackgroundProficiency = true;
+                return;
+            }
+
+            skill.IsProficient = false;
+            skill.IsBackgroundProficiency = false;
+            skill.IsExpertise = false;
         }
 
         private void BuildOptionPickCard(
@@ -3028,7 +3291,8 @@ namespace Nemo
             foreach (var skill in allSkills)
             {
                 bool isRaceSkill = currentRaceAutomaticSkills.Contains(skill.SkillName, StringComparer.OrdinalIgnoreCase) ||
-                                   skill.SkillName == raceGrantedSkill;
+                                   skill.SkillName == raceGrantedSkill ||
+                                   IsSamuraiGrantedSkill(skill.SkillName);
 
                 if (skill.IsBackgroundProficiency && !isRaceSkill)
                 {
@@ -3631,6 +3895,14 @@ namespace Nemo
             UpdateEquipmentProficiencySummary();
             UpdateTotalEquipmentSummary();
             UpdateSubclassSpellsLabel();
+
+            if (!_suppressLevelTabRebuild)
+            {
+                try { RebuildClassFeatureOptionPanels(); }
+                catch { /* levels tab may not be ready */ }
+                UpdateSavingThrows();
+                UpdateSkillBonuses();
+            }
         }
 
         private void Stat_TextChanged(object sender, TextChangedEventArgs e)
@@ -3958,7 +4230,19 @@ namespace Nemo
             if (!string.IsNullOrEmpty(raceGrantedSkill) &&
                 skill.SkillName.Equals(raceGrantedSkill, StringComparison.OrdinalIgnoreCase))
                 return true;
+            if (IsSamuraiGrantedSkill(skill.SkillName))
+                return true;
             return false;
+        }
+
+        private bool IsSamuraiGrantedSkill(string? skillName)
+        {
+            if (string.IsNullOrWhiteSpace(skillName) || CurrentCharacter == null)
+                return false;
+            if (!LevelUpCalculator.HasSamuraiBonusProficiency(GetActiveClassLevels()))
+                return false;
+            return skillName.Equals(CurrentCharacter.SamuraiBonusSkill?.Trim(),
+                StringComparison.OrdinalIgnoreCase);
         }
 
         public void UpdateSkillChoices(string className)
@@ -4237,7 +4521,8 @@ namespace Nemo
                             protectedByBackground = true;
                     }
 
-                    bool protectedByFlexible = skill.SkillName == raceGrantedSkill;
+                    bool protectedByFlexible = skill.SkillName == raceGrantedSkill ||
+                                               IsSamuraiGrantedSkill(skill.SkillName);
 
                     if (!protectedByBackground && !protectedByFlexible)
                     {
@@ -4293,6 +4578,8 @@ namespace Nemo
 
                 int totalBonus = LevelUpCalculator.ComputeSkillBonus(
                     mod, proficiencyBonus, skill.IsProficient, skill.IsExpertise, joat);
+                totalBonus += LevelUpCalculator.GetElegantCourtierSkillBonus(
+                    skill.SkillName, GetActiveClassLevels(), GetModifierFromText(txtWisMod?.Text));
                 skill.Bonus = totalBonus >= 0 ? $"+{totalBonus}" : totalBonus.ToString();
             }
 
@@ -4401,13 +4688,60 @@ namespace Nemo
         private bool HasSaveProficiency(string abilityName, IEnumerable<string> classProficientSaves)
         {
             if (string.IsNullOrWhiteSpace(abilityName)) return false;
+            if (HasClassOrResilientSave(abilityName, classProficientSaves))
+                return true;
+            string elegant = GetElegantCourtierGrantedSave(classProficientSaves);
+            return elegant.Equals(abilityName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool HasClassOrResilientSave(string abilityName, IEnumerable<string>? classProficientSaves)
+        {
             if (classProficientSaves != null &&
                 classProficientSaves.Contains(abilityName, StringComparer.OrdinalIgnoreCase))
                 return true;
-            if (!string.IsNullOrEmpty(resilientSaveAbility) &&
-                resilientSaveAbility.Equals(abilityName, StringComparison.OrdinalIgnoreCase))
-                return true;
-            return false;
+            return HasResilientSave(abilityName);
+        }
+
+        private bool HasResilientSave(string abilityName) =>
+            !string.IsNullOrEmpty(resilientSaveAbility) &&
+            resilientSaveAbility.Equals(abilityName, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Elegant Courtier grants Wisdom saves, or an alternate save if Wisdom is already proficient.
+        /// </summary>
+        private string GetElegantCourtierGrantedSave(IEnumerable<string>? classProficientSaves)
+        {
+            if (CurrentCharacter == null) return "";
+            if (!LevelUpCalculator.HasElegantCourtier(GetActiveClassLevels()))
+                return "";
+
+            bool WisdomAlready() => HasClassOrResilientSave("Wisdom", classProficientSaves);
+
+            if (!WisdomAlready())
+                return "Wisdom";
+
+            string stored = CurrentCharacter.ElegantCourtierSave?.Trim() ?? "";
+            bool StoredOk(string name) =>
+                !string.IsNullOrEmpty(name) &&
+                !name.Equals("Wisdom", StringComparison.OrdinalIgnoreCase) &&
+                !HasClassOrResilientSave(name, classProficientSaves);
+
+            if (StoredOk(stored))
+                return stored;
+
+            foreach (var alt in LevelUpCalculator.ElegantCourtierAlternateSaves)
+            {
+                if (StoredOk(alt))
+                    return alt;
+            }
+
+            foreach (var any in new[] { "Intelligence", "Charisma", "Dexterity", "Strength", "Constitution" })
+            {
+                if (StoredOk(any))
+                    return any;
+            }
+
+            return "";
         }
 
         private void UpdateSavingThrows()
@@ -4447,15 +4781,21 @@ namespace Nemo
             if (!proficient)
                 return text;
 
-            // Note source when proficiency is only from Resilient (not the class)
-            bool fromResilient = !string.IsNullOrEmpty(resilientSaveAbility) &&
-                resilientSaveAbility.Equals(abilityName, StringComparison.OrdinalIgnoreCase);
-            bool fromClass = cmbClass.SelectedItem is string cn &&
+            // Note source when proficiency is only from Resilient / Elegant Courtier (not the class)
+            bool fromResilient = HasResilientSave(abilityName);
+            List<string> classSaves = new();
+            if (cmbClass.SelectedItem is string cn &&
                 GameData.ClassData.TryGetValue(cn, out var cd) &&
-                (cd.SavingThrowProficiencies?.Contains(abilityName) ?? false);
+                cd.SavingThrowProficiencies != null)
+                classSaves = cd.SavingThrowProficiencies;
+            bool fromClass = classSaves.Contains(abilityName, StringComparer.OrdinalIgnoreCase);
+            bool fromElegant = GetElegantCourtierGrantedSave(classSaves)
+                .Equals(abilityName, StringComparison.OrdinalIgnoreCase);
 
             if (fromResilient && !fromClass)
                 return $"{text}  (Proficient — Resilient)";
+            if (fromElegant && !fromClass && !fromResilient)
+                return $"{text}  (Proficient — Elegant Courtier)";
             return $"{text}  (Proficient)";
         }
 
@@ -8644,6 +8984,8 @@ namespace Nemo
             var proficient = new HashSet<string>(
                 (CurrentCharacter.Skills ?? new List<SkillEntry>()).Select(s => s.Name),
                 StringComparer.OrdinalIgnoreCase);
+            if (IsSamuraiGrantedSkill(CurrentCharacter.SamuraiBonusSkill))
+                proficient.Add(CurrentCharacter.SamuraiBonusSkill.Trim());
 
             foreach (var (name, ability) in skillDefinitions)
             {
@@ -8660,6 +9002,9 @@ namespace Nemo
 
                 bool isProficient = proficient.Contains(name);
                 bool isExpertise = isProficient && expert.Contains(name);
+                int bonus = LevelUpCalculator.ComputeSkillBonus(mod, prof, isProficient, isExpertise, joat);
+                bonus += LevelUpCalculator.GetElegantCourtierSkillBonus(
+                    name, GetActiveClassLevels(), CurrentCharacter.AbilityScores.Wisdom.Modifier);
 
                 skills.Add(new SkillEntry
                 {
@@ -8667,7 +9012,7 @@ namespace Nemo
                     Ability = ability,
                     IsProficient = isProficient,
                     IsExpertise = isExpertise,
-                    Bonus = LevelUpCalculator.ComputeSkillBonus(mod, prof, isProficient, isExpertise, joat)
+                    Bonus = bonus
                 });
             }
 
@@ -10272,6 +10617,8 @@ namespace Nemo
                 granted.Add(raceGrantedSkill);
             if (!string.IsNullOrWhiteSpace(CurrentCharacter.RaceGrantedSkill))
                 granted.Add(CurrentCharacter.RaceGrantedSkill);
+            if (IsSamuraiGrantedSkill(CurrentCharacter.SamuraiBonusSkill))
+                granted.Add(CurrentCharacter.SamuraiBonusSkill.Trim());
 
             // Apply saved proficiencies + expertise
             foreach (var savedSkill in CurrentCharacter.Skills)
@@ -10288,6 +10635,18 @@ namespace Nemo
                     // Only true race/background grants are locked — class picks must remain
                     // countable for "X / Y class skills selected".
                     skill.IsBackgroundProficiency = granted.Contains(skill.SkillName);
+                }
+            }
+
+            if (IsSamuraiGrantedSkill(CurrentCharacter.SamuraiBonusSkill))
+            {
+                var samuraiSkill = allSkills.FirstOrDefault(s =>
+                    s.SkillName.Equals(CurrentCharacter.SamuraiBonusSkill.Trim(),
+                        StringComparison.OrdinalIgnoreCase));
+                if (samuraiSkill != null)
+                {
+                    samuraiSkill.IsProficient = true;
+                    samuraiSkill.IsBackgroundProficiency = true;
                 }
             }
 

@@ -592,6 +592,62 @@ namespace Nemo
                 e.ClassName.Equals("Bard", StringComparison.OrdinalIgnoreCase) && e.Levels >= 2);
 
         /// <summary>
+        /// Samurai 3rd-level Bonus Proficiency choices (Xanathar's).
+        /// Unlocks at the same time as Fighting Spirit.
+        /// </summary>
+        public static readonly string[] SamuraiBonusSkillOptions =
+        {
+            "History", "Insight", "Performance", "Persuasion"
+        };
+
+        /// <summary>
+        /// Extra save choices when Elegant Courtier would grant Wisdom but Wisdom is already proficient.
+        /// Official text: Intelligence or Charisma.
+        /// </summary>
+        public static readonly string[] ElegantCourtierAlternateSaves =
+        {
+            "Intelligence", "Charisma"
+        };
+
+        /// <summary>Fighter levels in the Samurai archetype (0 if subclass is not yet unlocked).</summary>
+        public static int GetSamuraiFighterLevel(IEnumerable<ClassLevelEntry>? classLevels)
+        {
+            int n = 0;
+            foreach (var e in Normalize(classLevels))
+            {
+                if (!e.ClassName.Equals("Fighter", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string? sub = GameData.GetEffectiveSubclass(e);
+                if (!string.IsNullOrWhiteSpace(sub) &&
+                    sub.Equals("Samurai", StringComparison.OrdinalIgnoreCase))
+                    n += e.Levels;
+            }
+            return n;
+        }
+
+        /// <summary>Samurai 3+: Bonus Proficiency skill pick.</summary>
+        public static bool HasSamuraiBonusProficiency(IEnumerable<ClassLevelEntry>? classLevels) =>
+            GetSamuraiFighterLevel(classLevels) >= 3;
+
+        /// <summary>Samurai 7+: Elegant Courtier (Wis save + Wis to Persuasion).</summary>
+        public static bool HasElegantCourtier(IEnumerable<ClassLevelEntry>? classLevels) =>
+            GetSamuraiFighterLevel(classLevels) >= 7;
+
+        /// <summary>
+        /// Extra bonus Elegant Courtier adds to a skill check (Wisdom modifier on Persuasion).
+        /// </summary>
+        public static int GetElegantCourtierSkillBonus(
+            string? skillName,
+            IEnumerable<ClassLevelEntry>? classLevels,
+            int wisdomModifier)
+        {
+            if (string.IsNullOrWhiteSpace(skillName)) return 0;
+            if (!skillName.Equals("Persuasion", StringComparison.OrdinalIgnoreCase)) return 0;
+            if (!HasElegantCourtier(classLevels)) return 0;
+            return wisdomModifier;
+        }
+
+        /// <summary>
         /// Skill / ability-check bonus: ability mod + proficiency (×2 if expertise), or half prof if JoAT.
         /// </summary>
         public static int ComputeSkillBonus(

@@ -1341,6 +1341,8 @@ namespace Nemo
             public List<string> MetamagicOptions { get; init; } = new();
             public string PactBoon { get; init; } = "";
             public string FightingInitiateStyle { get; init; } = "";
+            public string SamuraiBonusSkill { get; init; } = "";
+            public string ElegantCourtierSave { get; init; } = "";
         }
 
         /// <summary>
@@ -1484,13 +1486,31 @@ namespace Nemo
                 metaSlots,
                 rng);
 
+            string samuraiSkill = "";
+            string elegantSave = "";
+            int samuraiLv = LevelUpCalculator.GetSamuraiFighterLevel(classLevels);
+            if (samuraiLv >= 3)
+            {
+                string[] samuraiSkills = LevelUpCalculator.SamuraiBonusSkillOptions;
+                string? preferredFace = role == TemplateRole.Support ? "Persuasion"
+                    : role == TemplateRole.Tank ? "Insight"
+                    : "Persuasion";
+                samuraiSkill = samuraiSkills.FirstOrDefault(s =>
+                                   s.Equals(preferredFace, StringComparison.OrdinalIgnoreCase))
+                               ?? samuraiSkills[0];
+            }
+            if (samuraiLv >= 7)
+                elegantSave = "Wisdom";
+
             return new ClassFeaturePicks
             {
                 FightingStyles = fightingStyles,
                 EldritchInvocations = invocations,
                 MetamagicOptions = metamagic,
                 PactBoon = pact,
-                FightingInitiateStyle = fightInit
+                FightingInitiateStyle = fightInit,
+                SamuraiBonusSkill = samuraiSkill,
+                ElegantCourtierSave = elegantSave
             };
         }
 
@@ -1597,6 +1617,8 @@ namespace Nemo
                 MetamagicOptions = featurePicks?.MetamagicOptions?.ToList() ?? new List<string>(),
                 WarlockPactBoon = featurePicks?.PactBoon ?? "",
                 FightingInitiateStyle = featurePicks?.FightingInitiateStyle ?? "",
+                SamuraiBonusSkill = featurePicks?.SamuraiBonusSkill ?? "",
+                ElegantCourtierSave = featurePicks?.ElegantCourtierSave ?? "",
                 HpGainMethod = HpGainMethod.FixedAverage,
                 HitPointRolls = new List<int>(),
                 AbilityScores = new AbilityScoreBlock
@@ -1635,6 +1657,16 @@ namespace Nemo
                     c.SpellcastingAbility = "Intelligence";
                     break;
                 }
+            }
+
+            if (!string.IsNullOrWhiteSpace(c.SamuraiBonusSkill) &&
+                !c.Skills.Any(s => s.Name.Equals(c.SamuraiBonusSkill, StringComparison.OrdinalIgnoreCase)))
+            {
+                c.Skills.Add(new SkillEntry
+                {
+                    Name = c.SamuraiBonusSkill.Trim(),
+                    IsProficient = true
+                });
             }
 
             return c;

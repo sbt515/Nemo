@@ -2521,6 +2521,15 @@ public class Character
     public List<string> MetamagicOptions { get; set; } = new();
     /// <summary>Warlock Pact Boon at 3rd level: Pact of the Chain / Blade / Tome.</summary>
     public string WarlockPactBoon { get; set; } = "";
+    /// <summary>
+    /// Samurai 3rd-level Bonus Proficiency: History, Insight, Performance, or Persuasion.
+    /// </summary>
+    public string SamuraiBonusSkill { get; set; } = "";
+    /// <summary>
+    /// Elegant Courtier extra saving throw when Wisdom is already proficient
+    /// (typically Intelligence or Charisma). Empty means Wisdom (the default grant).
+    /// </summary>
+    public string ElegantCourtierSave { get; set; } = "";
     public string SelectedFeat { get; set; } = "";
     public int Speed { get; set; } = 30;
 

@@ -262,6 +262,13 @@ namespace Nemo
                 items.Add(BuildFeatItem(NewId(), c.WarlockPactBoon, "class",
                     "Warlock Pact Boon.", requirements: "Warlock 3"));
             }
+            if (!string.IsNullOrWhiteSpace(c.SamuraiBonusSkill) &&
+                LevelUpCalculator.HasSamuraiBonusProficiency(
+                    LevelUpCalculator.GetClassLevelsFromCharacter(c)))
+            {
+                items.Add(BuildFeatItem(NewId(), "Bonus Proficiency: " + c.SamuraiBonusSkill.Trim(),
+                    "class", "Samurai Bonus Proficiency.", requirements: "Samurai 3"));
+            }
 
             // Spells
             var spellNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -358,9 +365,19 @@ namespace Nemo
             }
 
             var saves = c.SavingThrows ?? new List<SavingThrow>();
-            bool SaveProf(string name) =>
-                saves.Any(s => s.IsProficient &&
-                               s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            bool SaveProf(string name)
+            {
+                if (saves.Any(s => s.IsProficient &&
+                                   s.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                    return true;
+                if (!LevelUpCalculator.HasElegantCourtier(classLevels))
+                    return false;
+                string extra = string.IsNullOrWhiteSpace(c.ElegantCourtierSave)
+                    ? "Wisdom"
+                    : c.ElegantCourtierSave.Trim();
+                if (string.IsNullOrEmpty(extra)) extra = "Wisdom";
+                return extra.Equals(name, StringComparison.OrdinalIgnoreCase);
+            }
 
             AddAbility("str", c.AbilityScores?.Strength ?? new(), SaveProf("Strength"));
             AddAbility("dex", c.AbilityScores?.Dexterity ?? new(), SaveProf("Dexterity"));
@@ -381,6 +398,9 @@ namespace Nemo
                 .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
+            int wisMod = c.AbilityScores?.Wisdom?.Modifier ?? 0;
+            bool elegantCourtier = LevelUpCalculator.HasElegantCourtier(classLevels);
+
             foreach (var (key, ability) in SkillDefs)
             {
                 double value = 0;
@@ -393,11 +413,22 @@ namespace Nemo
                     else if (match.IsProficient) value = 1;
                 }
 
+                if (value == 0 &&
+                    key == "per" &&
+                    !string.IsNullOrWhiteSpace(c.SamuraiBonusSkill) &&
+                    c.SamuraiBonusSkill.Equals("Persuasion", StringComparison.OrdinalIgnoreCase) &&
+                    LevelUpCalculator.HasSamuraiBonusProficiency(classLevels))
+                    value = 1;
+
+                string checkBonus = "";
+                if (elegantCourtier && key == "per" && wisMod != 0)
+                    checkBonus = wisMod >= 0 ? $"+{wisMod}" : wisMod.ToString();
+
                 skills[key] = new JsonObject
                 {
                     ["value"] = value,
                     ["ability"] = ability,
-                    ["bonuses"] = new JsonObject { ["check"] = "", ["passive"] = "" }
+                    ["bonuses"] = new JsonObject { ["check"] = checkBonus, ["passive"] = "" }
                 };
             }
 

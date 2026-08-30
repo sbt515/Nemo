@@ -563,6 +563,21 @@ namespace Nemo
                 preview.ExtraSelections.Add("High Elf Cantrip: " + character.HighElfCantrip.Trim());
             if (!string.IsNullOrWhiteSpace(character.RaceGrantedSkill))
                 preview.ExtraSelections.Add("Race Skill: " + character.RaceGrantedSkill.Trim());
+            if (!string.IsNullOrWhiteSpace(character.SamuraiBonusSkill) &&
+                LevelUpCalculator.HasSamuraiBonusProficiency(
+                    LevelUpCalculator.GetClassLevelsFromCharacter(character)))
+            {
+                preview.ExtraSelections.Add("Samurai Skill: " + character.SamuraiBonusSkill.Trim());
+            }
+            if (LevelUpCalculator.HasElegantCourtier(
+                LevelUpCalculator.GetClassLevelsFromCharacter(character)))
+            {
+                string save = string.IsNullOrWhiteSpace(character.ElegantCourtierSave)
+                    ? "Wisdom"
+                    : character.ElegantCourtierSave.Trim();
+                preview.ExtraSelections.Add(
+                    "Elegant Courtier: " + save + " saves, Wisdom modifier on Persuasion");
+            }
 
             // Equipment list (same merge as sheet Equipment field)
             preview.Equipment.AddRange(MergeEquipmentLines(character));
@@ -1682,6 +1697,17 @@ namespace Nemo
                     proficient.Add(s);
             }
 
+            if (LevelUpCalculator.HasElegantCourtier(LevelUpCalculator.GetClassLevelsFromCharacter(c)))
+            {
+                string extra = string.IsNullOrWhiteSpace(c.ElegantCourtierSave)
+                    ? "Wisdom"
+                    : c.ElegantCourtierSave.Trim();
+                if (!proficient.Contains(extra))
+                    proficient.Add(string.IsNullOrEmpty(extra) ? "Wisdom" : extra);
+                else if (!proficient.Contains("Wisdom"))
+                    proficient.Add("Wisdom");
+            }
+
             // Prefer saved list if present
             if (c.SavingThrows != null && c.SavingThrows.Count > 0)
                 return c.SavingThrows.ToList();
@@ -1737,6 +1763,10 @@ namespace Nemo
             var proficient = new HashSet<string>(
                 skillList.Select(s => s.Name),
                 StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(c.SamuraiBonusSkill) &&
+                LevelUpCalculator.HasSamuraiBonusProficiency(
+                    LevelUpCalculator.GetClassLevelsFromCharacter(c)))
+                proficient.Add(c.SamuraiBonusSkill.Trim());
             var expert = new HashSet<string>(
                 skillList.Where(s => s.IsExpertise).Select(s => s.Name),
                 StringComparer.OrdinalIgnoreCase);
@@ -1748,6 +1778,10 @@ namespace Nemo
                 bool isProf = proficient.Contains(d.Name);
                 bool isExp = isProf && expert.Contains(d.Name);
                 int bonus = LevelUpCalculator.ComputeSkillBonus(d.Mod(c), prof, isProf, isExp, joat);
+                bonus += LevelUpCalculator.GetElegantCourtierSkillBonus(
+                    d.Name,
+                    LevelUpCalculator.GetClassLevelsFromCharacter(c),
+                    c.AbilityScores?.Wisdom?.Modifier ?? 0);
                 return new SkillEntry
                 {
                     Name = d.Name,
@@ -1920,6 +1954,7 @@ namespace Nemo
         /// <summary>
         /// Page 1 (Features and Traits): feats, race/subrace, class features
         /// (omitting Spellcasting, ASI, and subclass-choice / placeholder rows).
+        /// Selected fighting styles replace the generic "Fighting Style" catalog text.
         /// Page 2 (Feat+Traits): subclass features only.
         /// </summary>
         private static FeaturesSplit BuildFeaturesAndTraitsSplit(Character c)
@@ -1927,6 +1962,8 @@ namespace Nemo
             var page1 = new StringBuilder();
             var page2 = new StringBuilder();
             bool hadRaceSection = false;
+            var remainingFightingStyles = new Queue<string>(GetSelectedFightingStyleNames(c));
+            bool fightingStylesListed = false;
 
             void BlankLine(StringBuilder sb)
             {
@@ -1939,12 +1976,29 @@ namespace Nemo
                 }
             }
 
+            void WriteFeature(StringBuilder sb, ClassFeature f, bool prefixAnyPositiveLevel, string? subclassName = null)
+            {
+                if (TryWriteSelectedFightingStyles(sb, f, remainingFightingStyles, ref fightingStylesListed))
+                    return;
+                if (TryWriteSamuraiBonusProficiency(sb, f, c, subclassName, prefixAnyPositiveLevel))
+                    return;
+                if (TryWriteElegantCourtier(sb, f, c, subclassName, prefixAnyPositiveLevel))
+                    return;
+
+                bool showLevel = prefixAnyPositiveLevel ? f.Level > 0 : f.Level > 1;
+                string label = showLevel ? $"(Lv {f.Level}) {f.Name}" : f.Name;
+                sb.AppendLine("• " + label);
+                if (!string.IsNullOrWhiteSpace(f.Description))
+                    sb.AppendLine("  " + f.Description);
+            }
+
             // ── Feats ──
             if (!string.IsNullOrWhiteSpace(c.SelectedFeat))
             {
                 page1.AppendLine("— Feats —");
                 string featLine = FormatFeatLine(c);
                 page1.AppendLine("• " + featLine);
+                AppendFightingInitiateStyleDetail(page1, c);
             }
 
             // ── Race / subrace ──
@@ -2016,12 +2070,7 @@ namespace Nemo
 
                     page1.AppendLine($"— {entry.ClassName} {classLv} Features —");
                     foreach (var f in kept)
-                    {
-                        string label = f.Level > 1 ? $"(Lv {f.Level}) {f.Name}" : f.Name;
-                        page1.AppendLine("• " + label);
-                        if (!string.IsNullOrWhiteSpace(f.Description))
-                            page1.AppendLine("  " + f.Description);
-                    }
+                        WriteFeature(page1, f, prefixAnyPositiveLevel: false, subclassName: null);
                 }
 
                 // ── Subclass features → page 2 only ──
@@ -2042,12 +2091,7 @@ namespace Nemo
 
                 page2.AppendLine($"— {effectiveSub} ({entry.ClassName} {classLv}) —");
                 foreach (var f in subFeats)
-                {
-                    string label = f.Level > 0 ? $"(Lv {f.Level}) {f.Name}" : f.Name;
-                    page2.AppendLine("• " + label);
-                    if (!string.IsNullOrWhiteSpace(f.Description))
-                        page2.AppendLine("  " + f.Description);
-                }
+                    WriteFeature(page2, f, prefixAnyPositiveLevel: true, subclassName: effectiveSub);
             }
 
             return new FeaturesSplit
@@ -2055,6 +2099,151 @@ namespace Nemo
                 Page1 = page1.ToString().Trim(),
                 Page2 = page2.ToString().Trim()
             };
+        }
+
+        private static List<string> GetSelectedFightingStyleNames(Character c)
+        {
+            var names = new List<string>();
+            if (c?.FightingStyles == null)
+                return names;
+            foreach (var s in c.FightingStyles)
+            {
+                if (!string.IsNullOrWhiteSpace(s))
+                    names.Add(s.Trim());
+            }
+            return names;
+        }
+
+        private static ClassFeatureOption? FindFightingStyleOption(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return null;
+            return ClassFeatureOptionData.AllFightingStyles
+                .FirstOrDefault(o => o.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Writes the character's chosen fighting style(s) in place of the generic
+        /// "Adopt a fighting style (Archery, Defense, …)" catalog text.
+        /// Subsequent Fighting Style / Additional Fighting Style rows are skipped
+        /// so the picks are not repeated as placeholders.
+        /// Returns true when the default feature line should not be written.
+        /// </summary>
+        private static bool TryWriteSelectedFightingStyles(
+            StringBuilder sb,
+            ClassFeature f,
+            Queue<string> remainingStyles,
+            ref bool alreadyListed)
+        {
+            string name = (f.Name ?? "").Trim();
+            if (!name.Equals("Fighting Style", StringComparison.OrdinalIgnoreCase) &&
+                !name.Equals("Additional Fighting Style", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // Picks already written under the first Fighting Style row — skip
+            // leftover placeholders (Champion Additional Fighting Style, later class FS).
+            if (alreadyListed)
+                return true;
+
+            if (remainingStyles.Count == 0)
+                return false;
+
+            alreadyListed = true;
+            bool first = true;
+            while (remainingStyles.Count > 0)
+            {
+                string style = remainingStyles.Dequeue();
+                string heading = name.Equals("Additional Fighting Style", StringComparison.OrdinalIgnoreCase) && first
+                    ? "Additional Fighting Style"
+                    : "Fighting Style";
+                string label = first && f.Level > 1
+                    ? $"(Lv {f.Level}) {heading}: {style}"
+                    : $"{heading}: {style}";
+                first = false;
+                sb.AppendLine("• " + label);
+
+                var opt = FindFightingStyleOption(style);
+                if (!string.IsNullOrWhiteSpace(opt?.Description))
+                    sb.AppendLine("  " + opt.Description);
+            }
+            return true;
+        }
+
+        private static bool TryWriteSamuraiBonusProficiency(
+            StringBuilder sb,
+            ClassFeature f,
+            Character c,
+            string? subclassName,
+            bool prefixAnyPositiveLevel)
+        {
+            if (f == null || c == null) return false;
+            if (!string.Equals(f.Name, "Bonus Proficiency", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (string.IsNullOrWhiteSpace(subclassName) ||
+                !subclassName.Equals("Samurai", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (string.IsNullOrWhiteSpace(c.SamuraiBonusSkill))
+                return false;
+
+            string skill = c.SamuraiBonusSkill.Trim();
+            bool showLevel = prefixAnyPositiveLevel ? f.Level > 0 : f.Level > 1;
+            string label = showLevel
+                ? $"(Lv {f.Level}) Bonus Proficiency: {skill}"
+                : $"Bonus Proficiency: {skill}";
+            sb.AppendLine("• " + label);
+            sb.AppendLine("  You gain proficiency in " + skill + ".");
+            return true;
+        }
+
+        private static bool TryWriteElegantCourtier(
+            StringBuilder sb,
+            ClassFeature f,
+            Character c,
+            string? subclassName,
+            bool prefixAnyPositiveLevel)
+        {
+            if (f == null || c == null) return false;
+            if (!string.Equals(f.Name, "Elegant Courtier", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (string.IsNullOrWhiteSpace(subclassName) ||
+                !subclassName.Equals("Samurai", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (!LevelUpCalculator.HasElegantCourtier(
+                    LevelUpCalculator.GetClassLevelsFromCharacter(c)))
+                return false;
+
+            string save = string.IsNullOrWhiteSpace(c.ElegantCourtierSave)
+                ? "Wisdom"
+                : c.ElegantCourtierSave.Trim();
+            int wisMod = c.AbilityScores?.Wisdom?.Modifier ?? 0;
+            string wisText = wisMod >= 0 ? $"+{wisMod}" : wisMod.ToString();
+
+            bool showLevel = prefixAnyPositiveLevel ? f.Level > 0 : f.Level > 1;
+            string label = showLevel ? $"(Lv {f.Level}) Elegant Courtier" : "Elegant Courtier";
+            sb.AppendLine("• " + label);
+            sb.AppendLine($"  Add your Wisdom modifier ({wisText}) to Charisma (Persuasion) checks.");
+            sb.AppendLine($"  You are proficient in {save} saving throws.");
+            return true;
+        }
+
+        /// <summary>
+        /// Adds the Fighting Initiate pick's rules text under the feat line on page 1.
+        /// </summary>
+        private static void AppendFightingInitiateStyleDetail(StringBuilder sb, Character c)
+        {
+            if (string.IsNullOrWhiteSpace(c.FightingInitiateStyle) ||
+                string.IsNullOrWhiteSpace(c.SelectedFeat))
+                return;
+
+            bool hasFeat = c.SelectedFeat
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(n => n.Equals("Fighting Initiate", StringComparison.OrdinalIgnoreCase));
+            if (!hasFeat)
+                return;
+
+            var opt = FindFightingStyleOption(c.FightingInitiateStyle);
+            if (!string.IsNullOrWhiteSpace(opt?.Description))
+                sb.AppendLine("  " + opt.Description);
         }
 
         /// <summary>
